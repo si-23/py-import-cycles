@@ -159,6 +159,7 @@ def _make_graph(
             ds.node(edge.module)
             ds.node(edge.imports)
 
+            # TODO use different colors for different cycles
             if _is_in_cycle(edge, import_cycles):
                 color = "red"
             else:
