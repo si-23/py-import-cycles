@@ -148,13 +148,19 @@ def _visit_python_contents(
 
 
 def _make_graph(
-    import_edges: Sequence[ImportEdge], import_cycles: Sequence[ImportCycle]
+    path: Path,
+    import_edges: Sequence[ImportEdge],
+    import_cycles: Sequence[ImportCycle],
 ) -> Digraph:
     # TODO
-    target = Path(os.path.abspath(__file__)).parent.parent.joinpath("outputs")
-    target.mkdir(parents=True, exist_ok=True)
+    target_dir = (
+        Path(os.path.abspath(__file__))
+        .parent.parent.joinpath("outputs")
+        .joinpath(path.name)
+    )
+    target_dir.mkdir(parents=True, exist_ok=True)
 
-    d = Digraph("unix", filename=target.joinpath("import-cycles.gv"))
+    d = Digraph("unix", filename=target_dir.joinpath("import-cycles.gv"))
 
     with d.subgraph() as ds:
         for edge in import_edges:
@@ -325,7 +331,7 @@ def main(argv: Sequence[str]) -> int:
 
     import_cycles = _find_import_cycles(module_imports)
 
-    graph = _make_graph(import_edges, import_cycles)
+    graph = _make_graph(path, import_edges, import_cycles)
     graph.view()
 
     return 0
