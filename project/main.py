@@ -25,6 +25,46 @@ from typing import (
 logger = logging.getLogger(__name__)
 
 
+#   .--contents------------------------------------------------------------.
+#   |                                _             _                       |
+#   |                 ___ ___  _ __ | |_ ___ _ __ | |_ ___                 |
+#   |                / __/ _ \| '_ \| __/ _ \ '_ \| __/ __|                |
+#   |               | (_| (_) | | | | ||  __/ | | | |_\__ \                |
+#   |                \___\___/|_| |_|\__\___|_| |_|\__|___/                |
+#   |                                                                      |
+#   '----------------------------------------------------------------------'
+
+
+def _get_python_files(path: Path) -> Iterable[Path]:
+    if path.is_symlink():
+        return
+
+    if path.is_file() and path.suffix == ".py":
+        yield path.resolve()
+        return
+
+    for f in path.iterdir():
+        if f.is_dir():
+            yield from _get_python_files(f)
+            continue
+
+        if f.suffix == ".py":
+            yield f.resolve()
+
+
+def _load_python_contents(files: Set[Path]) -> Mapping[Path, str]:
+    raw_contents: Dict[Path, str] = {}
+    for path in files:
+        try:
+            with open(path, encoding="utf-8") as f:
+                raw_contents.setdefault(path, f.read())
+        except UnicodeDecodeError as e:
+            logger.debug("Cannot read python file %s: %s", path, e)
+
+    return raw_contents
+
+
+# .
 #   .--node visitor--------------------------------------------------------.
 #   |                        _              _     _ _                      |
 #   |        _ __   ___   __| | ___  __   _(_)___(_) |_ ___  _ __          |
@@ -84,46 +124,6 @@ class NodeVisitorImports(ast.NodeVisitor):
         self._context = self._context[:-1]
 
 
-# .
-#   .--contents------------------------------------------------------------.
-#   |                                _             _                       |
-#   |                 ___ ___  _ __ | |_ ___ _ __ | |_ ___                 |
-#   |                / __/ _ \| '_ \| __/ _ \ '_ \| __/ __|                |
-#   |               | (_| (_) | | | | ||  __/ | | | |_\__ \                |
-#   |                \___\___/|_| |_|\__\___|_| |_|\__|___/                |
-#   |                                                                      |
-#   '----------------------------------------------------------------------'
-
-
-def _get_python_files(path: Path) -> Iterable[Path]:
-    if path.is_symlink():
-        return
-
-    if path.is_file() and path.suffix == ".py":
-        yield path.resolve()
-        return
-
-    for f in path.iterdir():
-        if f.is_dir():
-            yield from _get_python_files(f)
-            continue
-
-        if f.suffix == ".py":
-            yield f.resolve()
-
-
-def _load_python_contents(files: Set[Path]) -> Mapping[Path, str]:
-    raw_contents: Dict[Path, str] = {}
-    for path in files:
-        try:
-            with open(path, encoding="utf-8") as f:
-                raw_contents.setdefault(path, f.read())
-        except UnicodeDecodeError as e:
-            logger.debug("Cannot read python file %s: %s", path, e)
-
-    return raw_contents
-
-
 def _visit_python_contents(
     python_contents: Mapping[Path, str]
 ) -> Sequence[NodeVisitorImports]:
@@ -142,61 +142,6 @@ def _visit_python_contents(
 
 
 # .
-#   .--graph---------------------------------------------------------------.
-#   |                                           _                          |
-#   |                      __ _ _ __ __ _ _ __ | |__                       |
-#   |                     / _` | '__/ _` | '_ \| '_ \                      |
-#   |                    | (_| | | | (_| | |_) | | | |                     |
-#   |                     \__, |_|  \__,_| .__/|_| |_|                     |
-#   |                     |___/          |_|                               |
-#   '----------------------------------------------------------------------'
-
-
-def _make_graph(
-    path: Path,
-    import_edges: Sequence[ImportEdge],
-    import_cycles: Sequence[ImportCycle],
-) -> Digraph:
-    # TODO
-    target_dir = (
-        Path(os.path.abspath(__file__))
-        .parent.parent.joinpath("outputs")
-        .joinpath(path.name)
-    )
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    d = Digraph("unix", filename=target_dir.joinpath("import-cycles.gv"))
-
-    with d.subgraph() as ds:
-        for edge in import_edges:
-            ds.node(edge.module)
-            ds.node(edge.imports)
-
-            # TODO use different colors for different cycles
-            if _is_in_cycle(edge, import_cycles):
-                color = "red"
-            else:
-                color = "black"
-
-            ds.attr("edge", color=color)
-            ds.edge(edge.module, edge.imports)
-
-    return d
-
-
-def _is_in_cycle(edge: ImportEdge, import_cycles: Sequence[ImportCycle]) -> bool:
-    for import_cycle in import_cycles:
-        try:
-            idx = import_cycle.cycle.index(edge.module)
-        except ValueError:
-            continue
-
-        if import_cycle.cycle[idx + 1] == edge.imports:
-            return True
-    return False
-
-
-# .
 #   .--cycles--------------------------------------------------------------.
 #   |                                     _                                |
 #   |                      ___ _   _  ___| | ___  ___                      |
@@ -207,66 +152,12 @@ def _is_in_cycle(edge: ImportEdge, import_cycles: Sequence[ImportCycle]) -> bool
 #   '----------------------------------------------------------------------'
 
 
-class ImportEdge(NamedTuple):
-    module: str
-    imports: str
-
-
 class ImportCycle(NamedTuple):
     cycle: Tuple[str, ...]
     chain: Sequence[str]
 
 
-def _get_edges_and_imports(
-    base_path: Path,
-    visitors: Sequence[NodeVisitorImports],
-) -> Tuple[Sequence[ImportEdge], Mapping[str, Sequence[str]]]:
-    import_edges: Set[ImportEdge] = set()
-    module_imports: Dict[str, List[str]] = {}
-    for visitor in visitors:
-        try:
-            module = _get_import_name(base_path, visitor.path)
-        except ValueError as e:
-            logger.debug("Error while getting module name: %s", e)
-            continue
-
-        for import_stmt in visitor.imports_stmt:
-            for alias in import_stmt.node.names:
-                if _is_builtin_or_stdlib(alias.name):
-                    continue
-                import_edges.add(ImportEdge(module, alias.name))
-                module_imports.setdefault(module, []).append(alias.name)
-
-        for import_modulestmt in visitor.imports_from_stmt:
-            if not import_modulestmt.node.module:
-                continue
-
-            if _is_builtin_or_stdlib(import_modulestmt.node.module):
-                continue
-
-            import_edges.add(ImportEdge(module, import_modulestmt.node.module))
-            module_imports.setdefault(module, []).append(import_modulestmt.node.module)
-
-    return sorted(import_edges), module_imports
-
-
-def _get_import_name(base_path: Path, path: Path) -> str:
-    # TODO use importlib or inspect in order to get the right module name
-    path = path.relative_to(base_path).with_suffix("")
-    if path.name == "__init__":
-        path = path.parent
-    return str(path).replace("/", ".")
-
-
-def _is_builtin_or_stdlib(name: str) -> bool:
-    return (
-        name in sys.builtin_module_names
-    )  #  Avail in 3.10: or name in sys.stdlib_module_names
-
-
-def _find_import_cycles(
-    module_imports: Mapping[str, Sequence[str]]
-) -> Sequence[ImportCycle]:
+def _find_import_cycles(module_imports: ModuleImports) -> Sequence[ImportCycle]:
     detector = DetectImportCycles(module_imports)
 
     # TODO sort out duplicates
@@ -320,6 +211,143 @@ class DetectImportCycles:
 
 
 # .
+#   .--graph---------------------------------------------------------------.
+#   |                                           _                          |
+#   |                      __ _ _ __ __ _ _ __ | |__                       |
+#   |                     / _` | '__/ _` | '_ \| '_ \                      |
+#   |                    | (_| | | | (_| | |_) | | | |                     |
+#   |                     \__, |_|  \__,_| .__/|_| |_|                     |
+#   |                     |___/          |_|                               |
+#   '----------------------------------------------------------------------'
+
+
+def _make_graph(path: Path, import_edges: Sequence[ImportEdge]) -> Digraph:
+    # TODO
+    target_dir = (
+        Path(os.path.abspath(__file__))
+        .parent.parent.joinpath("outputs")
+        .joinpath(path.name)
+    )
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    d = Digraph("unix", filename=target_dir.joinpath("import-cycles.gv"))
+
+    with d.subgraph() as ds:
+        for edge in import_edges:
+            ds.node(edge.module)
+            ds.node(edge.imports)
+
+            # TODO use different colors for different cycles
+            if edge.is_in_cycle:
+                color = "red"
+            else:
+                color = "black"
+
+            ds.attr("edge", color=color)
+            ds.edge(edge.module, edge.imports)
+
+    return d
+
+
+class ImportEdge(NamedTuple):
+    module: str
+    imports: str
+    is_in_cycle: bool
+
+
+def _make_edges(
+    module_imports: ModuleImports,
+    import_cycles: Sequence[ImportCycle],
+) -> Sequence[ImportEdge]:
+    edges: Set[ImportEdge] = set()
+    for module, imports in module_imports.items():
+        for the_import in imports:
+            edges.add(
+                ImportEdge(
+                    module,
+                    the_import,
+                    _is_in_cycle(module, the_import, import_cycles),
+                )
+            )
+    return sorted(edges)
+
+
+def _is_in_cycle(
+    module: str,
+    the_import: str,
+    import_cycles: Sequence[ImportCycle],
+) -> bool:
+    for import_cycle in import_cycles:
+        try:
+            idx = import_cycle.cycle.index(module)
+        except ValueError:
+            continue
+
+        if import_cycle.cycle[idx + 1] == the_import:
+            return True
+    return False
+
+
+# .
+#   .--helper--------------------------------------------------------------.
+#   |                    _          _                                      |
+#   |                   | |__   ___| |_ __   ___ _ __                      |
+#   |                   | '_ \ / _ \ | '_ \ / _ \ '__|                     |
+#   |                   | | | |  __/ | |_) |  __/ |                        |
+#   |                   |_| |_|\___|_| .__/ \___|_|                        |
+#   |                                |_|                                   |
+#   '----------------------------------------------------------------------'
+
+
+ModuleImports = Mapping[str, Sequence[str]]
+
+
+def _get_module_imports(
+    base_path: Path,
+    visitors: Sequence[NodeVisitorImports],
+) -> ModuleImports:
+    module_imports: Dict[str, List[str]] = {}
+    for visitor in visitors:
+        try:
+            module = _get_import_name(base_path, visitor.path)
+        except ValueError as e:
+            logger.debug("Error while getting module name: %s", e)
+            continue
+
+        for import_stmt in visitor.imports_stmt:
+            for alias in import_stmt.node.names:
+                if _is_builtin_or_stdlib(alias.name):
+                    continue
+
+                module_imports.setdefault(module, []).append(alias.name)
+
+        for import_modulestmt in visitor.imports_from_stmt:
+            if not import_modulestmt.node.module:
+                continue
+
+            if _is_builtin_or_stdlib(import_modulestmt.node.module):
+                continue
+
+            module_imports.setdefault(module, []).append(import_modulestmt.node.module)
+
+    return module_imports
+
+
+def _get_import_name(base_path: Path, path: Path) -> str:
+    # TODO use importlib or inspect in order to get the right module name
+    path = path.relative_to(base_path).with_suffix("")
+    if path.name == "__init__":
+        path = path.parent
+    return str(path).replace("/", ".")
+
+
+def _is_builtin_or_stdlib(name: str) -> bool:
+    return (
+        name in sys.builtin_module_names
+    )  #  Avail in 3.10: or name in sys.stdlib_module_names
+
+
+# .
 
 
 def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
@@ -366,11 +394,13 @@ def main(argv: Sequence[str]) -> int:
 
     visitors = _visit_python_contents(loaded_python_files)
 
-    import_edges, module_imports = _get_edges_and_imports(path, visitors)
+    module_imports = _get_module_imports(path, visitors)
 
     import_cycles = _find_import_cycles(module_imports)
 
-    graph = _make_graph(path, import_edges, import_cycles)
+    edges = _make_edges(module_imports, import_cycles)
+
+    graph = _make_graph(path, edges)
     graph.view()
 
     return 0
