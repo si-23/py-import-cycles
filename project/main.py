@@ -7,7 +7,7 @@ import ast
 import os
 import logging
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from graphviz import Digraph
 from pathlib import Path
 from typing import (
@@ -152,27 +152,28 @@ def _visit_python_contents(
 #   '----------------------------------------------------------------------'
 
 
-class ImportCycle(NamedTuple):
+ImportChain = Sequence[str]
+
+
+@dataclass
+class ImportCycle:
     cycle: Tuple[str, ...]
-    chain: Sequence[str]
+    chains: List[ImportChain] = field(default_factory=list)
 
 
 def _find_import_cycles(module_imports: ModuleImports) -> Sequence[ImportCycle]:
     detector = DetectImportCycles(module_imports)
 
-    # TODO sort out duplicates
-    cycles: Dict[Tuple[str, ...], List[ImportCycle]] = {}
-    for chain in detector.detect_cycles():
+    import_cycles: Dict[Tuple[str, ...], List[ImportCycle]] = {}
+    for chain in sorted(detector.detect_cycles()):
         first_idx = chain.index(chain[-1])
         cycle = tuple(chain[first_idx:])
-        cycles.setdefault(tuple(sorted(cycle[:-1])), []).append(
-            ImportCycle(
-                cycle=cycle,
-                chain=chain,
-            )
-        )
 
-    return [ic for ics in cycles.values() for ic in ics]
+        import_cycles.setdefault(
+            tuple(sorted(cycle[:-1])), ImportCycle(cycle=cycle)
+        ).chains.append(chain)
+
+    return list(import_cycles.values())
 
 
 @dataclass(frozen=True)
@@ -183,7 +184,7 @@ class DetectImportCycles:
         for module in self._get_main_modules():
             yield from self._detect_cycles([module], module)
 
-    def _get_main_modules(self) -> Set[str]:
+    def _get_main_modules(self) -> Sequence[str]:
         imported_modules = set(
             imported_module
             for imported_modules in self._module_imports.values()
@@ -192,8 +193,8 @@ class DetectImportCycles:
         if main_modules := set(
             name for name in self._module_imports if name not in imported_modules
         ):
-            return main_modules
-        return set(self._module_imports)
+            return sorted(main_modules)
+        return sorted(self._module_imports)
 
     def _detect_cycles(
         self,
@@ -416,7 +417,9 @@ def _show_import_cycles(import_cycles: Sequence[ImportCycle]) -> None:
     if import_cycles:
         print("===== Found import cycles ====")
         for import_cycle in import_cycles:
-            print(import_cycle)
+            print("Cycle:", import_cycle.cycle)
+            for chain in import_cycle.chains:
+                print("  In chain:", chain)
 
 
 def _get_return_code(import_cycles: Sequence[ImportCycle]) -> bool:
