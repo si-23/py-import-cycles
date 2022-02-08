@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import ast
 import os
+import logging
 import sys
 from dataclasses import dataclass
 from graphviz import Digraph
@@ -21,7 +22,8 @@ from typing import (
     Union,
 )
 
-# TODO log instead of print
+logger = logging.getLogger(__name__)
+
 
 #   .--node visitor--------------------------------------------------------.
 #   |                        _              _     _ _                      |
@@ -117,7 +119,7 @@ def _load_python_contents(files: Set[Path]) -> Mapping[Path, str]:
             with open(path, encoding="utf-8") as f:
                 raw_contents.setdefault(path, f.read())
         except UnicodeDecodeError as e:
-            print("Cannot read python file %s: %s" % (path, e))
+            logger.debug("Cannot read python file %s: %s", path, e)
 
     return raw_contents
 
@@ -130,7 +132,7 @@ def _visit_python_contents(
         try:
             tree = ast.parse(python_content)
         except SyntaxError as e:
-            print("Cannot visit python file %s: %s" % (path, e))
+            logger.debug("Cannot visit python file %s: %s", path, e)
             continue
 
         visitor = NodeVisitorImports(path)
@@ -225,7 +227,7 @@ def _get_edges_and_imports(
         try:
             module = _get_import_name(base_path, visitor.path)
         except ValueError as e:
-            print(e)
+            logger.debug("Error while getting module name: %s", e)
             continue
 
         for import_stmt in visitor.imports_stmt:
@@ -325,16 +327,37 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         description=__doc__,
         formatter_class=argparse.RawTextHelpFormatter,
     )
+    parser.add_argument("-d", "--debug", action="store_true", help="Show errors")
     parser.add_argument("path", help="Path to project folder")
     return parser.parse_args(argv)
+
+
+def _setup_logging(args: argparse.Namespace) -> None:
+    if args.debug:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.NOTSET
+
+    logger.setLevel(log_level)
+
+    handler = logging.StreamHandler()
+    handler.setLevel(log_level)
+
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 
 def main(argv: Sequence[str]) -> int:
     args = _parse_arguments(argv)
 
+    _setup_logging(args)
+
     path = Path(args.path)
     if not path.exists() or not path.is_dir():
-        print("No such directory: %s" % path)
+        logger.debug("No such directory: %s", path)
         return 1
 
     python_files = _get_python_files(path)
