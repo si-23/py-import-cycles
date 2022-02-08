@@ -350,12 +350,46 @@ def _is_builtin_or_stdlib(name: str) -> bool:
 # .
 
 
+def main(argv: Sequence[str]) -> int:
+    args = _parse_arguments(argv)
+
+    _setup_logging(args)
+
+    path = Path(args.path)
+    if not path.exists() or not path.is_dir():
+        logger.debug("No such directory: %s", path)
+        return 1
+
+    python_files = _get_python_files(path)
+
+    loaded_python_files = _load_python_contents(set(python_files))
+
+    visitors = _visit_python_contents(loaded_python_files)
+
+    module_imports = _get_module_imports(path, visitors)
+
+    import_cycles = _find_import_cycles(module_imports)
+
+    _show_import_cycles(import_cycles)
+
+    if args.no_graph:
+        return _get_return_code(import_cycles)
+
+    edges = _make_edges(module_imports, import_cycles)
+
+    graph = _make_graph(path, edges)
+    graph.view()
+
+    return _get_return_code(import_cycles)
+
+
 def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument("-d", "--debug", action="store_true", help="Show errors")
+    parser.add_argument("--no-graph", action="store_true", help="Only show cycles")
     parser.add_argument("path", help="Path to project folder")
     return parser.parse_args(argv)
 
@@ -378,32 +412,15 @@ def _setup_logging(args: argparse.Namespace) -> None:
     logger.addHandler(handler)
 
 
-def main(argv: Sequence[str]) -> int:
-    args = _parse_arguments(argv)
+def _show_import_cycles(import_cycles: Sequence[ImportCycle]) -> None:
+    if import_cycles:
+        print("===== Found import cycles ====")
+        for import_cycle in import_cycles:
+            print(import_cycle)
 
-    _setup_logging(args)
 
-    path = Path(args.path)
-    if not path.exists() or not path.is_dir():
-        logger.debug("No such directory: %s", path)
-        return 1
-
-    python_files = _get_python_files(path)
-
-    loaded_python_files = _load_python_contents(set(python_files))
-
-    visitors = _visit_python_contents(loaded_python_files)
-
-    module_imports = _get_module_imports(path, visitors)
-
-    import_cycles = _find_import_cycles(module_imports)
-
-    edges = _make_edges(module_imports, import_cycles)
-
-    graph = _make_graph(path, edges)
-    graph.view()
-
-    return 0
+def _get_return_code(import_cycles: Sequence[ImportCycle]) -> bool:
+    return bool(import_cycles)
 
 
 if __name__ == "__main__":
