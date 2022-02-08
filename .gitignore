@@ -130,3 +130,6 @@ dmypy.json
 
 # Outputs
 outputs/
+
+# Swap files
+*.swp
