@@ -158,7 +158,8 @@ def _visit_python_contents(
 def _make_graph(
     import_edges: Sequence[ImportEdge], import_cycles: Sequence[ImportCycle]
 ) -> Digraph:
-    target = Path(os.path.abspath(__file__)).parent.joinpath("outputs")
+    # TODO
+    target = Path(os.path.abspath(__file__)).parent.parent.joinpath("outputs")
     target.mkdir(parents=True, exist_ok=True)
 
     d = Digraph("unix", filename=target.joinpath("import-cycles.gv"))
