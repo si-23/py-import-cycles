@@ -1,0 +1,23 @@
+#!/bin/bash
+
+REPO_PATH=$(dirname "$(dirname "$(realpath "$0")")")
+
+if [ "$PIPENV_ACTIVE" != "1" ]; then
+    echo "Run mypy within pipenv"
+    exit 1
+fi
+
+if [ -n "$1" ]; then
+	python_files="$1"
+else
+	python_files="$("$REPO_PATH/scripts/find-python-files" --mypy)"
+fi
+
+if [ -z "$python_files" ]; then
+    exit 0
+fi
+
+# shellcheck disable=SC2086
+pipenv run mypy \
+    --config-file ../mypy.ini \
+    $python_files

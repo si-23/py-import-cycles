@@ -1,0 +1,23 @@
+[MASTER]
+jobs=0
+persistent=yes
+
+[MESSAGES CONTROL]
+disable=
+    # Write comments as needed
+    missing-docstring,
+    # Why?
+    fixme,
+    too-few-public-methods,
+    no-self-use,
+    invalid-name,
+    too-many-instance-attributes,
+    too-many-return-statements,
+    too-many-ancestors,
+    duplicate-code,
+
+[REPORTS]
+msg-template={path}:{line}: [{msg_id}({symbol}), {obj}] {msg}
+
+[FORMAT]
+max-line-length=100

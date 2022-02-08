@@ -1,0 +1,8 @@
+#!/bin/bash
+
+REPO_PATH=$(dirname "$(dirname "$(realpath "$0")")")
+
+scripts=$(find "${REPO_PATH}" -type f \( -perm -u=x -o -perm -g=x -o -perm -o=x \) -exec grep "^#.*/bash" {} /dev/null \; | cut -d":" -f1)
+
+# shellcheck disable=SC2086
+shellcheck $scripts
