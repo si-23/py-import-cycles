@@ -101,7 +101,7 @@ class NodeVisitorImports(ast.NodeVisitor):
 #   '----------------------------------------------------------------------'
 
 
-def _get_python_files(path) -> Iterable[Path]:
+def _get_python_files(path: Path) -> Iterable[Path]:
     if path.is_file() and path.suffix == ".py":
         yield path.resolve()
         return
@@ -193,7 +193,7 @@ class ImportEdge(NamedTuple):
 
 class ImportCycle(NamedTuple):
     cycle: Tuple[str, ...]
-    chain: Tuple[str, ...]
+    chain: Sequence[str]
 
 
 def _find_import_cycles(
@@ -249,14 +249,14 @@ def _get_main_modules(module_imports: Mapping[str, Sequence[str]]) -> Set[str]:
 
 def _get_all_chains_with_cycles(
     main_modules: Set[str], module_imports: Mapping[str, Sequence[str]]
-):
+) -> Iterable[Sequence[str]]:
     for from_ in main_modules:
         yield from _get_chains_with_cycle([from_], from_, module_imports)
 
 
 def _get_chains_with_cycle(
     base_chain: List[str], key: str, module_imports: Mapping[str, Sequence[str]]
-):
+) -> Iterable[Sequence[str]]:
     for imported_module in module_imports.get(key, []):
         if imported_module in base_chain:
             yield base_chain + [imported_module]
