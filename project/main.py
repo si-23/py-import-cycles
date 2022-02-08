@@ -6,6 +6,7 @@ import argparse
 import ast
 import os
 import sys
+from dataclasses import dataclass
 from graphviz import Digraph
 from pathlib import Path
 from typing import (
@@ -218,11 +219,11 @@ def _find_import_cycles(
             import_edges.add(ImportEdge(module, import_modulestmt.node.module))
             module_imports.setdefault(module, []).append(import_modulestmt.node.module)
 
-    main_modules = _get_main_modules(module_imports)
+    detector = DetectImportCycles(module_imports)
 
     # TODO sort out duplicates
     cycles: Dict[Tuple[str, ...], List[ImportCycle]] = {}
-    for chain in _get_all_chains_with_cycles(main_modules, module_imports):
+    for chain in detector.detect_cycles():
         first_idx = chain.index(chain[-1])
         cycle = tuple(chain[first_idx:])
         cycles.setdefault(tuple(sorted(cycle[:-1])), []).append(
@@ -235,36 +236,39 @@ def _find_import_cycles(
     return sorted(import_edges), [ic for ics in cycles.values() for ic in ics]
 
 
-def _get_main_modules(module_imports: Mapping[str, Sequence[str]]) -> Set[str]:
-    imported_modules = set(
-        imported_module
-        for imported_modules in module_imports.values()
-        for imported_module in imported_modules
-    )
-    if main_modules := set(
-        name for name in module_imports if name not in imported_modules
-    ):
-        return main_modules
-    return set(module_imports)
+@dataclass(frozen=True)
+class DetectImportCycles:
+    _module_imports: Mapping[str, Sequence[str]]
 
+    def detect_cycles(self) -> Iterable[Sequence[str]]:
+        for module in self._get_main_modules():
+            yield from self._detect_cycles([module], module)
 
-def _get_all_chains_with_cycles(
-    main_modules: Set[str], module_imports: Mapping[str, Sequence[str]]
-) -> Iterable[Sequence[str]]:
-    for from_ in main_modules:
-        yield from _get_chains_with_cycle([from_], from_, module_imports)
-
-
-def _get_chains_with_cycle(
-    base_chain: List[str], key: str, module_imports: Mapping[str, Sequence[str]]
-) -> Iterable[Sequence[str]]:
-    for imported_module in module_imports.get(key, []):
-        if imported_module in base_chain:
-            yield base_chain + [imported_module]
-            break
-        yield from _get_chains_with_cycle(
-            base_chain + [imported_module], imported_module, module_imports
+    def _get_main_modules(self) -> Set[str]:
+        imported_modules = set(
+            imported_module
+            for imported_modules in self._module_imports.values()
+            for imported_module in imported_modules
         )
+        if main_modules := set(
+            name for name in self._module_imports if name not in imported_modules
+        ):
+            return main_modules
+        return set(self._module_imports)
+
+    def _detect_cycles(
+        self,
+        base_chain: List[str],
+        module: str,
+    ) -> Iterable[Sequence[str]]:
+        for imported_module in self._module_imports.get(module, []):
+            if imported_module in base_chain:
+                yield base_chain + [imported_module]
+                break
+
+            yield from self._detect_cycles(
+                base_chain + [imported_module], imported_module
+            )
 
 
 # .
