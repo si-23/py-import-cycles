@@ -222,7 +222,11 @@ def _get_edges_and_imports(
     import_edges: Set[ImportEdge] = set()
     module_imports: Dict[str, List[str]] = {}
     for visitor in visitors:
-        module = _get_import_name(base_path, visitor.path)
+        try:
+            module = _get_import_name(base_path, visitor.path)
+        except ValueError as e:
+            print(e)
+            continue
 
         for import_stmt in visitor.imports_stmt:
             for alias in import_stmt.node.names:
