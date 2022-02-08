@@ -304,12 +304,10 @@ class DetectImportCycles:
 
 def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawTextHelpFormatter
+        description=__doc__,
+        formatter_class=argparse.RawTextHelpFormatter,
     )
-    parser.add_argument(
-        "path",
-        help="Raise Python exceptions.",
-    )
+    parser.add_argument("path", help="Path to project folder")
     return parser.parse_args(argv)
 
 
