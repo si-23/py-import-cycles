@@ -7,19 +7,11 @@ import ast
 import os
 import sys
 from dataclasses import dataclass
-from graphviz import Digraph
 from pathlib import Path
-from typing import (
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    NamedTuple,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import (Dict, Iterable, List, Mapping, NamedTuple, Sequence, Set,
+                    Tuple, Union)
+
+from graphviz import Digraph
 
 #   .--node visitor--------------------------------------------------------.
 #   |                        _              _     _ _                      |
