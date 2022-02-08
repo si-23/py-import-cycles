@@ -221,7 +221,7 @@ class DetectImportCycles:
 #   '----------------------------------------------------------------------'
 
 
-def _make_graph(path: Path, import_edges: Sequence[ImportEdge]) -> Digraph:
+def _make_graph(path: Path, edges: Sequence[ImportEdge]) -> Digraph:
     # TODO
     target_dir = (
         Path(os.path.abspath(__file__))
@@ -233,7 +233,7 @@ def _make_graph(path: Path, import_edges: Sequence[ImportEdge]) -> Digraph:
     d = Digraph("unix", filename=target_dir.joinpath("import-cycles.gv"))
 
     with d.subgraph() as ds:
-        for edge in import_edges:
+        for edge in edges:
             ds.node(edge.module)
             ds.node(edge.imports)
 
