@@ -206,14 +206,14 @@ class ImportCycle(NamedTuple):
     chain: Sequence[str]
 
 
-def _find_import_cycles(
+def _get_edges_and_imports(
+    base_path: Path,
     visitors: Sequence[NodeVisitorImports],
-) -> Tuple[Sequence[ImportEdge], Sequence[ImportCycle]]:
+) -> Tuple[Sequence[ImportEdge], Mapping[str, Sequence[str]]]:
     import_edges: Set[ImportEdge] = set()
     module_imports: Dict[str, List[str]] = {}
     for visitor in visitors:
-        # TODO use importlib or inspect in order to get the right module name
-        module = visitor.path.stem
+        module = _get_import_name(base_path, visitor.path)
 
         for import_stmt in visitor.imports_stmt:
             for alias in import_stmt.node.names:
@@ -227,6 +227,20 @@ def _find_import_cycles(
             import_edges.add(ImportEdge(module, import_modulestmt.node.module))
             module_imports.setdefault(module, []).append(import_modulestmt.node.module)
 
+    return sorted(import_edges), module_imports
+
+
+def _get_import_name(base_path: Path, path: Path) -> str:
+    # TODO use importlib or inspect in order to get the right module name
+    path = path.relative_to(base_path).with_suffix("")
+    if path.name == "__init__":
+        path = path.parent
+    return str(path).replace("/", ".")
+
+
+def _find_import_cycles(
+    module_imports: Mapping[str, Sequence[str]]
+) -> Sequence[ImportCycle]:
     detector = DetectImportCycles(module_imports)
 
     # TODO sort out duplicates
@@ -241,7 +255,7 @@ def _find_import_cycles(
             )
         )
 
-    return sorted(import_edges), [ic for ics in cycles.values() for ic in ics]
+    return [ic for ics in cycles.values() for ic in ics]
 
 
 @dataclass(frozen=True)
@@ -307,11 +321,9 @@ def main(argv: Sequence[str]) -> int:
 
     visitors = _visit_python_contents(loaded_python_files)
 
-    import_edges, import_cycles = _find_import_cycles(visitors)
+    import_edges, module_imports = _get_edges_and_imports(path, visitors)
 
-    if import_cycles:
-        for import_cycle in import_cycles:
-            print(import_cycle.cycle)
+    import_cycles = _find_import_cycles(module_imports)
 
     graph = _make_graph(import_edges, import_cycles)
     graph.view()
