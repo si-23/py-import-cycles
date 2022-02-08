@@ -1,5 +1,6 @@
 SHELL := /bin/bash -e
 BLACK := pipenv run ../scripts/run-black
+ISORT := pipenv run ../scripts/run-isort
 PYTEST := pipenv run py.test -vv unit
 MYPY := pipenv run ../scripts/run-mypy
 PYLINT := pipenv run ../scripts/run-pylint
@@ -12,6 +13,7 @@ venv:
 
 test-format-python:
 	@$(BLACK) --diff
+	@$(ISORT)
 
 test-unit: venv
 	@$(PYTEST)

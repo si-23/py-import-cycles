@@ -7,11 +7,21 @@ import ast
 import os
 import sys
 from dataclasses import dataclass
-from pathlib import Path
-from typing import (Dict, Iterable, List, Mapping, NamedTuple, Sequence, Set,
-                    Tuple, Union)
-
 from graphviz import Digraph
+from pathlib import Path
+from typing import (
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    NamedTuple,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
+
+# TODO log instead of print
 
 #   .--node visitor--------------------------------------------------------.
 #   |                        _              _     _ _                      |
@@ -116,7 +126,7 @@ def _visit_python_contents(
     for path, python_content in python_contents.items():
         try:
             tree = ast.parse(python_content)
-        except Exception as e:
+        except SyntaxError as e:
             print("Cannot visit python file %s: %s" % (path, e))
             continue
 
@@ -170,7 +180,7 @@ def _is_in_cycle(edge: ImportEdge, import_cycles: Sequence[ImportCycle]) -> bool
         except ValueError:
             continue
 
-        if import_cycle.cycle[idx+1] == edge.imports:
+        if import_cycle.cycle[idx + 1] == edge.imports:
             return True
     return False
 
