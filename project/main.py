@@ -226,11 +226,16 @@ def _get_edges_and_imports(
 
         for import_stmt in visitor.imports_stmt:
             for alias in import_stmt.node.names:
+                if _is_builtin_or_stdlib(alias.name):
+                    continue
                 import_edges.add(ImportEdge(module, alias.name))
                 module_imports.setdefault(module, []).append(alias.name)
 
         for import_modulestmt in visitor.imports_from_stmt:
             if not import_modulestmt.node.module:
+                continue
+
+            if _is_builtin_or_stdlib(import_modulestmt.node.module):
                 continue
 
             import_edges.add(ImportEdge(module, import_modulestmt.node.module))
@@ -245,6 +250,12 @@ def _get_import_name(base_path: Path, path: Path) -> str:
     if path.name == "__init__":
         path = path.parent
     return str(path).replace("/", ".")
+
+
+def _is_builtin_or_stdlib(name: str) -> bool:
+    return (
+        name in sys.builtin_module_names
+    )  #  Avail in 3.10: or name in sys.stdlib_module_names
 
 
 def _find_import_cycles(
