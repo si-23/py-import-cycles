@@ -166,15 +166,31 @@ def _make_graph(
     d = Digraph("unix", filename=target.joinpath("import-cycles.gv"))
 
     with d.subgraph() as ds:
-        for module, imports in import_edges:
-            ds.node(module)
-            ds.node(imports)
+        for edge in import_edges:
+            ds.node(edge.module)
+            ds.node(edge.imports)
 
-            # TODO change color="red" if import_edge is in cycle
-            ds.attr("edge", color="black")
-            ds.edge(module, imports)
+            if _is_in_cycle(edge, import_cycles):
+                color = "red"
+            else:
+                color = "black"
+
+            ds.attr("edge", color=color)
+            ds.edge(edge.module, edge.imports)
 
     return d
+
+
+def _is_in_cycle(edge: ImportEdge, import_cycles: Sequence[ImportCycle]) -> bool:
+    for import_cycle in import_cycles:
+        try:
+            idx = import_cycle.cycle.index(edge.module)
+        except ValueError:
+            continue
+
+        if import_cycle.cycle[idx+1] == edge.imports:
+            return True
+    return False
 
 
 # .
