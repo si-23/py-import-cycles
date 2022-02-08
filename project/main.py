@@ -32,7 +32,6 @@ from typing import (
 
 
 ImportContext = Tuple[Union[ast.ClassDef, ast.FunctionDef], ...]
-SerializedImport = Tuple[Tuple[str, ...], str]
 
 
 class ImportSTMT(NamedTuple):
