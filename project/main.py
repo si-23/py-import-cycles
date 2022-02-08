@@ -94,6 +94,9 @@ class NodeVisitorImports(ast.NodeVisitor):
 
 
 def _get_python_files(path: Path) -> Iterable[Path]:
+    if path.is_symlink():
+        return
+
     if path.is_file() and path.suffix == ".py":
         yield path.resolve()
         return
