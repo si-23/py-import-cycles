@@ -39,22 +39,12 @@ class ImportSTMT(NamedTuple):
     context: ImportContext
     node: ast.Import
 
-    def get_context_names(self) -> List[str]:
-        return [c.name for c in self.context]
-
-    def is_nested(self) -> bool:
-        return bool(self.context)
-
 
 class ImportFromSTMT(NamedTuple):
     context: ImportContext
     node: ast.ImportFrom
 
-    def get_context_names(self) -> List[str]:
-        return [c.name for c in self.context]
-
-    def is_nested(self) -> bool:
-        return bool(self.context)
+    # TODO use context in graph (nested import stmt)
 
 
 class NodeVisitorImports(ast.NodeVisitor):
@@ -223,12 +213,12 @@ def _find_import_cycles(
         # TODO use importlib or inspect in order to get the right module name
         module = visitor.path.stem
 
-        for import_stmt in visitor._imports_stmt:
+        for import_stmt in visitor.imports_stmt:
             for alias in import_stmt.node.names:
                 import_edges.add(ImportEdge(module, alias.name))
                 module_imports.setdefault(module, []).append(alias.name)
 
-        for import_modulestmt in visitor._imports_from_stmt:
+        for import_modulestmt in visitor.imports_from_stmt:
             if not import_modulestmt.node.module:
                 continue
 
