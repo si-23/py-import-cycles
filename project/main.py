@@ -201,9 +201,9 @@ class DetectImportCycles:
 
     def _get_main_modules(self) -> Sequence[str]:
         module_names = set(
-            module_name
-            for module_import in self._module_imports.values()
-            for module_name in module_import.imports
+            module_import.module_name
+            for module_imports in self._module_imports.values()
+            for module_import in module_imports
         )
         if main_modules := set(
             module_name
@@ -218,16 +218,13 @@ class DetectImportCycles:
         base_chain: List[str],
         module: str,
     ) -> Iterable[Sequence[str]]:
-        if (module_import := self._module_imports.get(module)) is None:
-            return
-
-        for imported_module in module_import.imports:
-            if imported_module in base_chain:
-                yield base_chain + [imported_module]
+        for module_import in self._module_imports.get(module, []):
+            if module_import.module_name in base_chain:
+                yield base_chain + [module_import.module_name]
                 break
 
             yield from self._detect_cycles(
-                base_chain + [imported_module], imported_module
+                base_chain + [module_import.module_name], module_import.module_name
             )
 
 
@@ -258,10 +255,12 @@ def _make_graph(path: Path, edges: Sequence[ImportEdge]) -> Digraph:
             ds.node(edge.imports)
             ds.attr("edge", color=edge.color)
 
+            prefix = ">" if edge.context else ""
+
             if edge.title:
-                ds.edge(edge.module, edge.imports, edge.title)
+                ds.edge(edge.module, prefix + edge.imports, edge.title)
             else:
-                ds.edge(edge.module, edge.imports)
+                ds.edge(edge.module, prefix + edge.imports)
 
     return d.unflatten(stagger=50)
 
@@ -271,6 +270,7 @@ class ImportEdge(NamedTuple):
     module: str
     imports: str
     color: str
+    context: ImportContext
 
 
 def _make_edges(
@@ -282,7 +282,7 @@ def _make_edges(
         return _make_all_edges(module_imports, import_cycles)
 
     if args.graph == "only-cycles":
-        return _make_only_cycles_edges(import_cycles)
+        return _make_only_cycles_edges(module_imports, import_cycles)
 
     raise NotImplementedError("Unknown graph option: %s" % args.graph)
 
@@ -292,15 +292,18 @@ def _make_all_edges(
     import_cycles: Sequence[ImportCycle],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
-    for module, module_import in module_imports.items():
-        for module_name in module_import.imports:
-            import_cycle = _is_in_cycle(module, module_name, import_cycles)
+    for module, these_module_imports in module_imports.items():
+        for module_import in these_module_imports:
+            import_cycle = _is_in_cycle(
+                module, module_import.module_name, import_cycles
+            )
             edges.add(
                 ImportEdge(
                     "",
                     module,
-                    module_name,
+                    module_import.module_name,
                     "black" if import_cycle is None else "red",
+                    tuple(),
                 )
             )
     return sorted(edges)
@@ -323,6 +326,7 @@ def _is_in_cycle(
 
 
 def _make_only_cycles_edges(
+    module_imports: ModuleImports,
     import_cycles: Sequence[ImportCycle],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
@@ -333,16 +337,22 @@ def _make_only_cycles_edges(
             random.randint(50, 200),
         )
         module = import_cycle.cycle[0]
-        for the_import in import_cycle.cycle[1:]:
+        for module_name in import_cycle.cycle[1:]:
+            # if (module_import := module_imports.get(module_name)) is None:
+            #     context = tuple()
+            # else:
+            #     context = module_import.context
+
             edges.add(
                 ImportEdge(
                     str(nr + 1),
                     module,
-                    the_import,
+                    module_name,
                     color,
+                    tuple(),
                 )
             )
-            module = the_import
+            module = module_name
     return sorted(edges)
 
 
@@ -359,11 +369,11 @@ def _make_only_cycles_edges(
 
 @dataclass
 class ModuleImport:
+    module_name: str
     context: ImportContext
-    imports: List[str] = field(default_factory=list)
 
 
-ModuleImports = Mapping[str, ModuleImport]
+ModuleImports = Mapping[str, Sequence[ModuleImport]]
 
 
 def _get_module_imports(
@@ -372,7 +382,7 @@ def _get_module_imports(
     visitors: Sequence[NodeVisitorImports],
 ) -> ModuleImports:
     # TODO move to cache
-    module_imports: Dict[str, ModuleImport] = {}
+    module_imports: Dict[str, List[ModuleImport]] = {}
     unknown_modules_cache = UnknownModulesCache()
     for visitor in visitors:
         try:
@@ -397,9 +407,9 @@ def _get_module_imports(
                 ) is None:
                     continue
 
-                module_imports.setdefault(
-                    module_name_from_path, ModuleImport(import_stmt.context)
-                ).imports.append(module_name_from_import)
+                module_imports.setdefault(module_name_from_path, []).append(
+                    ModuleImport(module_name_from_import, import_stmt.context)
+                )
 
         for import_from_stmt in visitor.imports_from_stmt:
             if not import_from_stmt.node.module:
@@ -417,9 +427,9 @@ def _get_module_imports(
             ) is None:
                 continue
 
-            module_imports.setdefault(
-                module_name_from_path, ModuleImport(import_from_stmt.context)
-            ).imports.append(module_name_from_import)
+            module_imports.setdefault(module_name_from_path, []).append(
+                ModuleImport(module_name_from_import, import_from_stmt.context)
+            )
 
     return module_imports
 
