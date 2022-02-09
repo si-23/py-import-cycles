@@ -7,6 +7,7 @@ import ast
 import importlib
 import os
 import logging
+import random
 import sys
 from dataclasses import dataclass, field
 from graphviz import Digraph
@@ -17,6 +18,7 @@ from typing import (
     List,
     Mapping,
     NamedTuple,
+    Optional,
     Sequence,
     Set,
     Tuple,
@@ -159,6 +161,7 @@ ImportChain = Sequence[str]
 @dataclass
 class ImportCycle:
     cycle: Tuple[str, ...]
+    color: str
     chains: List[ImportChain] = field(default_factory=list)
 
 
@@ -171,7 +174,16 @@ def _find_import_cycles(module_imports: ModuleImports) -> Sequence[ImportCycle]:
         cycle = tuple(chain[first_idx:])
 
         import_cycles.setdefault(
-            tuple(sorted(cycle[:-1])), ImportCycle(cycle=cycle)
+            tuple(sorted(cycle[:-1])),
+            ImportCycle(
+                cycle=cycle,
+                color="#%02x%02x%02x"
+                % (
+                    random.randint(50, 200),
+                    random.randint(50, 200),
+                    random.randint(50, 200),
+                ),
+            ),
         ).chains.append(chain)
 
     return list(import_cycles.values())
@@ -238,14 +250,7 @@ def _make_graph(path: Path, edges: Sequence[ImportEdge]) -> Digraph:
         for edge in edges:
             ds.node(edge.module)
             ds.node(edge.imports)
-
-            # TODO use different colors for different cycles
-            if edge.is_in_cycle:
-                color = "red"
-            else:
-                color = "black"
-
-            ds.attr("edge", color=color)
+            ds.attr("edge", color=edge.color)
             ds.edge(edge.module, edge.imports)
 
     return d.unflatten(stagger=50)
@@ -255,6 +260,7 @@ class ImportEdge(NamedTuple):
     module: str
     imports: str
     is_in_cycle: bool
+    color: str
 
 
 def _make_edges(
@@ -278,13 +284,7 @@ def _make_all_edges(
     edges: Set[ImportEdge] = set()
     for module, imports in module_imports.items():
         for the_import in imports:
-            edges.add(
-                ImportEdge(
-                    module,
-                    the_import,
-                    _is_in_cycle(module, the_import, import_cycles),
-                )
-            )
+            edges.add(_make_edge(module, the_import, import_cycles))
     return sorted(edges)
 
 
@@ -296,22 +296,30 @@ def _make_only_cycles_edges(
         for chain in import_cycle.chains:
             module = chain[0]
             for the_import in chain[1:]:
-                edges.add(
-                    ImportEdge(
-                        module,
-                        the_import,
-                        _is_in_cycle(module, the_import, import_cycles),
-                    )
-                )
+                edges.add(_make_edge(module, the_import, import_cycles))
                 module = the_import
-    return edges
+    return sorted(edges)
+
+
+def _make_edge(
+    module: str,
+    the_import: str,
+    import_cycles: Sequence[ImportCycle],
+) -> ImportEdge:
+    import_cycle = _is_in_cycle(module, the_import, import_cycles)
+    return ImportEdge(
+        module,
+        the_import,
+        import_cycle is not None,
+        "black" if import_cycle is None else import_cycle.color,
+    )
 
 
 def _is_in_cycle(
     module: str,
     the_import: str,
     import_cycles: Sequence[ImportCycle],
-) -> bool:
+) -> Optional[ImportCycle]:
     for import_cycle in import_cycles:
         try:
             idx = import_cycle.cycle.index(module)
@@ -319,8 +327,8 @@ def _is_in_cycle(
             continue
 
         if import_cycle.cycle[idx + 1] == the_import:
-            return True
-    return False
+            return import_cycle
+    return None
 
 
 # .
