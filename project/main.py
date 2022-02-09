@@ -248,7 +248,7 @@ def _make_graph(path: Path, edges: Sequence[ImportEdge]) -> Digraph:
             ds.attr("edge", color=color)
             ds.edge(edge.module, edge.imports)
 
-    return d
+    return d.unflatten(stagger=50)
 
 
 class ImportEdge(NamedTuple):
