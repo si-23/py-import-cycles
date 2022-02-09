@@ -251,12 +251,13 @@ def _make_graph(path: Path, edges: Sequence[ImportEdge]) -> Digraph:
             ds.node(edge.module)
             ds.node(edge.imports)
             ds.attr("edge", color=edge.color)
-            ds.edge(edge.module, edge.imports)
+            ds.edge(edge.module, edge.imports, edge.title)
 
     return d.unflatten(stagger=50)
 
 
 class ImportEdge(NamedTuple):
+    title: str
     module: str
     imports: str
     is_in_cycle: bool
@@ -305,8 +306,9 @@ def _make_edge(
     the_import: str,
     import_cycles: Sequence[ImportCycle],
 ) -> ImportEdge:
-    import_cycle = _is_in_cycle(module, the_import, import_cycles)
+    nr, import_cycle = _is_in_cycle(module, the_import, import_cycles)
     return ImportEdge(
+        "" if nr is None else str(nr),
         module,
         the_import,
         import_cycle is not None,
@@ -318,16 +320,16 @@ def _is_in_cycle(
     module: str,
     the_import: str,
     import_cycles: Sequence[ImportCycle],
-) -> Optional[ImportCycle]:
-    for import_cycle in import_cycles:
+) -> Tuple[Optional[int], Optional[ImportCycle]]:
+    for nr, import_cycle in enumerate(import_cycles):
         try:
             idx = import_cycle.cycle.index(module)
         except ValueError:
             continue
 
         if import_cycle.cycle[idx + 1] == the_import:
-            return import_cycle
-    return None
+            return nr, import_cycle
+    return None, None
 
 
 # .
