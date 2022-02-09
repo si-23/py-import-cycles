@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import importlib
 import os
 import logging
 import sys
@@ -305,13 +306,15 @@ ModuleImports = Mapping[str, Sequence[str]]
 
 def _get_module_imports(
     base_path: Path,
+    namespace: str,
     visitors: Sequence[NodeVisitorImports],
 ) -> ModuleImports:
     module_imports: Dict[str, List[str]] = {}
     for visitor in visitors:
-
         try:
-            module = _get_import_name(base_path, visitor.path)
+            module_name_from_path = _get_module_name_from_path(
+                base_path, namespace, visitor.path
+            )
         except ValueError as e:
             logger.debug("Error while getting module name: %s", e)
             continue
@@ -321,7 +324,16 @@ def _get_module_imports(
                 if _is_builtin_or_stdlib(alias.name):
                     continue
 
-                module_imports.setdefault(module, []).append(alias.name)
+                if (
+                    module_name_from_import := _get_module_name_from_import(
+                        base_path, namespace, alias.name
+                    )
+                ) is None:
+                    continue
+
+                module_imports.setdefault(module_name_from_path, []).append(
+                    module_name_from_import
+                )
 
         for import_from_stmt in visitor.imports_from_stmt:
             if not import_from_stmt.node.module:
@@ -330,13 +342,25 @@ def _get_module_imports(
             if _is_builtin_or_stdlib(import_from_stmt.node.module):
                 continue
 
-            module_imports.setdefault(module, []).append(import_from_stmt.node.module)
+            if (
+                module_name_from_import := _get_module_name_from_import(
+                    base_path, namespace, import_from_stmt.node.module
+                )
+            ) is None:
+                continue
+
+            module_imports.setdefault(module_name_from_path, []).append(
+                module_name_from_import
+            )
 
     return module_imports
 
 
-def _get_import_name(base_path: Path, path: Path) -> str:
+def _get_module_name_from_path(base_path: Path, namespace: str, path: Path) -> str:
     # TODO use importlib or inspect in order to get the right module name
+    idx = base_path.parts.index(namespace)
+    base_path = Path(*base_path.parts[:idx])
+
     path = path.relative_to(base_path).with_suffix("")
     if path.name == "__init__":
         path = path.parent
@@ -345,8 +369,26 @@ def _get_import_name(base_path: Path, path: Path) -> str:
 
 def _is_builtin_or_stdlib(name: str) -> bool:
     return (
-        name in sys.builtin_module_names
+        name in sys.builtin_module_names or name in sys.modules
     )  #  Avail in 3.10: or name in sys.stdlib_module_names
+
+
+def _get_module_name_from_import(base_path: Path, namespace: str, name: str) -> str:
+    if name.startswith(namespace):
+        return name
+
+    try:
+        module_spec = importlib.util.find_spec(name)
+    except ModuleNotFoundError as e:
+        logger.debug("No such module: %s", e)
+        # Found module in the python paths
+        return None
+
+    if module_spec is not None:
+        return None
+
+    idx = base_path.parts.index(namespace)
+    return ".".join(list(base_path.parts[idx:]) + [name])
 
 
 # .
@@ -368,7 +410,7 @@ def main(argv: Sequence[str]) -> int:
 
     visitors = _visit_python_contents(loaded_python_files)
 
-    module_imports = _get_module_imports(path, visitors)
+    module_imports = _get_module_imports(path, args.namespace, visitors)
 
     import_cycles = _find_import_cycles(module_imports)
 
@@ -392,6 +434,9 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument("-d", "--debug", action="store_true", help="Show errors")
     parser.add_argument("--no-graph", action="store_true", help="Only show cycles")
+    parser.add_argument(
+        "--namespace", help="Part of the path which is the anchor to the namespace"
+    )
     parser.add_argument("path", help="Path to project folder")
     return parser.parse_args(argv)
 
