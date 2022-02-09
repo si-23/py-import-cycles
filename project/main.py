@@ -309,6 +309,7 @@ def _get_module_imports(
 ) -> ModuleImports:
     module_imports: Dict[str, List[str]] = {}
     for visitor in visitors:
+
         try:
             module = _get_import_name(base_path, visitor.path)
         except ValueError as e:
@@ -322,14 +323,14 @@ def _get_module_imports(
 
                 module_imports.setdefault(module, []).append(alias.name)
 
-        for import_modulestmt in visitor.imports_from_stmt:
-            if not import_modulestmt.node.module:
+        for import_from_stmt in visitor.imports_from_stmt:
+            if not import_from_stmt.node.module:
                 continue
 
-            if _is_builtin_or_stdlib(import_modulestmt.node.module):
+            if _is_builtin_or_stdlib(import_from_stmt.node.module):
                 continue
 
-            module_imports.setdefault(module, []).append(import_modulestmt.node.module)
+            module_imports.setdefault(module, []).append(import_from_stmt.node.module)
 
     return module_imports
 
