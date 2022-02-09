@@ -78,7 +78,7 @@ def _load_python_contents(files: Set[Path]) -> Mapping[Path, str]:
 #   '----------------------------------------------------------------------'
 
 
-ImportContext = Tuple[Union[ast.ClassDef, ast.FunctionDef], ...]
+ImportContext = Tuple[Union[ast.If, ast.Try, ast.ClassDef, ast.FunctionDef], ...]
 
 
 class ImportSTMT(NamedTuple):
@@ -113,6 +113,18 @@ class NodeVisitorImports(ast.NodeVisitor):
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         self._imports_from_stmt.append(ImportFromSTMT(self._context, node))
+
+    def visit_If(self, node: ast.If) -> None:
+        self._context += (node,)
+        for child in ast.iter_child_nodes(node):
+            ast.NodeVisitor.visit(self, child)
+        self._context = self._context[:-1]
+
+    def visit_Try(self, node: ast.Try) -> None:
+        self._context += (node,)
+        for child in ast.iter_child_nodes(node):
+            ast.NodeVisitor.visit(self, child)
+        self._context = self._context[:-1]
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self._context += (node,)
@@ -181,20 +193,22 @@ def _find_import_cycles(module_imports: ModuleImports) -> Sequence[ImportCycle]:
 
 @dataclass(frozen=True)
 class DetectImportCycles:
-    _module_imports: Mapping[str, Sequence[str]]
+    _module_imports: ModuleImports
 
     def detect_cycles(self) -> Iterable[Sequence[str]]:
         for module in self._get_main_modules():
             yield from self._detect_cycles([module], module)
 
     def _get_main_modules(self) -> Sequence[str]:
-        imported_modules = set(
-            imported_module
-            for imported_modules in self._module_imports.values()
-            for imported_module in imported_modules
+        module_names = set(
+            module_name
+            for module_import in self._module_imports.values()
+            for module_name in module_import.imports
         )
         if main_modules := set(
-            name for name in self._module_imports if name not in imported_modules
+            module_name
+            for module_name in self._module_imports
+            if module_name not in module_names
         ):
             return sorted(main_modules)
         return sorted(self._module_imports)
@@ -204,7 +218,10 @@ class DetectImportCycles:
         base_chain: List[str],
         module: str,
     ) -> Iterable[Sequence[str]]:
-        for imported_module in self._module_imports.get(module, []):
+        if (module_import := self._module_imports.get(module)) is None:
+            return
+
+        for imported_module in module_import.imports:
             if imported_module in base_chain:
                 yield base_chain + [imported_module]
                 break
@@ -340,7 +357,13 @@ def _make_only_cycles_edges(
 #   '----------------------------------------------------------------------'
 
 
-ModuleImports = Mapping[str, Sequence[str]]
+@dataclass
+class ModuleImport:
+    context: ImportContext
+    imports: List[str] = field(default_factory=list)
+
+
+ModuleImports = Mapping[str, ModuleImport]
 
 
 def _get_module_imports(
@@ -349,7 +372,7 @@ def _get_module_imports(
     visitors: Sequence[NodeVisitorImports],
 ) -> ModuleImports:
     # TODO move to cache
-    module_imports: Dict[str, List[str]] = {}
+    module_imports: Dict[str, ModuleImport] = {}
     unknown_modules_cache = UnknownModulesCache()
     for visitor in visitors:
         try:
@@ -374,9 +397,9 @@ def _get_module_imports(
                 ) is None:
                     continue
 
-                module_imports.setdefault(module_name_from_path, []).append(
-                    module_name_from_import
-                )
+                module_imports.setdefault(
+                    module_name_from_path, ModuleImport(import_stmt.context)
+                ).imports.append(module_name_from_import)
 
         for import_from_stmt in visitor.imports_from_stmt:
             if not import_from_stmt.node.module:
@@ -394,9 +417,9 @@ def _get_module_imports(
             ) is None:
                 continue
 
-            module_imports.setdefault(module_name_from_path, []).append(
-                module_name_from_import
-            )
+            module_imports.setdefault(
+                module_name_from_path, ModuleImport(import_from_stmt.context)
+            ).imports.append(module_name_from_import)
 
     return module_imports
 
