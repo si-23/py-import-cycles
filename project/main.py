@@ -288,6 +288,25 @@ def _make_all_edges(
     return sorted(edges)
 
 
+def _make_only_cycles_edges(
+    import_cycles: Sequence[ImportCycle],
+) -> Sequence[ImportEdge]:
+    edges: Set[ImportEdge] = set()
+    for import_cycle in import_cycles:
+        for chain in import_cycle.chains:
+            module = chain[0]
+            for the_import in chain[1:]:
+                edges.add(
+                    ImportEdge(
+                        module,
+                        the_import,
+                        _is_in_cycle(module, the_import, import_cycles),
+                    )
+                )
+                module = the_import
+    return edges
+
+
 def _is_in_cycle(
     module: str,
     the_import: str,
@@ -302,25 +321,6 @@ def _is_in_cycle(
         if import_cycle.cycle[idx + 1] == the_import:
             return True
     return False
-
-
-def _make_only_cycles_edges(
-    import_cycles: Sequence[ImportCycle],
-) -> Sequence[ImportEdge]:
-    edges: Set[ImportEdge] = set()
-    for import_cycle in import_cycles:
-        for chain in import_cycle.chains:
-            module = chain[0]
-            for the_import in chain[1:]:
-                edges.add(
-                    ImportEdge(
-                        module,
-                        the_import,
-                        True,
-                    )
-                )
-                module = the_import
-    return edges
 
 
 # .
