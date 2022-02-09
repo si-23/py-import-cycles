@@ -292,14 +292,14 @@ def _make_all_edges(
     import_cycles: Sequence[ImportCycle],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
-    for module, imports in module_imports.items():
-        for the_import in imports:
-            import_cycle = _is_in_cycle(module, the_import, import_cycles)
+    for module, module_import in module_imports.items():
+        for module_name in module_import.imports:
+            import_cycle = _is_in_cycle(module, module_name, import_cycles)
             edges.add(
                 ImportEdge(
                     "",
                     module,
-                    the_import,
+                    module_name,
                     "black" if import_cycle is None else "red",
                 )
             )
