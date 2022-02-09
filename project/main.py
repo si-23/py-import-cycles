@@ -258,6 +258,20 @@ class ImportEdge(NamedTuple):
 
 
 def _make_edges(
+    args: argparse.Namespace,
+    module_imports: ModuleImports,
+    import_cycles: Sequence[ImportCycle],
+) -> Sequence[ImportEdge]:
+    if args.graph == "all":
+        return _make_all_edges(module_imports, import_cycles)
+
+    if args.graph == "only-cycles":
+        return _make_only_cycles_edges(import_cycles)
+
+    raise NotImplementedError("Unknown graph option: %s" % args.graph)
+
+
+def _make_all_edges(
     module_imports: ModuleImports,
     import_cycles: Sequence[ImportCycle],
 ) -> Sequence[ImportEdge]:
@@ -288,6 +302,25 @@ def _is_in_cycle(
         if import_cycle.cycle[idx + 1] == the_import:
             return True
     return False
+
+
+def _make_only_cycles_edges(
+    import_cycles: Sequence[ImportCycle],
+) -> Sequence[ImportEdge]:
+    edges: Set[ImportEdge] = set()
+    for import_cycle in import_cycles:
+        for chain in import_cycle.chains:
+            module = chain[0]
+            for the_import in chain[1:]:
+                edges.add(
+                    ImportEdge(
+                        module,
+                        the_import,
+                        True,
+                    )
+                )
+                module = the_import
+    return edges
 
 
 # .
@@ -419,10 +452,12 @@ def main(argv: Sequence[str]) -> int:
 
     _show_import_cycles(args, import_cycles)
 
-    if args.no_graph:
+    if args.graph == "no":
         return _get_return_code(import_cycles)
 
-    edges = _make_edges(module_imports, import_cycles)
+    if not (edges := _make_edges(args, module_imports, import_cycles)):
+        logger.debug("No edges for graphing")
+        return _get_return_code(import_cycles)
 
     graph = _make_graph(path, edges)
     graph.view()
@@ -448,8 +483,9 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="Show chains",
     )
     parser.add_argument(
-        "--no-graph",
-        action="store_true",
+        "--graph",
+        choices=["all", "only-cycles", "no"],
+        default="only-cycles",
         help="Only show cycles",
     )
     parser.add_argument(
@@ -482,7 +518,9 @@ def _setup_logging(args: argparse.Namespace) -> None:
     logger.addHandler(handler)
 
 
-def _show_import_cycles(args: argparse.Namespace, import_cycles: Sequence[ImportCycle]) -> None:
+def _show_import_cycles(
+    args: argparse.Namespace, import_cycles: Sequence[ImportCycle]
+) -> None:
     if import_cycles:
         print("===== Found import cycles ====")
         for import_cycle in import_cycles:
