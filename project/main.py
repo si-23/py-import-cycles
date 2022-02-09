@@ -413,7 +413,7 @@ def _get_module_name_from_import(base_path: Path, namespace: str, name: str) -> 
     try:
         module_spec = importlib.util.find_spec(name)
     except ModuleNotFoundError as e:
-        logger.debug(e)
+        logger.debug("Name: %s, Error: %s", name, e)
         module_spec = None
 
     if module_spec is not None:
