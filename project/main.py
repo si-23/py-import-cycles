@@ -161,7 +161,6 @@ ImportChain = Sequence[str]
 @dataclass
 class ImportCycle:
     cycle: Tuple[str, ...]
-    color: str
     chains: List[ImportChain] = field(default_factory=list)
 
 
@@ -174,16 +173,7 @@ def _find_import_cycles(module_imports: ModuleImports) -> Sequence[ImportCycle]:
         cycle = tuple(chain[first_idx:])
 
         import_cycles.setdefault(
-            tuple(sorted(cycle[:-1])),
-            ImportCycle(
-                cycle=cycle,
-                color="#%02x%02x%02x"
-                % (
-                    random.randint(50, 200),
-                    random.randint(50, 200),
-                    random.randint(50, 200),
-                ),
-            ),
+            tuple(sorted(cycle[:-1])), ImportCycle(cycle=cycle)
         ).chains.append(chain)
 
     return list(import_cycles.values())
