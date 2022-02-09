@@ -593,6 +593,8 @@ def _show_import_cycles(
             for chain in import_cycle.chains:
                 print("  In chain:", chain)
 
+        print("Amount of cycles: %s" % len(import_cycles))
+
 
 def _get_return_code(import_cycles: Sequence[ImportCycle]) -> bool:
     return bool(import_cycles)
