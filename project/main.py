@@ -319,7 +319,7 @@ def _make_only_cycles_edges(
         for the_import in import_cycle.cycle[1:]:
             edges.add(
                 ImportEdge(
-                    str(nr),
+                    str(nr + 1),
                     module,
                     the_import,
                     color,
