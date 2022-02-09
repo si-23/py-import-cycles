@@ -168,7 +168,7 @@ class ImportCycle:
 def _find_import_cycles(module_imports: ModuleImports) -> Sequence[ImportCycle]:
     detector = DetectImportCycles(module_imports)
 
-    import_cycles: Dict[Tuple[str, ...], List[ImportCycle]] = {}
+    import_cycles: Dict[Tuple[str, ...], ImportCycle] = {}
     for chain in sorted(detector.detect_cycles()):
         first_idx = chain.index(chain[-1])
         cycle = tuple(chain[first_idx:])
@@ -414,7 +414,11 @@ def _is_builtin_or_stdlib(name: str) -> bool:
     )  #  Avail in 3.10: or name in sys.stdlib_module_names
 
 
-def _get_module_name_from_import(base_path: Path, namespace: str, name: str) -> str:
+def _get_module_name_from_import(
+    base_path: Path,
+    namespace: str,
+    name: str,
+) -> Optional[str]:
     if name.startswith(namespace):
         return name
 
