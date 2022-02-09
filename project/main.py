@@ -348,7 +348,9 @@ def _get_module_imports(
     namespace: str,
     visitors: Sequence[NodeVisitorImports],
 ) -> ModuleImports:
+    # TODO move to cache
     module_imports: Dict[str, List[str]] = {}
+    unknown_modules_cache = UnknownModulesCache()
     for visitor in visitors:
         try:
             module_name_from_path = _get_module_name_from_path(
@@ -364,8 +366,10 @@ def _get_module_imports(
                     continue
 
                 if (
-                    module_name_from_import := _get_module_name_from_import(
-                        base_path, namespace, alias.name
+                    module_name_from_import := unknown_modules_cache.get_module_name_from_import(
+                        base_path,
+                        namespace,
+                        alias.name,
                     )
                 ) is None:
                     continue
@@ -382,8 +386,10 @@ def _get_module_imports(
                 continue
 
             if (
-                module_name_from_import := _get_module_name_from_import(
-                    base_path, namespace, import_from_stmt.node.module
+                module_name_from_import := unknown_modules_cache.get_module_name_from_import(
+                    base_path,
+                    namespace,
+                    import_from_stmt.node.module,
                 )
             ) is None:
                 continue
@@ -412,25 +418,32 @@ def _is_builtin_or_stdlib(name: str) -> bool:
     )  #  Avail in 3.10: or name in sys.stdlib_module_names
 
 
-def _get_module_name_from_import(
-    base_path: Path,
-    namespace: str,
-    name: str,
-) -> Optional[str]:
-    if name.startswith(namespace):
-        return name
+@dataclass(frozen=True)
+class UnknownModulesCache:
+    _unknown_modules: Set[str] = field(default_factory=set)
 
-    try:
-        module_spec = importlib.util.find_spec(name)
-    except ModuleNotFoundError as e:
-        logger.debug("Name: %s, Error: %s", name, e)
-        module_spec = None
+    def get_module_name_from_import(
+        self,
+        base_path: Path,
+        namespace: str,
+        name: str,
+    ) -> Optional[str]:
+        if name.startswith(namespace):
+            return name
 
-    if module_spec is not None:
-        return None
+        try:
+            module_spec = importlib.util.find_spec(name)
+        except ModuleNotFoundError as e:
+            if name not in self._unknown_modules:
+                self._unknown_modules.add(name)
+                logger.debug("Name: %s, Error: %s", name, e)
+            module_spec = None
 
-    idx = base_path.parts.index(namespace)
-    return ".".join(list(base_path.parts[idx:]) + [name])
+        if module_spec is not None:
+            return None
+
+        idx = base_path.parts.index(namespace)
+        return ".".join(list(base_path.parts[idx:]) + [name])
 
 
 # .
