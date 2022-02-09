@@ -380,9 +380,8 @@ def _get_module_name_from_import(base_path: Path, namespace: str, name: str) -> 
     try:
         module_spec = importlib.util.find_spec(name)
     except ModuleNotFoundError as e:
-        logger.debug("No such module: %s", e)
-        # Found module in the python paths
-        return None
+        logger.debug(e)
+        module_spec = None
 
     if module_spec is not None:
         return None
@@ -432,12 +431,26 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         description=__doc__,
         formatter_class=argparse.RawTextHelpFormatter,
     )
-    parser.add_argument("-d", "--debug", action="store_true", help="Show errors")
-    parser.add_argument("--no-graph", action="store_true", help="Only show cycles")
     parser.add_argument(
-        "--namespace", help="Part of the path which is the anchor to the namespace"
+        "-d",
+        "--debug",
+        action="store_true",
+        help="Show errors",
     )
-    parser.add_argument("path", help="Path to project folder")
+    parser.add_argument(
+        "--no-graph",
+        action="store_true",
+        help="Only show cycles",
+    )
+    parser.add_argument(
+        "--namespace",
+        help="Part of the path which is the anchor to the namespace",
+        required=True,
+    )
+    parser.add_argument(
+        "path",
+        help="Path to project folder",
+    )
     return parser.parse_args(argv)
 
 
