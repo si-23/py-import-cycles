@@ -450,14 +450,19 @@ def main(argv: Sequence[str]) -> int:
         logger.debug("Namespace '%s' must be part of %s", args.namespace, path)
         return 1
 
+    logger.info("Get Python files")
     python_files = _get_python_files(path)
 
+    logger.info("Load Python files")
     loaded_python_files = _load_python_contents(set(python_files))
 
+    logger.info("Visit Python contents")
     visitors = _visit_python_contents(loaded_python_files)
 
+    logger.info("Parse Python contents into module relationships")
     module_imports = _get_module_imports(path, args.namespace, visitors)
 
+    logger.info("Detect import cycles")
     import_cycles = _find_import_cycles(module_imports)
 
     _show_import_cycles(args, import_cycles)
@@ -469,6 +474,7 @@ def main(argv: Sequence[str]) -> int:
         logger.debug("No edges for graphing")
         return _get_return_code(import_cycles)
 
+    logger.info("Make graph")
     graph = _make_graph(path, edges)
     graph.view()
 
