@@ -403,6 +403,10 @@ def main(argv: Sequence[str]) -> int:
         logger.debug("No such directory: %s", path)
         return 1
 
+    if args.namespace not in path.parts:
+        logger.debug("Namespace '%s' must be part of %s", args.namespace, path)
+        return 1
+
     python_files = _get_python_files(path)
 
     loaded_python_files = _load_python_contents(set(python_files))
