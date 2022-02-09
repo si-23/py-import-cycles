@@ -417,7 +417,7 @@ def main(argv: Sequence[str]) -> int:
 
     import_cycles = _find_import_cycles(module_imports)
 
-    _show_import_cycles(import_cycles)
+    _show_import_cycles(args, import_cycles)
 
     if args.no_graph:
         return _get_return_code(import_cycles)
@@ -440,6 +440,12 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         "--debug",
         action="store_true",
         help="Show errors",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Show chains",
     )
     parser.add_argument(
         "--no-graph",
@@ -476,11 +482,14 @@ def _setup_logging(args: argparse.Namespace) -> None:
     logger.addHandler(handler)
 
 
-def _show_import_cycles(import_cycles: Sequence[ImportCycle]) -> None:
+def _show_import_cycles(args: argparse.Namespace, import_cycles: Sequence[ImportCycle]) -> None:
     if import_cycles:
         print("===== Found import cycles ====")
         for import_cycle in import_cycles:
             print("Cycle:", import_cycle.cycle)
+            if not args.verbose:
+                continue
+
             for chain in import_cycle.chains:
                 print("  In chain:", chain)
 
