@@ -293,11 +293,10 @@ def _make_only_cycles_edges(
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
     for import_cycle in import_cycles:
-        for chain in import_cycle.chains:
-            module = chain[0]
-            for the_import in chain[1:]:
-                edges.add(_make_edge(module, the_import, import_cycles))
-                module = the_import
+        module = import_cycle.cycle[0]
+        for the_import in import_cycle.cycle[1:]:
+            edges.add(_make_edge(module, the_import, import_cycles))
+            module = the_import
     return sorted(edges)
 
 
