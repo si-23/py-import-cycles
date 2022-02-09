@@ -239,7 +239,9 @@ class DetectImportCycles:
 #   '----------------------------------------------------------------------'
 
 
-def _make_graph(path: Path, edges: Sequence[ImportEdge]) -> Digraph:
+def _make_graph(
+    path: Path, args: argparse.Namespace, edges: Sequence[ImportEdge]
+) -> Digraph:
     target_dir = (
         Path(os.path.abspath(__file__))
         .parent.parent.joinpath("outputs")
@@ -247,7 +249,10 @@ def _make_graph(path: Path, edges: Sequence[ImportEdge]) -> Digraph:
     )
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    d = Digraph("unix", filename=target_dir.joinpath("import-cycles.gv"))
+    idx = path.parts.index(args.namespace)
+    name = "-".join(list(path.parts[idx:]))
+
+    d = Digraph("unix", filename=target_dir.joinpath("%s-import-cycles.gv" % name))
 
     with d.subgraph() as ds:
         for edge in edges:
@@ -521,7 +526,7 @@ def main(argv: Sequence[str]) -> int:
         return _get_return_code(import_cycles)
 
     logger.info("Make graph")
-    graph = _make_graph(path, edges)
+    graph = _make_graph(path, args, edges)
     graph.view()
 
     return _get_return_code(import_cycles)
