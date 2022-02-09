@@ -260,7 +260,6 @@ class ImportEdge(NamedTuple):
     title: str
     module: str
     imports: str
-    is_in_cycle: bool
     color: str
 
 
@@ -311,7 +310,6 @@ def _make_edge(
         "" if nr is None else str(nr),
         module,
         the_import,
-        import_cycle is not None,
         "black" if import_cycle is None else import_cycle.color,
     )
 
