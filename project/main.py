@@ -102,12 +102,11 @@ class ImportFromSTMT(NamedTuple):
     def get_imported_module_names(
         self, project_path: Path, module_name: str
     ) -> Sequence[str]:
-        imported_module_names: List[str] = []
         if not self.node.module:
-            return imported_module_names
+            return []
 
         if _is_builtin_or_stdlib(self.node.module):
-            return imported_module_names
+            return []
 
         if self.node.level > 0:
             return [".".join(module_name.split(".")[: -self.node.level])]
