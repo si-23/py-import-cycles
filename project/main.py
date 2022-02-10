@@ -177,7 +177,9 @@ class ImportCycleWithChains:
     chains: List[ImportChain] = field(default_factory=list)
 
 
-def _find_import_cycles(module_imports: ModuleImports) -> Sequence[ImportCycleWithChains]:
+def _find_import_cycles(
+    module_imports: ModuleImports,
+) -> Sequence[ImportCycleWithChains]:
     detector = DetectImportCycles(module_imports)
 
     import_cycles: Dict[Tuple[str, ...], ImportCycleWithChains] = {}
