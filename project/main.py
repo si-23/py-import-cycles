@@ -80,17 +80,52 @@ def _load_python_contents(files: Set[Path]) -> Mapping[Path, str]:
 
 ImportContext = Tuple[Union[ast.If, ast.Try, ast.ClassDef, ast.FunctionDef], ...]
 
+# TODO use context in graph (nested import stmt)
+
 
 class ImportSTMT(NamedTuple):
     context: ImportContext
     node: ast.Import
+
+    def get_imported_module_names(self) -> Sequence[str]:
+        return [
+            alias.name
+            for alias in self.node.names
+            if not _is_builtin_or_stdlib(alias.name)
+        ]
 
 
 class ImportFromSTMT(NamedTuple):
     context: ImportContext
     node: ast.ImportFrom
 
-    # TODO use context in graph (nested import stmt)
+    def get_imported_module_names(
+        self, project_path: Path, module_name: str
+    ) -> Sequence[str]:
+        imported_module_names: List[str] = []
+        if not self.node.module:
+            return imported_module_names
+
+        if _is_builtin_or_stdlib(self.node.module):
+            return imported_module_names
+
+        if self.node.level > 0:
+            return [".".join(module_name.split(".")[: -self.node.level])]
+
+        module_path = project_path.joinpath(Path(*self.node.module.split(".")))
+
+        if module_path.with_suffix(".py").exists():
+            return [self.node.module]
+
+        if module_path.is_dir():
+            return [
+                ".".join(module_path.joinpath(alias.name).parts)
+                for alias in self.node.names
+                if module_path.joinpath(alias.name).with_suffix(".py").exists()
+            ]
+
+        logger.debug("Unknown statement: %s", ast.dump(self.node))
+        return []
 
 
 class NodeVisitorImports(ast.NodeVisitor):
@@ -394,57 +429,19 @@ def _get_module_imports(
         )
 
         for import_stmt in visitor.imports_stmt:
-            for alias in import_stmt.node.names:
-                if _is_builtin_or_stdlib(alias.name):
-                    continue
-
+            for imported_module_name in import_stmt.get_imported_module_names():
                 module_imports.setdefault(module_name_from_path, []).append(
-                    ModuleImport(alias.name, import_stmt.context)
+                    ModuleImport(imported_module_name, import_stmt.context)
                 )
 
         for import_from_stmt in visitor.imports_from_stmt:
-            if not import_from_stmt.node.module:
-                continue
-
-            if _is_builtin_or_stdlib(import_from_stmt.node.module):
-                continue
-
-            if import_from_stmt.node.level > 0:
+            for imported_module_name in import_from_stmt.get_imported_module_names(
+                project_path,
+                module_name_from_path,
+            ):
                 module_imports.setdefault(module_name_from_path, []).append(
-                    ModuleImport(
-                        ".".join(
-                            module_name_from_path.split(".")[
-                                : -import_from_stmt.node.level
-                            ]
-                        ),
-                        import_from_stmt.context,
-                    )
+                    ModuleImport(imported_module_name, import_from_stmt.context)
                 )
-                continue
-
-            module_path = project_path.joinpath(
-                Path(*import_from_stmt.node.module.split("."))
-            )
-
-            if module_path.with_suffix(".py").exists():
-                module_imports.setdefault(module_name_from_path, []).append(
-                    ModuleImport(import_from_stmt.node.module, import_from_stmt.context)
-                )
-                continue
-
-            if module_path.is_dir():
-                for alias in import_from_stmt.node.names:
-                    if module_path.joinpath(alias.name).with_suffix(".py").exists():
-                        module_imports.setdefault(module_name_from_path, []).append(
-                            ModuleImport(
-                                ".".join(module_path.joinpath(alias.name).parts),
-                                import_from_stmt.context,
-                            )
-                        )
-
-                continue
-
-            logger.debug("Unknown statement: %s", ast.dump(import_from_stmt.node))
 
     return module_imports
 
