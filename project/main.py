@@ -153,7 +153,7 @@ def _visit_python_contents(
         visitor = NodeVisitorImports(path)
         visitor.visit(tree)
         visitors.append(visitor)
-    return visitors
+    return sorted(visitors, key=lambda v: v.path)
 
 
 # .
@@ -243,19 +243,17 @@ class DetectImportCycles:
 
 
 def _make_graph(
-    path: Path, args: argparse.Namespace, edges: Sequence[ImportEdge]
+    project_path: Path, args: argparse.Namespace, edges: Sequence[ImportEdge]
 ) -> Digraph:
-    target_dir = (
-        Path(os.path.abspath(__file__))
-        .parent.parent.joinpath("outputs")
-        .joinpath(path.name)
-    )
+    target_dir = Path(os.path.abspath(__file__)).parent.parent.joinpath("outputs")
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    idx = path.parts.index(args.namespace)
-    name = "-".join(list(path.parts[idx:]))
-
-    d = Digraph("unix", filename=target_dir.joinpath("%s-import-cycles.gv" % name))
+    d = Digraph(
+        "unix",
+        filename=target_dir.joinpath(
+            "%s-import-cycles.gv" % args.folder.replace("/", "-")
+        ),
+    )
 
     with d.subgraph() as ds:
         for edge in edges:
@@ -385,38 +383,24 @@ ModuleImports = Mapping[str, Sequence[ModuleImport]]
 
 
 def _get_module_imports(
-    base_path: Path,
-    namespace: str,
+    args: argparse.Namespace,
+    project_path: Path,
     visitors: Sequence[NodeVisitorImports],
 ) -> ModuleImports:
-    # TODO move to cache
+    # TODO improve this
     module_imports: Dict[str, List[ModuleImport]] = {}
-    unknown_modules_cache = UnknownModulesCache()
     for visitor in visitors:
-        try:
-            module_name_from_path = _get_module_name_from_path(
-                base_path, namespace, visitor.path
-            )
-        except ValueError as e:
-            logger.debug("Error while getting module name: %s", e)
-            continue
+        module_name_from_path = _get_module_name_from_path(
+            args, project_path, visitor.path
+        )
 
         for import_stmt in visitor.imports_stmt:
             for alias in import_stmt.node.names:
                 if _is_builtin_or_stdlib(alias.name):
                     continue
 
-                if (
-                    module_name_from_import := unknown_modules_cache.get_module_name_from_import(
-                        base_path,
-                        namespace,
-                        alias.name,
-                    )
-                ) is None:
-                    continue
-
                 module_imports.setdefault(module_name_from_path, []).append(
-                    ModuleImport(module_name_from_import, import_stmt.context)
+                    ModuleImport(alias.name, import_stmt.context)
                 )
 
         for import_from_stmt in visitor.imports_from_stmt:
@@ -426,65 +410,73 @@ def _get_module_imports(
             if _is_builtin_or_stdlib(import_from_stmt.node.module):
                 continue
 
-            if (
-                module_name_from_import := unknown_modules_cache.get_module_name_from_import(
-                    base_path,
-                    namespace,
-                    import_from_stmt.node.module,
+            if import_from_stmt.node.level > 0:
+                module_imports.setdefault(module_name_from_path, []).append(
+                    ModuleImport(
+                        ".".join(
+                            module_name_from_path.split(".")[
+                                : -import_from_stmt.node.level
+                            ]
+                        ),
+                        import_from_stmt.context,
+                    )
                 )
-            ) is None:
                 continue
 
-            module_imports.setdefault(module_name_from_path, []).append(
-                ModuleImport(module_name_from_import, import_from_stmt.context)
+            module_path = project_path.joinpath(
+                Path(*import_from_stmt.node.module.split("."))
             )
+
+            if module_path.with_suffix(".py").exists():
+                module_imports.setdefault(module_name_from_path, []).append(
+                    ModuleImport(import_from_stmt.node.module, import_from_stmt.context)
+                )
+                continue
+
+            if module_path.is_dir():
+                for alias in import_from_stmt.node.names:
+                    if module_path.joinpath(alias.name).with_suffix(".py").exists():
+                        module_imports.setdefault(module_name_from_path, []).append(
+                            ModuleImport(
+                                ".".join(module_path.joinpath(alias.name).parts),
+                                import_from_stmt.context,
+                            )
+                        )
+
+                continue
+
+            logger.debug("Unknown statement: %s", ast.dump(import_from_stmt.node))
 
     return module_imports
 
 
-def _get_module_name_from_path(base_path: Path, namespace: str, path: Path) -> str:
-    # TODO use importlib or inspect in order to get the right module name
-    idx = base_path.parts.index(namespace)
-    base_path = Path(*base_path.parts[:idx])
+def _get_module_name_from_path(
+    args: argparse.Namespace, project_path: Path, module_path: Path
+) -> str:
+    rel_path = module_path.relative_to(project_path).with_suffix("")
+    if rel_path.name == "__init__":
+        # TODO check this
+        rel_path = rel_path.parent
 
-    path = path.relative_to(base_path).with_suffix("")
-    if path.name == "__init__":
-        path = path.parent
-    return str(path).replace("/", ".")
+    parts = rel_path.parts
+    for ignore in args.ignore:
+        if ignore.split(":")[0] == parts[0]:
+            parts = parts[1:]
+            break
+
+    return ".".join(parts)
 
 
-def _is_builtin_or_stdlib(name: str) -> bool:
-    return (
-        name in sys.builtin_module_names or name in sys.modules
-    )  #  Avail in 3.10: or name in sys.stdlib_module_names
+def _is_builtin_or_stdlib(module_name: str) -> bool:
+    if module_name in sys.builtin_module_names or module_name in sys.modules:
+        # Avail in 3.10: or name in sys.stdlib_module_names
+        return True
 
-
-@dataclass(frozen=True)
-class UnknownModulesCache:
-    _unknown_modules: Set[str] = field(default_factory=set)
-
-    def get_module_name_from_import(
-        self,
-        base_path: Path,
-        namespace: str,
-        name: str,
-    ) -> Optional[str]:
-        if name.startswith(namespace):
-            return name
-
-        try:
-            module_spec = importlib.util.find_spec(name)
-        except ModuleNotFoundError as e:
-            if name not in self._unknown_modules:
-                self._unknown_modules.add(name)
-                logger.debug("Name: %s, Error: %s", name, e)
-            module_spec = None
-
-        if module_spec is not None:
-            return None
-
-        idx = base_path.parts.index(namespace)
-        return ".".join(list(base_path.parts[idx:]) + [name])
+    try:
+        importlib.util.find_spec(module_name)
+        return True
+    except ModuleNotFoundError:
+        return False
 
 
 # .
@@ -495,17 +487,15 @@ def main(argv: Sequence[str]) -> int:
 
     _setup_logging(args)
 
-    path = Path(args.path)
-    if not path.exists() or not path.is_dir():
-        logger.debug("No such directory: %s", path)
+    project_path = Path(args.project_path)
+    if not project_path.exists() or not project_path.is_dir():
+        logger.debug("No such directory: %s", project_path)
         return 1
 
-    if args.namespace not in path.parts:
-        logger.debug("Namespace '%s' must be part of %s", args.namespace, path)
-        return 1
+    folder_path = project_path.joinpath(args.folder)
 
     logger.info("Get Python files")
-    python_files = _get_python_files(path)
+    python_files = _get_python_files(folder_path)
 
     logger.info("Load Python files")
     loaded_python_files = _load_python_contents(set(python_files))
@@ -514,7 +504,7 @@ def main(argv: Sequence[str]) -> int:
     visitors = _visit_python_contents(loaded_python_files)
 
     logger.info("Parse Python contents into module relationships")
-    module_imports = _get_module_imports(path, args.namespace, visitors)
+    module_imports = _get_module_imports(args, project_path, visitors)
     logger.info("Found %d relationships", len(module_imports))
 
     logger.info("Detect import cycles")
@@ -530,7 +520,7 @@ def main(argv: Sequence[str]) -> int:
         return _get_return_code(import_cycles)
 
     logger.info("Make graph")
-    graph = _make_graph(path, args, edges)
+    graph = _make_graph(project_path, args, edges)
     graph.view()
 
     return _get_return_code(import_cycles)
@@ -560,13 +550,18 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="Only show cycles",
     )
     parser.add_argument(
-        "--namespace",
-        help="Part of the path which is the anchor to the namespace",
+        "--ignore",
+        nargs="+",
+        help="Ignore prefixes, eg. managed:cme",
+    )
+    parser.add_argument(
+        "--project-path",
+        help="Path to project",
         required=True,
     )
     parser.add_argument(
-        "path",
-        help="Path to project folder",
+        "folder",
+        help="Folder for cycle analysis which is appended to project path.",
     )
     return parser.parse_args(argv)
 
