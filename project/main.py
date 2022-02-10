@@ -203,7 +203,6 @@ class DetectImportCycles:
 
     def detect_cycles(self) -> Iterable[ChainWithCycle]:
         for module_name, module_imports in self._module_imports.items():
-            logger.debug("Compute cycles of %s", module_name)
             yield from self._detect_cycles([module_name], module_imports)
 
     def _detect_cycles(
