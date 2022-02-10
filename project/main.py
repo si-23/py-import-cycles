@@ -189,7 +189,7 @@ def _find_import_cycles(
             ImportCycleWithChains(cycle=chain_with_cycle.cycle),
         ).chains.append(chain_with_cycle.chain)
 
-    return list(import_cycles.values())
+    return sorted(import_cycles.values(), key=lambda icwc: icwc.cycle)
 
 
 class ChainWithCycle(NamedTuple):
