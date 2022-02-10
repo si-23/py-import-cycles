@@ -442,10 +442,11 @@ def _get_module_name_from_path(
         rel_path = rel_path.parent
 
     parts = rel_path.parts
-    for ignore in args.ignore:
-        if ignore.split(":")[0] == parts[0]:
-            parts = parts[1:]
-            break
+    if args.ignore:
+        for ignore in args.ignore:
+            if ignore.split(":")[0] == parts[0]:
+                parts = parts[1:]
+                break
 
     return ".".join(parts)
 
