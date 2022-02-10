@@ -167,35 +167,39 @@ def _visit_python_contents(
 #   '----------------------------------------------------------------------'
 
 
+ImportCycle = Tuple[str, ...]
 ImportChain = Sequence[str]
 
 
 @dataclass
-class ImportCycle:
-    cycle: Tuple[str, ...]
+class ImportCycleWithChains:
+    cycle: ImportCycle
     chains: List[ImportChain] = field(default_factory=list)
 
 
-def _find_import_cycles(module_imports: ModuleImports) -> Sequence[ImportCycle]:
+def _find_import_cycles(module_imports: ModuleImports) -> Sequence[ImportCycleWithChains]:
     detector = DetectImportCycles(module_imports)
 
-    import_cycles: Dict[Tuple[str, ...], ImportCycle] = {}
-    for chain in detector.detect_cycles():
-        first_idx = chain.index(chain[-1])
-        cycle = tuple(chain[first_idx:])
-
+    import_cycles: Dict[Tuple[str, ...], ImportCycleWithChains] = {}
+    for chain_with_cycle in detector.detect_cycles():
         import_cycles.setdefault(
-            tuple(sorted(cycle[:-1])), ImportCycle(cycle=cycle)
-        ).chains.append(chain)
+            tuple(sorted(chain_with_cycle.cycle[:-1])),
+            ImportCycleWithChains(cycle=chain_with_cycle.cycle),
+        ).chains.append(chain_with_cycle.chain)
 
     return list(import_cycles.values())
+
+
+class ChainWithCycle(NamedTuple):
+    cycle: ImportCycle
+    chain: ImportChain
 
 
 @dataclass(frozen=True)
 class DetectImportCycles:
     _module_imports: ModuleImports
 
-    def detect_cycles(self) -> Iterable[Sequence[str]]:
+    def detect_cycles(self) -> Iterable[ChainWithCycle]:
         for module_name, module_imports in self._module_imports.items():
             logger.debug("Compute cycles of %s", module_name)
             yield from self._detect_cycles([module_name], module_imports)
@@ -204,12 +208,15 @@ class DetectImportCycles:
         self,
         base_chain: List[str],
         module_imports: Sequence[ModuleImport],
-    ) -> Iterable[Sequence[str]]:
+    ) -> Iterable[ChainWithCycle]:
         for module_import in module_imports:
             if module_import.module_name in base_chain:
-                chain = self._create_chain(base_chain, module_import.module_name)
-                logger.debug("Found cycle %s", chain)
-                yield chain
+                yield self._make_chain_with_cycle(
+                    self._create_chain(
+                        base_chain,
+                        module_import.module_name,
+                    )
+                )
                 return
 
             yield from self._detect_cycles(
@@ -219,6 +226,13 @@ class DetectImportCycles:
 
     def _create_chain(self, base_chain: List[str], module_name: str) -> List[str]:
         return base_chain + [module_name]
+
+    def _make_chain_with_cycle(self, chain: Sequence[str]) -> ChainWithCycle:
+        first_idx = chain.index(chain[-1])
+        return ChainWithCycle(
+            cycle=tuple(chain[first_idx:]),
+            chain=chain,
+        )
 
 
 # .
