@@ -88,6 +88,7 @@ class ImportSTMT(NamedTuple):
     node: ast.Import
 
     def get_imported_module_names(self) -> Sequence[str]:
+        # TODO handle path.to.mod.func
         return [
             alias.name
             for alias in self.node.names
@@ -102,6 +103,7 @@ class ImportFromSTMT(NamedTuple):
     def get_imported_module_names(
         self, project_path: Path, module_name: str
     ) -> Sequence[str]:
+        # TODO handle from path.to.mod import func?
         if not self.node.module:
             return []
 
