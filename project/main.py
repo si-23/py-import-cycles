@@ -505,7 +505,7 @@ def main(argv: Sequence[str]) -> int:
 
     logger.info("Parse Python contents into module relationships")
     module_imports = _get_module_imports(path, args.namespace, visitors)
-    logger.info("Found %d relationships" % len(module_imports))
+    logger.info("Found %d relationships", len(module_imports))
 
     logger.info("Detect import cycles")
     import_cycles = _find_import_cycles(module_imports)
