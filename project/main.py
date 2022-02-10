@@ -196,36 +196,29 @@ class DetectImportCycles:
     _module_imports: ModuleImports
 
     def detect_cycles(self) -> Iterable[Sequence[str]]:
-        for module in self._get_main_modules():
-            yield from self._detect_cycles([module], module)
-
-    def _get_main_modules(self) -> Sequence[str]:
-        module_names = set(
-            module_import.module_name
-            for module_imports in self._module_imports.values()
-            for module_import in module_imports
-        )
-        if main_modules := set(
-            module_name
-            for module_name in self._module_imports
-            if module_name not in module_names
-        ):
-            return sorted(main_modules)
-        return sorted(self._module_imports)
+        for module_name, module_imports in self._module_imports.items():
+            logger.debug("Compute cycles of %s", module_name)
+            yield from self._detect_cycles([module_name], module_imports)
 
     def _detect_cycles(
         self,
         base_chain: List[str],
-        module: str,
+        module_imports: Sequence[ModuleImport],
     ) -> Iterable[Sequence[str]]:
-        for module_import in self._module_imports.get(module, []):
+        for module_import in module_imports:
             if module_import.module_name in base_chain:
-                yield base_chain + [module_import.module_name]
-                break
+                chain = self._create_chain(base_chain, module_import.module_name)
+                logger.debug("Found cycle %s", chain)
+                yield chain
+                return
 
             yield from self._detect_cycles(
-                base_chain + [module_import.module_name], module_import.module_name
+                self._create_chain(base_chain, module_import.module_name),
+                self._module_imports.get(module_import.module_name, []),
             )
+
+    def _create_chain(self, base_chain: List[str], module_name: str) -> List[str]:
+        return base_chain + [module_name]
 
 
 # .
@@ -512,6 +505,7 @@ def main(argv: Sequence[str]) -> int:
 
     logger.info("Parse Python contents into module relationships")
     module_imports = _get_module_imports(path, args.namespace, visitors)
+    logger.info("Found %d relationships" % len(module_imports))
 
     logger.info("Detect import cycles")
     import_cycles = _find_import_cycles(module_imports)
