@@ -290,7 +290,7 @@ class ImportEdge(NamedTuple):
 def _make_edges(
     args: argparse.Namespace,
     module_imports: ModuleImports,
-    import_cycles: Sequence[ImportCycle],
+    import_cycles: Sequence[ImportCycleWithChains],
 ) -> Sequence[ImportEdge]:
     if args.graph == "all":
         return _make_all_edges(module_imports, import_cycles)
@@ -303,7 +303,7 @@ def _make_edges(
 
 def _make_all_edges(
     module_imports: ModuleImports,
-    import_cycles: Sequence[ImportCycle],
+    import_cycles: Sequence[ImportCycleWithChains],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
     for module, these_module_imports in module_imports.items():
@@ -326,8 +326,8 @@ def _make_all_edges(
 def _is_in_cycle(
     module: str,
     the_import: str,
-    import_cycles: Sequence[ImportCycle],
-) -> Optional[ImportCycle]:
+    import_cycles: Sequence[ImportCycleWithChains],
+) -> Optional[ImportCycleWithChains]:
     for import_cycle in import_cycles:
         try:
             idx = import_cycle.cycle.index(module)
@@ -341,7 +341,7 @@ def _is_in_cycle(
 
 def _make_only_cycles_edges(
     module_imports: ModuleImports,
-    import_cycles: Sequence[ImportCycle],
+    import_cycles: Sequence[ImportCycleWithChains],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
     for nr, import_cycle in enumerate(import_cycles):
@@ -596,7 +596,7 @@ def _setup_logging(args: argparse.Namespace) -> None:
 
 
 def _show_import_cycles(
-    args: argparse.Namespace, import_cycles: Sequence[ImportCycle]
+    args: argparse.Namespace, import_cycles: Sequence[ImportCycleWithChains]
 ) -> None:
     if import_cycles:
         print("===== Found import cycles ====")
@@ -611,7 +611,7 @@ def _show_import_cycles(
         print("Amount of cycles: %s" % len(import_cycles))
 
 
-def _get_return_code(import_cycles: Sequence[ImportCycle]) -> bool:
+def _get_return_code(import_cycles: Sequence[ImportCycleWithChains]) -> bool:
     return bool(import_cycles)
 
 
