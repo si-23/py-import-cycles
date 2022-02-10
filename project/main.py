@@ -206,62 +206,49 @@ ImportChain = Sequence[str]
 
 
 @dataclass
-class ImportCycleWithChains:
+class CycleAndChains:
     cycle: ImportCycle
     chains: List[ImportChain] = field(default_factory=list)
 
 
-def _find_import_cycles(
-    module_imports: ModuleImports,
-) -> Sequence[ImportCycleWithChains]:
+def _find_import_cycles(module_imports: ModuleImports) -> Sequence[CycleAndChains]:
     detector = DetectImportCycles(module_imports)
-
-    import_cycles: Dict[Tuple[str, ...], ImportCycleWithChains] = {}
-    for chain_with_cycle in detector.detect_cycles():
-        import_cycles.setdefault(
-            tuple(sorted(chain_with_cycle.cycle[:-1])),
-            ImportCycleWithChains(cycle=chain_with_cycle.cycle),
-        ).chains.append(chain_with_cycle.chain)
-
-    return sorted(import_cycles.values(), key=lambda icwc: icwc.cycle)
-
-
-class ChainWithCycle(NamedTuple):
-    cycle: ImportCycle
-    chain: ImportChain
+    detector.detect_cycles()
+    return detector.cycles
 
 
 @dataclass(frozen=True)
 class DetectImportCycles:
     _module_imports: ModuleImports
+    _cycles: Dict[ImportChain, CycleAndChains] = field(default_factory=dict)
 
-    def detect_cycles(self) -> Iterable[ChainWithCycle]:
+    @property
+    def cycles(self) -> Sequence[CycleAndChains]:
+        return sorted(self._cycles.values(), key=lambda icwc: icwc.cycle)
+
+    def detect_cycles(self) -> None:
         for module_name, module_imports in self._module_imports.items():
-            yield from self._detect_cycles([module_name], module_imports)
+            self._detect_cycles([module_name], module_imports)
 
     def _detect_cycles(
-        self,
-        base_chain: List[str],
-        module_imports: Sequence[ModuleImport],
-    ) -> Iterable[ChainWithCycle]:
+        self, base_chain: List[str], module_imports: Sequence[ModuleImport],
+    ) -> None:
         for module_import in module_imports:
             chain = base_chain + [module_import.module_name]
 
             if module_import.module_name in base_chain:
-                yield self._make_chain_with_cycle(chain)
+                self._add_cycle(chain)
                 return
 
-            yield from self._detect_cycles(
+            self._detect_cycles(
                 chain,
                 self._module_imports.get(module_import.module_name, []),
             )
 
-    def _make_chain_with_cycle(self, chain: Sequence[str]) -> ChainWithCycle:
+    def _add_cycle(self, chain: ImportChain) -> None:
         first_idx = chain.index(chain[-1])
-        return ChainWithCycle(
-            cycle=tuple(chain[first_idx:]),
-            chain=chain,
-        )
+        cycle = tuple(chain[first_idx:])
+        self._cycles.setdefault(cycle, CycleAndChains(cycle)).chains.append(chain)
 
 
 # .
@@ -315,7 +302,7 @@ class ImportEdge(NamedTuple):
 def _make_edges(
     args: argparse.Namespace,
     module_imports: ModuleImports,
-    import_cycles: Sequence[ImportCycleWithChains],
+    import_cycles: Sequence[CycleAndChains],
 ) -> Sequence[ImportEdge]:
     if args.graph == "all":
         return _make_all_edges(module_imports, import_cycles)
@@ -328,7 +315,7 @@ def _make_edges(
 
 def _make_all_edges(
     module_imports: ModuleImports,
-    import_cycles: Sequence[ImportCycleWithChains],
+    import_cycles: Sequence[CycleAndChains],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
     for module, these_module_imports in module_imports.items():
@@ -351,8 +338,8 @@ def _make_all_edges(
 def _is_in_cycle(
     module: str,
     the_import: str,
-    import_cycles: Sequence[ImportCycleWithChains],
-) -> Optional[ImportCycleWithChains]:
+    import_cycles: Sequence[CycleAndChains],
+) -> Optional[CycleAndChains]:
     for import_cycle in import_cycles:
         try:
             idx = import_cycle.cycle.index(module)
@@ -366,7 +353,7 @@ def _is_in_cycle(
 
 def _make_only_cycles_edges(
     module_imports: ModuleImports,
-    import_cycles: Sequence[ImportCycleWithChains],
+    import_cycles: Sequence[CycleAndChains],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
     for nr, import_cycle in enumerate(import_cycles):
@@ -580,7 +567,7 @@ def _setup_logging(args: argparse.Namespace) -> None:
 
 
 def _show_import_cycles(
-    args: argparse.Namespace, import_cycles: Sequence[ImportCycleWithChains]
+    args: argparse.Namespace, import_cycles: Sequence[CycleAndChains]
 ) -> None:
     if import_cycles:
         print("===== Found import cycles ====")
@@ -595,7 +582,7 @@ def _show_import_cycles(
         print("Amount of cycles: %s" % len(import_cycles))
 
 
-def _get_return_code(import_cycles: Sequence[ImportCycleWithChains]) -> bool:
+def _get_return_code(import_cycles: Sequence[CycleAndChains]) -> bool:
     return bool(import_cycles)
 
 

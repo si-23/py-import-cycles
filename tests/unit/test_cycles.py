@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import pytest
-from project.main import DetectImportCycles, ModuleImport, ChainWithCycle
+from project.main import DetectImportCycles, ModuleImport, CycleAndChains
 
 
 @pytest.mark.parametrize(
@@ -12,8 +12,8 @@ from project.main import DetectImportCycles, ModuleImport, ChainWithCycle
         (
             {"a": [ModuleImport("b", tuple())], "b": [ModuleImport("a", tuple())]},
             [
-                ChainWithCycle(cycle=("a", "b", "a"), chain=["a", "b", "a"]),
-                ChainWithCycle(cycle=("b", "a", "b"), chain=["b", "a", "b"]),
+                CycleAndChains(cycle=("a", "b", "a"), chains=[["a", "b", "a"]]),
+                CycleAndChains(cycle=("b", "a", "b"), chains=[["b", "a", "b"]]),
             ],
         ),
         (
@@ -23,8 +23,8 @@ from project.main import DetectImportCycles, ModuleImport, ChainWithCycle
                 "c": [ModuleImport("d", tuple())],
             },
             [
-                ChainWithCycle(cycle=("a", "b", "a"), chain=["a", "b", "a"]),
-                ChainWithCycle(cycle=("b", "a", "b"), chain=["b", "a", "b"]),
+                CycleAndChains(cycle=("a", "b", "a"), chains=[["a", "b", "a"]]),
+                CycleAndChains(cycle=("b", "a", "b"), chains=[["b", "a", "b"]]),
             ],
         ),
         (
@@ -34,9 +34,15 @@ from project.main import DetectImportCycles, ModuleImport, ChainWithCycle
                 "c": [ModuleImport("a", tuple()), ModuleImport("d", tuple())],
             },
             [
-                ChainWithCycle(cycle=("a", "b", "c", "a"), chain=["a", "b", "c", "a"]),
-                ChainWithCycle(cycle=("b", "c", "a", "b"), chain=["b", "c", "a", "b"]),
-                ChainWithCycle(cycle=("c", "a", "b", "c"), chain=["c", "a", "b", "c"]),
+                CycleAndChains(
+                    cycle=("a", "b", "c", "a"), chains=[["a", "b", "c", "a"]]
+                ),
+                CycleAndChains(
+                    cycle=("b", "c", "a", "b"), chains=[["b", "c", "a", "b"]]
+                ),
+                CycleAndChains(
+                    cycle=("c", "a", "b", "c"), chains=[["c", "a", "b", "c"]]
+                ),
             ],
         ),
         (
@@ -47,18 +53,30 @@ from project.main import DetectImportCycles, ModuleImport, ChainWithCycle
                 "d": [ModuleImport("b", tuple())],
             },
             [
-                ChainWithCycle(cycle=("a", "b", "c", "a"), chain=["a", "b", "c", "a"]),
-                ChainWithCycle(cycle=("b", "c", "a", "b"), chain=["b", "c", "a", "b"]),
-                ChainWithCycle(cycle=("b", "c", "d", "b"), chain=["b", "c", "d", "b"]),
-                ChainWithCycle(cycle=("c", "a", "b", "c"), chain=["c", "a", "b", "c"]),
-                ChainWithCycle(cycle=("c", "d", "b", "c"), chain=["c", "d", "b", "c"]),
-                ChainWithCycle(
-                    cycle=("b", "c", "a", "b"), chain=["d", "b", "c", "a", "b"]
+                CycleAndChains(
+                    cycle=("a", "b", "c", "a"), chains=[["a", "b", "c", "a"]]
                 ),
-                ChainWithCycle(cycle=("d", "b", "c", "d"), chain=["d", "b", "c", "d"]),
+                CycleAndChains(
+                    cycle=("b", "c", "a", "b"),
+                    chains=[["b", "c", "a", "b"], ["d", "b", "c", "a", "b"]],
+                ),
+                CycleAndChains(
+                    cycle=("b", "c", "d", "b"), chains=[["b", "c", "d", "b"]]
+                ),
+                CycleAndChains(
+                    cycle=("c", "a", "b", "c"), chains=[["c", "a", "b", "c"]]
+                ),
+                CycleAndChains(
+                    cycle=("c", "d", "b", "c"), chains=[["c", "d", "b", "c"]]
+                ),
+                CycleAndChains(
+                    cycle=("d", "b", "c", "d"), chains=[["d", "b", "c", "d"]]
+                ),
             ],
         ),
     ],
 )
 def test_cycles(module_imports, expected_cycles):
-    assert list(DetectImportCycles(module_imports).detect_cycles()) == expected_cycles
+    detector = DetectImportCycles(module_imports)
+    detector.detect_cycles()
+    assert detector.cycles == expected_cycles
