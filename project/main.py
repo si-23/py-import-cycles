@@ -214,6 +214,7 @@ class CycleAndChains:
 def _find_import_cycles(module_imports: ModuleImports) -> Sequence[CycleAndChains]:
     detector = DetectImportCycles(module_imports)
     detector.detect_cycles()
+    # TODO sort out duplicates
     return detector.cycles
 
 
