@@ -12,8 +12,9 @@ from project.main import DetectImportCycles, ModuleImport, CycleAndChains
         (
             {"a": [ModuleImport("b", tuple())], "b": [ModuleImport("a", tuple())]},
             [
-                CycleAndChains(cycle=("a", "b", "a"), chains=[["a", "b", "a"]]),
-                CycleAndChains(cycle=("b", "a", "b"), chains=[["b", "a", "b"]]),
+                CycleAndChains(
+                    cycle=("a", "b", "a"), chains=[["a", "b", "a"], ["b", "a", "b"]]
+                ),
             ],
         ),
         (
@@ -23,8 +24,9 @@ from project.main import DetectImportCycles, ModuleImport, CycleAndChains
                 "c": [ModuleImport("d", tuple())],
             },
             [
-                CycleAndChains(cycle=("a", "b", "a"), chains=[["a", "b", "a"]]),
-                CycleAndChains(cycle=("b", "a", "b"), chains=[["b", "a", "b"]]),
+                CycleAndChains(
+                    cycle=("a", "b", "a"), chains=[["a", "b", "a"], ["b", "a", "b"]]
+                ),
             ],
         ),
         (
@@ -35,13 +37,12 @@ from project.main import DetectImportCycles, ModuleImport, CycleAndChains
             },
             [
                 CycleAndChains(
-                    cycle=("a", "b", "c", "a"), chains=[["a", "b", "c", "a"]]
-                ),
-                CycleAndChains(
-                    cycle=("b", "c", "a", "b"), chains=[["b", "c", "a", "b"]]
-                ),
-                CycleAndChains(
-                    cycle=("c", "a", "b", "c"), chains=[["c", "a", "b", "c"]]
+                    cycle=("a", "b", "c", "a"),
+                    chains=[
+                        ["a", "b", "c", "a"],
+                        ["b", "c", "a", "b"],
+                        ["c", "a", "b", "c"],
+                    ],
                 ),
             ],
         ),
@@ -54,23 +55,21 @@ from project.main import DetectImportCycles, ModuleImport, CycleAndChains
             },
             [
                 CycleAndChains(
-                    cycle=("a", "b", "c", "a"), chains=[["a", "b", "c", "a"]]
+                    cycle=("a", "b", "c", "a"),
+                    chains=[
+                        ["a", "b", "c", "a"],
+                        ["b", "c", "a", "b"],
+                        ["c", "a", "b", "c"],
+                        ["d", "b", "c", "a", "b"],
+                    ],
                 ),
                 CycleAndChains(
-                    cycle=("b", "c", "a", "b"),
-                    chains=[["b", "c", "a", "b"], ["d", "b", "c", "a", "b"]],
-                ),
-                CycleAndChains(
-                    cycle=("b", "c", "d", "b"), chains=[["b", "c", "d", "b"]]
-                ),
-                CycleAndChains(
-                    cycle=("c", "a", "b", "c"), chains=[["c", "a", "b", "c"]]
-                ),
-                CycleAndChains(
-                    cycle=("c", "d", "b", "c"), chains=[["c", "d", "b", "c"]]
-                ),
-                CycleAndChains(
-                    cycle=("d", "b", "c", "d"), chains=[["d", "b", "c", "d"]]
+                    cycle=("b", "c", "d", "b"),
+                    chains=[
+                        ["b", "c", "d", "b"],
+                        ["c", "d", "b", "c"],
+                        ["d", "b", "c", "d"],
+                    ],
                 ),
             ],
         ),

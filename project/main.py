@@ -214,7 +214,6 @@ class CycleAndChains:
 def _find_import_cycles(module_imports: ModuleImports) -> Sequence[CycleAndChains]:
     detector = DetectImportCycles(module_imports)
     detector.detect_cycles()
-    # TODO sort out duplicates
     return detector.cycles
 
 
@@ -232,7 +231,9 @@ class DetectImportCycles:
             self._detect_cycles([module_name], module_imports)
 
     def _detect_cycles(
-        self, base_chain: List[str], module_imports: Sequence[ModuleImport],
+        self,
+        base_chain: List[str],
+        module_imports: Sequence[ModuleImport],
     ) -> None:
         for module_import in module_imports:
             chain = base_chain + [module_import.module_name]
@@ -249,7 +250,9 @@ class DetectImportCycles:
     def _add_cycle(self, chain: ImportChain) -> None:
         first_idx = chain.index(chain[-1])
         cycle = tuple(chain[first_idx:])
-        self._cycles.setdefault(cycle, CycleAndChains(cycle)).chains.append(chain)
+        self._cycles.setdefault(
+            tuple(sorted(cycle[:-1])), CycleAndChains(cycle)
+        ).chains.append(chain)
 
 
 # .
