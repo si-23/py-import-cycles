@@ -212,22 +212,16 @@ class DetectImportCycles:
         module_imports: Sequence[ModuleImport],
     ) -> Iterable[ChainWithCycle]:
         for module_import in module_imports:
+            chain = base_chain + [module_import.module_name]
+
             if module_import.module_name in base_chain:
-                yield self._make_chain_with_cycle(
-                    self._create_chain(
-                        base_chain,
-                        module_import.module_name,
-                    )
-                )
+                yield self._make_chain_with_cycle(chain)
                 return
 
             yield from self._detect_cycles(
-                self._create_chain(base_chain, module_import.module_name),
+                chain,
                 self._module_imports.get(module_import.module_name, []),
             )
-
-    def _create_chain(self, base_chain: List[str], module_name: str) -> List[str]:
-        return base_chain + [module_name]
 
     def _make_chain_with_cycle(self, chain: Sequence[str]) -> ChainWithCycle:
         first_idx = chain.index(chain[-1])
