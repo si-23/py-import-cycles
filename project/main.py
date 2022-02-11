@@ -156,17 +156,28 @@ class ImportSTMT(NamedTuple):
         self,
         mapping: Mapping[str, str],
         project_path: Path,
+        base_module_name: str,
     ) -> Sequence[str]:
-        return [
-            module_path_and_name.name
-            for alias in self.node.names
-            if not _is_builtin_or_stdlib(alias.name)
-            and (
+        imported_module_names: Set[str] = set()
+        for alias in self.node.names:
+            if _is_builtin_or_stdlib(alias.name):
+                continue
+
+            if (
                 module_path_and_name := ModulePathAndName.make(
                     mapping, project_path, alias.name
                 )
-            ).py_exists()
-        ]
+            ).py_exists():
+                imported_module_names.add(module_path_and_name.name)
+                continue
+
+            if module_path_and_name.init_exists():
+                imported_module_names.add(module_path_and_name.name)
+                continue
+
+            logger.debug("Unhandled %s: %s", base_module_name, ast.dump(self.node))
+
+        return sorted(imported_module_names)
 
 
 class ImportFromSTMT(NamedTuple):
@@ -200,20 +211,27 @@ class ImportFromSTMT(NamedTuple):
         ).py_exists():
             return [module_path_and_name.name]
 
-        if module_path_and_name.path.is_dir():
-            return [
-                sub_module_path_and_name.name
-                for alias in self.node.names
-                if (
-                    sub_module_path_and_name := ModulePathAndName.make(
-                        mapping,
-                        project_path,
-                        ".".join([module_path_and_name.name, alias.name]),
-                    )
-                ).py_exists()
-            ]
+        if module_path_and_name.init_exists():
+            return [module_path_and_name.name]
 
-        logger.debug("Unknown statement: %s", ast.dump(self.node))
+        if module_path_and_name.path.is_dir():
+            imported_module_names: Set[str] = set()
+            for alias in self.node.names:
+                sub_module_path_and_name = ModulePathAndName.make(
+                    mapping,
+                    project_path,
+                    ".".join([module_path_and_name.name, alias.name]),
+                )
+
+                if sub_module_path_and_name.py_exists():
+                    imported_module_names.add(sub_module_path_and_name.name)
+                    continue
+
+                logger.debug("Unhandled %s: %s", base_module_name, ast.dump(self.node))
+
+            return sorted(imported_module_names)
+
+        logger.debug("Unhandled %s: %s", base_module_name, ast.dump(self.node))
         return []
 
 
@@ -235,6 +253,12 @@ class ModulePathAndName(NamedTuple):
 
     def py_exists(self) -> bool:
         return self.path.with_suffix(".py").exists()
+
+    def init_exists(self) -> bool:
+        return (
+            self.path.is_dir()
+            and self.path.joinpath("__init__").with_suffix(".py").exists()
+        )
 
     @classmethod
     def make(
@@ -487,6 +511,7 @@ def _get_module_imports(
             for imported_module_name in import_stmt.get_imported_module_names(
                 mapping,
                 project_path,
+                module_name_from_path,
             ):
                 module_imports.setdefault(module_name_from_path, []).append(
                     ModuleImport(imported_module_name, import_stmt.context)
