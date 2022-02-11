@@ -172,7 +172,9 @@ class ImportSTMT(NamedTuple):
                 continue
 
             if module_path_and_name.init_exists():
-                imported_module_names.add(module_path_and_name.name)
+                logger.debug(
+                    "Unhandled %s: __init__: %s", base_module_name, module_path_and_name
+                )
                 continue
 
             logger.debug("Unhandled %s: %s", base_module_name, ast.dump(self.node))
@@ -212,7 +214,10 @@ class ImportFromSTMT(NamedTuple):
             return [module_path_and_name.name]
 
         if module_path_and_name.init_exists():
-            return [module_path_and_name.name]
+            logger.debug(
+                "Unhandled %s: __init__: %s", base_module_name, module_path_and_name
+            )
+            return []
 
         if module_path_and_name.path.is_dir():
             imported_module_names: Set[str] = set()
