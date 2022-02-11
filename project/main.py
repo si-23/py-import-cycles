@@ -158,7 +158,7 @@ class ImportSTMT(NamedTuple):
         project_path: Path,
         base_module_name: str,
     ) -> Sequence[str]:
-        imported_module_names: Set[str] = set()
+        imported_module_names: List[str] = []
         for alias in self.node.names:
             if _is_builtin_or_stdlib(alias.name):
                 continue
@@ -168,7 +168,8 @@ class ImportSTMT(NamedTuple):
                     mapping, project_path, alias.name
                 )
             ).py_exists():
-                imported_module_names.add(module_path_and_name.name)
+                if module_path_and_name.name not in imported_module_names:
+                    imported_module_names.append(module_path_and_name.name)
                 continue
 
             if module_path_and_name.init_exists():
@@ -179,7 +180,7 @@ class ImportSTMT(NamedTuple):
 
             logger.debug("Unhandled %s: %s", base_module_name, ast.dump(self.node))
 
-        return sorted(imported_module_names)
+        return imported_module_names
 
 
 class ImportFromSTMT(NamedTuple):
@@ -220,7 +221,7 @@ class ImportFromSTMT(NamedTuple):
             return []
 
         if module_path_and_name.path.is_dir():
-            imported_module_names: Set[str] = set()
+            imported_module_names: List[str] = []
             for alias in self.node.names:
                 sub_module_path_and_name = ModulePathAndName.make(
                     mapping,
@@ -229,12 +230,13 @@ class ImportFromSTMT(NamedTuple):
                 )
 
                 if sub_module_path_and_name.py_exists():
-                    imported_module_names.add(sub_module_path_and_name.name)
+                    if sub_module_path_and_name.name not in imported_module_names:
+                        imported_module_names.append(sub_module_path_and_name.name)
                     continue
 
                 logger.debug("Unhandled %s: %s", base_module_name, ast.dump(self.node))
 
-            return sorted(imported_module_names)
+            return imported_module_names
 
         logger.debug("Unhandled %s: %s", base_module_name, ast.dump(self.node))
         return []
