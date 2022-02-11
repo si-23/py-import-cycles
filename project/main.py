@@ -508,9 +508,11 @@ def _get_module_imports(
     # TODO improve this
     module_imports: Dict[str, List[ModuleImport]] = {}
     for visitor in visitors:
-        if (module_name_from_path := _get_module_name_from_path(
-            mapping, project_path, visitor.path
-        )) is None:
+        if (
+            module_name_from_path := _get_module_name_from_path(
+                mapping, project_path, visitor.path
+            )
+        ) is None:
             continue
 
         for import_stmt in visitor.imports_stmt:
