@@ -508,9 +508,10 @@ def _get_module_imports(
     # TODO improve this
     module_imports: Dict[str, List[ModuleImport]] = {}
     for visitor in visitors:
-        module_name_from_path = _get_module_name_from_path(
+        if (module_name_from_path := _get_module_name_from_path(
             mapping, project_path, visitor.path
-        )
+        )) is None:
+            continue
 
         for import_stmt in visitor.imports_stmt:
             for imported_module_name in import_stmt.get_imported_module_names(
@@ -537,11 +538,11 @@ def _get_module_imports(
 
 def _get_module_name_from_path(
     mapping: Mapping[str, str], project_path: Path, module_path: Path
-) -> str:
+) -> Optional[str]:
     rel_path = module_path.relative_to(project_path).with_suffix("")
     if rel_path.name == "__init__":
-        # TODO check this
-        rel_path = rel_path.parent
+        logger.debug("Ignore %s", module_path)
+        return None
 
     parts = rel_path.parts
     for key in mapping:
