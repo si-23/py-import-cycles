@@ -80,54 +80,6 @@ def _load_python_contents(files: Set[Path]) -> Mapping[Path, str]:
 
 ImportContext = Tuple[Union[ast.If, ast.Try, ast.ClassDef, ast.FunctionDef], ...]
 
-# TODO use context in graph (nested import stmt)
-
-
-class ImportSTMT(NamedTuple):
-    context: ImportContext
-    node: ast.Import
-
-    def get_imported_module_names(self) -> Sequence[str]:
-        # TODO handle path.to.mod.func
-        return [
-            alias.name
-            for alias in self.node.names
-            if not _is_builtin_or_stdlib(alias.name)
-        ]
-
-
-class ImportFromSTMT(NamedTuple):
-    context: ImportContext
-    node: ast.ImportFrom
-
-    def get_imported_module_names(
-        self, project_path: Path, module_name: str
-    ) -> Sequence[str]:
-        # TODO handle from path.to.mod import func?
-        if not self.node.module:
-            return []
-
-        if _is_builtin_or_stdlib(self.node.module):
-            return []
-
-        if self.node.level > 0:
-            return [".".join(module_name.split(".")[: -self.node.level])]
-
-        module_path = project_path.joinpath(Path(*self.node.module.split(".")))
-
-        if module_path.with_suffix(".py").exists():
-            return [self.node.module]
-
-        if module_path.is_dir():
-            return [
-                ".".join(module_path.joinpath(alias.name).parts)
-                for alias in self.node.names
-                if module_path.joinpath(alias.name).with_suffix(".py").exists()
-            ]
-
-        logger.debug("Unknown statement: %s", ast.dump(self.node))
-        return []
-
 
 class NodeVisitorImports(ast.NodeVisitor):
     def __init__(self, path: Path) -> None:
@@ -190,6 +142,117 @@ def _visit_python_contents(
         visitor.visit(tree)
         visitors.append(visitor)
     return sorted(visitors, key=lambda v: v.path)
+
+
+# TODO use context in graph (nested import stmt)
+# TODO handle __init__s
+
+
+class ImportSTMT(NamedTuple):
+    context: ImportContext
+    node: ast.Import
+
+    def get_imported_module_names(
+        self,
+        mapping: Mapping[str, str],
+        project_path: Path,
+    ) -> Sequence[str]:
+        return [
+            module_path_and_name.name
+            for alias in self.node.names
+            if not _is_builtin_or_stdlib(alias.name)
+            and (
+                module_path_and_name := ModulePathAndName.make(
+                    mapping, project_path, alias.name
+                )
+            ).py_exists()
+        ]
+
+
+class ImportFromSTMT(NamedTuple):
+    context: ImportContext
+    node: ast.ImportFrom
+
+    def get_imported_module_names(
+        self,
+        mapping: Mapping[str, str],
+        project_path: Path,
+        base_module_name: str,
+    ) -> Sequence[str]:
+        if not self.node.module:
+            return []
+
+        if _is_builtin_or_stdlib(self.node.module):
+            return []
+
+        if self.node.level == 0:
+            module_name = self.node.module
+        else:
+            module_name = ".".join(
+                base_module_name.split(".")[: -self.node.level]
+                + self.node.module.split(".")
+            )
+
+        if (
+            module_path_and_name := ModulePathAndName.make(
+                mapping, project_path, module_name
+            )
+        ).py_exists():
+            return [module_path_and_name.name]
+
+        if module_path_and_name.path.is_dir():
+            return [
+                sub_module_path_and_name.name
+                for alias in self.node.names
+                if (
+                    sub_module_path_and_name := ModulePathAndName.make(
+                        mapping,
+                        project_path,
+                        ".".join([module_path_and_name.name, alias.name]),
+                    )
+                ).py_exists()
+            ]
+
+        logger.debug("Unknown statement: %s", ast.dump(self.node))
+        return []
+
+
+def _is_builtin_or_stdlib(module_name: str) -> bool:
+    if module_name in sys.builtin_module_names or module_name in sys.modules:
+        # Avail in 3.10: or name in sys.stdlib_module_names
+        return True
+
+    try:
+        importlib.util.find_spec(module_name)
+        return True
+    except ModuleNotFoundError:
+        return False
+
+
+class ModulePathAndName(NamedTuple):
+    path: Path
+    name: str
+
+    def py_exists(self) -> bool:
+        return self.path.with_suffix(".py").exists()
+
+    @classmethod
+    def make(
+        cls,
+        mapping: Mapping[str, str],
+        project_path: Path,
+        module_name: str,
+    ) -> ModulePathAndName:
+        parts = module_name.split(".")
+        for key, value in mapping.items():
+            if value in parts:
+                parts = [key] + parts
+                break
+
+        return cls(
+            path=project_path.joinpath(Path(*parts)),
+            name=module_name,
+        )
 
 
 # .
@@ -409,7 +472,7 @@ ModuleImports = Mapping[str, Sequence[ModuleImport]]
 
 
 def _get_module_imports(
-    args: argparse.Namespace,
+    mapping: Mapping[str, str],
     project_path: Path,
     visitors: Sequence[NodeVisitorImports],
 ) -> ModuleImports:
@@ -417,17 +480,21 @@ def _get_module_imports(
     module_imports: Dict[str, List[ModuleImport]] = {}
     for visitor in visitors:
         module_name_from_path = _get_module_name_from_path(
-            args, project_path, visitor.path
+            mapping, project_path, visitor.path
         )
 
         for import_stmt in visitor.imports_stmt:
-            for imported_module_name in import_stmt.get_imported_module_names():
+            for imported_module_name in import_stmt.get_imported_module_names(
+                mapping,
+                project_path,
+            ):
                 module_imports.setdefault(module_name_from_path, []).append(
                     ModuleImport(imported_module_name, import_stmt.context)
                 )
 
         for import_from_stmt in visitor.imports_from_stmt:
             for imported_module_name in import_from_stmt.get_imported_module_names(
+                mapping,
                 project_path,
                 module_name_from_path,
             ):
@@ -439,7 +506,7 @@ def _get_module_imports(
 
 
 def _get_module_name_from_path(
-    args: argparse.Namespace, project_path: Path, module_path: Path
+    mapping: Mapping[str, str], project_path: Path, module_path: Path
 ) -> str:
     rel_path = module_path.relative_to(project_path).with_suffix("")
     if rel_path.name == "__init__":
@@ -447,25 +514,12 @@ def _get_module_name_from_path(
         rel_path = rel_path.parent
 
     parts = rel_path.parts
-    if args.ignore:
-        for ignore in args.ignore:
-            if ignore.split(":")[0] == parts[0]:
-                parts = parts[1:]
-                break
+    for key in mapping:
+        if key == parts[0]:
+            parts = parts[1:]
+            break
 
     return ".".join(parts)
-
-
-def _is_builtin_or_stdlib(module_name: str) -> bool:
-    if module_name in sys.builtin_module_names or module_name in sys.modules:
-        # Avail in 3.10: or name in sys.stdlib_module_names
-        return True
-
-    try:
-        importlib.util.find_spec(module_name)
-        return True
-    except ModuleNotFoundError:
-        return False
 
 
 # .
@@ -482,6 +536,13 @@ def main(argv: Sequence[str]) -> int:
         return 1
 
     folder_path = project_path.joinpath(args.folder)
+    if not folder_path.exists():
+        logger.debug("No such directory: %s", folder_path)
+        return 1
+
+    mapping = (
+        dict([entry.split(":") for entry in args.map]) if args.map is not None else {}
+    )
 
     logger.info("Get Python files")
     python_files = _get_python_files(folder_path)
@@ -493,7 +554,7 @@ def main(argv: Sequence[str]) -> int:
     visitors = _visit_python_contents(loaded_python_files)
 
     logger.info("Parse Python contents into module relationships")
-    module_imports = _get_module_imports(args, project_path, visitors)
+    module_imports = _get_module_imports(mapping, project_path, visitors)
     logger.info("Found %d relationships", len(module_imports))
 
     logger.info("Detect import cycles")
@@ -539,9 +600,14 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="Only show cycles",
     )
     parser.add_argument(
-        "--ignore",
+        "--map",
         nargs="+",
-        help="Ignore prefixes, eg. managed:cme",
+        help=(
+            "Hack with symlinks: Sanitize module paths or import statments,"
+            " ie. PREFIX:SHORT, eg.:"
+            " from path.to.SHORT.module -> PREFIX/path/to/SHORT/module.py"
+            " PREFIX/path/to/SHORT/module.py -> path.to.SHORT.module"
+        ),
     )
     parser.add_argument(
         "--project-path",
