@@ -24,6 +24,10 @@ def _get_import_cycles(path: Path) -> Sequence[CycleAndChains]:
 
 
 def test_imports_1():
+    # ├── main.py::import mod_1
+    # ├── mod_1.py::import mod_2
+    # ├── mod_2.py::import mod_3
+    # └── mod_3.py::import mod_1
     path = Path(os.path.dirname(os.path.realpath(__file__))).joinpath("imports-1")
     assert _get_import_cycles(path) == [
         CycleAndChains(
@@ -35,4 +39,57 @@ def test_imports_1():
                 ["mod_3", "mod_1", "mod_2", "mod_3"],
             ],
         )
+    ]
+
+
+def test_imports_2():
+    # ├── main.py::import sub_pkg.mod_1
+    # └── sub_pkg
+    #     ├── __init__.py
+    #     ├── mod_1.py::import sub_pkg.mod_2
+    #     ├── mod_2.py::import sub_pkg.mod_3
+    #     └── mod_3.py::import sub_pkg.mod_1
+    path = Path(os.path.dirname(os.path.realpath(__file__))).joinpath("imports-2")
+    assert _get_import_cycles(path) == [
+        CycleAndChains(
+            cycle=("sub_pkg.mod_1", "sub_pkg.mod_2", "sub_pkg.mod_3", "sub_pkg.mod_1"),
+            chains=[
+                [
+                    "main",
+                    "sub_pkg.mod_1",
+                    "sub_pkg.mod_2",
+                    "sub_pkg.mod_3",
+                    "sub_pkg.mod_1",
+                ],
+                ["sub_pkg.mod_1", "sub_pkg.mod_2", "sub_pkg.mod_3", "sub_pkg.mod_1"],
+                ["sub_pkg.mod_2", "sub_pkg.mod_3", "sub_pkg.mod_1", "sub_pkg.mod_2"],
+                ["sub_pkg.mod_3", "sub_pkg.mod_1", "sub_pkg.mod_2", "sub_pkg.mod_3"],
+            ],
+        )
+    ]
+
+
+def test_imports_3():
+    # ├── main.py::import sub_pkg
+    # └── sub_pkg
+    #     ├── __init__.py
+    #     ├── mod_1.py::import sub_pkg.mod_2
+    #     ├── mod_2.py::import sub_pkg.mod_3
+    #     └── mod_3.py::import sub_pkg.mod_1
+    path = Path(os.path.dirname(os.path.realpath(__file__))).joinpath("imports-3")
+    assert _get_import_cycles(path) == [
+        # FIXME
+    ]
+
+
+def test_imports_4():
+    # ├── main.py::import sub_pkg
+    # └── sub_pkg
+    #     ├── __init__.py::import import sub_pkg.mod_1
+    #     ├── mod_1.py::import sub_pkg.mod_2
+    #     ├── mod_2.py::import sub_pkg.mod_3
+    #     └── mod_3.py::import sub_pkg.mod_1
+    path = Path(os.path.dirname(os.path.realpath(__file__))).joinpath("imports-4")
+    assert _get_import_cycles(path) == [
+        # FIXME with __init__ handling
     ]
