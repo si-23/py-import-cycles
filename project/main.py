@@ -44,6 +44,22 @@ logger = logging.getLogger(__name__)
 # TODO #4
 # use context in graph (nested import stmt)
 
+# TODO #5
+# Handle star imports
+
+# TODO #6
+# Handle relative imports properly
+
+# Cases:
+# import path.to.mod
+# import path.to.mod as my_mod
+
+# from path.to.mod import sub_mod
+# from path.to.mod import sub_mod as my_sub_mod
+
+# from path.to.mod import func/class
+# from path.to.mod import func/class as my_func/class
+
 
 #   .--contents------------------------------------------------------------.
 #   |                                _             _                       |
