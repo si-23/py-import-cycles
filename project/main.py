@@ -178,20 +178,18 @@ class ImportSTMT(NamedTuple):
             if _is_builtin_or_stdlib(alias.name):
                 continue
 
-            if (
-                module_path_and_name := ModulePathAndName.make(
-                    mapping, project_path, alias.name
-                )
-            ).py_exists():
-                if module_path_and_name.name not in imported_module_names:
-                    imported_module_names.append(module_path_and_name.name)
+            module = Module.from_name(mapping, project_path, alias.name, self.context)
+
+            if module.py_exists():
+                if module.name not in imported_module_names:
+                    imported_module_names.append(module.name)
                 continue
 
-            if module_path_and_name.init_exists():
+            if module.init_exists():
                 logger.debug(
                     "Import: Unhandled %s: %s",
                     base_module_name,
-                    ".".join([module_path_and_name.name, "__init__"]),
+                    ".".join([module.name, "__init__"]),
                 )
                 continue
 
@@ -228,33 +226,32 @@ class ImportFromSTMT(NamedTuple):
                 + self.node.module.split(".")
             )
 
-        if (
-            module_path_and_name := ModulePathAndName.make(
-                mapping, project_path, module_name
-            )
-        ).py_exists():
-            return [module_path_and_name.name]
+        module = Module.from_name(mapping, project_path, module_name, self.context)
 
-        if module_path_and_name.init_exists():
+        if module.py_exists():
+            return [module.name]
+
+        if module.init_exists():
             logger.debug(
                 "ImportFrom: Unhandled %s: %s",
                 base_module_name,
-                ".".join([module_path_and_name.name, "__init__"]),
+                ".".join([module.name, "__init__"]),
             )
             return []
 
-        if module_path_and_name.path.is_dir():
+        if module.path.is_dir():
             imported_module_names: List[str] = []
             for alias in self.node.names:
-                sub_module_path_and_name = ModulePathAndName.make(
+                sub_module = Module.from_name(
                     mapping,
                     project_path,
-                    ".".join([module_path_and_name.name, alias.name]),
+                    ".".join([module.name, alias.name]),
+                    self.context,
                 )
 
-                if sub_module_path_and_name.py_exists():
-                    if sub_module_path_and_name.name not in imported_module_names:
-                        imported_module_names.append(sub_module_path_and_name.name)
+                if sub_module.py_exists():
+                    if sub_module.name not in imported_module_names:
+                        imported_module_names.append(sub_module.name)
                     continue
 
                 logger.debug(
@@ -282,38 +279,6 @@ def _is_builtin_or_stdlib(module_name: str) -> bool:
         return importlib.util.find_spec(module_name) is not None
     except ModuleNotFoundError:
         return False
-
-
-class ModulePathAndName(NamedTuple):
-    path: Path
-    name: str
-
-    def py_exists(self) -> bool:
-        return self.path.with_suffix(".py").exists()
-
-    def init_exists(self) -> bool:
-        return (
-            self.path.is_dir()
-            and self.path.joinpath("__init__").with_suffix(".py").exists()
-        )
-
-    @classmethod
-    def make(
-        cls,
-        mapping: Mapping[str, str],
-        project_path: Path,
-        module_name: str,
-    ) -> ModulePathAndName:
-        parts = module_name.split(".")
-        for key, value in mapping.items():
-            if value in parts:
-                parts = [key] + parts
-                break
-
-        return cls(
-            path=project_path.joinpath(Path(*parts)),
-            name=module_name,
-        )
 
 
 # .
@@ -610,25 +575,61 @@ def _get_imports_by_module(
         ]
         for visitor in visitors
         for module_name in (
-            _get_module_name_from_path(mapping, project_path, visitor.path),
+            Module.from_path(mapping, project_path, visitor.path, tuple()).name,
         )
     }
 
 
-def _get_module_name_from_path(
-    mapping: Mapping[str, str],
-    project_path: Path,
-    module_path: Path,
-) -> str:
-    # Note: pkg/__init__.py are added, too
-    parts = module_path.relative_to(project_path).with_suffix("").parts
+class Module(NamedTuple):
+    path: Path
+    name: str
+    context: ImportContext
 
-    for key, value in mapping.items():
-        if key == parts[0] and value in parts[1:]:
-            parts = parts[1:]
-            break
+    @classmethod
+    def from_name(
+        cls,
+        mapping: Mapping[str, str],
+        project_path: Path,
+        module_name: str,
+        context: ImportContext,
+    ) -> Module:
+        parts = module_name.split(".")
+        for key, value in mapping.items():
+            if value in parts:
+                parts = [key] + parts
+                break
 
-    return ".".join(parts)
+        return cls(
+            path=project_path.joinpath(Path(*parts)),
+            name=module_name,
+            context=context,
+        )
+
+    @classmethod
+    def from_path(
+        cls,
+        mapping: Mapping[str, str],
+        project_path: Path,
+        module_path: Path,
+        context: ImportContext,
+    ) -> Module:
+        parts = module_path.relative_to(project_path).with_suffix("").parts
+        for key, value in mapping.items():
+            if key == parts[0] and value in parts[1:]:
+                parts = parts[1:]
+                break
+
+        return cls(
+            path=module_path,
+            name=".".join(parts),
+            context=context,
+        )
+
+    def py_exists(self) -> bool:
+        return self.path.with_suffix(".py").exists()
+
+    def init_exists(self) -> bool:
+        return self.path.is_dir and self.path.joinpath("__init__.py").exists()
 
 
 def _show_import_cycles(
