@@ -502,123 +502,6 @@ def _make_only_cycles_edges(
 #   '----------------------------------------------------------------------'
 
 
-@dataclass
-class ModuleImport:
-    module_name: str
-    context: ImportContext
-
-
-ModuleImports = Mapping[str, Sequence[ModuleImport]]
-
-
-def _get_module_imports(
-    mapping: Mapping[str, str],
-    project_path: Path,
-    visitors: Sequence[NodeVisitorImports],
-) -> ModuleImports:
-    module_imports: Dict[str, List[ModuleImport]] = {}
-    for visitor in visitors:
-        if (
-            module_name_from_path := _get_module_name_from_path(
-                mapping, project_path, visitor.path
-            )
-        ) is None:
-            continue
-
-        for import_stmt in visitor.imports_stmt:
-            for imported_module_name in import_stmt.get_imported_module_names(
-                mapping,
-                project_path,
-                module_name_from_path,
-            ):
-                module_imports.setdefault(module_name_from_path, []).append(
-                    ModuleImport(imported_module_name, import_stmt.context)
-                )
-
-        for import_from_stmt in visitor.imports_from_stmt:
-            for imported_module_name in import_from_stmt.get_imported_module_names(
-                mapping,
-                project_path,
-                module_name_from_path,
-            ):
-                module_imports.setdefault(module_name_from_path, []).append(
-                    ModuleImport(imported_module_name, import_from_stmt.context)
-                )
-
-    return module_imports
-
-
-def _get_module_name_from_path(
-    mapping: Mapping[str, str], project_path: Path, module_path: Path
-) -> Optional[str]:
-    rel_path = module_path.relative_to(project_path).with_suffix("")
-    if rel_path.name == "__init__":
-        logger.debug("Ignore %s", module_path)
-        return None
-
-    parts = rel_path.parts
-    for key in mapping:
-        if key == parts[0]:
-            parts = parts[1:]
-            break
-
-    return ".".join(parts)
-
-
-# .
-
-
-def main(argv: Sequence[str]) -> int:
-    args = _parse_arguments(argv)
-
-    _setup_logging(args)
-
-    project_path = Path(args.project_path)
-    if not project_path.exists() or not project_path.is_dir():
-        logger.debug("No such directory: %s", project_path)
-        return 1
-
-    folder_path = project_path.joinpath(args.folder)
-    if not folder_path.exists():
-        logger.debug("No such directory: %s", folder_path)
-        return 1
-
-    mapping = (
-        dict([entry.split(":") for entry in args.map]) if args.map is not None else {}
-    )
-
-    logger.info("Get Python files")
-    python_files = _get_python_files(folder_path)
-
-    logger.info("Load Python files")
-    loaded_python_files = _load_python_contents(set(python_files))
-
-    logger.info("Visit Python contents")
-    visitors = _visit_python_contents(loaded_python_files)
-
-    logger.info("Parse Python contents into module relationships")
-    module_imports = _get_module_imports(mapping, project_path, visitors)
-    logger.info("Found %d relationships", len(module_imports))
-
-    logger.info("Detect import cycles")
-    import_cycles = _find_import_cycles(module_imports)
-
-    _show_import_cycles(args, import_cycles)
-
-    if args.graph == "no":
-        return _get_return_code(import_cycles)
-
-    if not (edges := _make_edges(args, module_imports, import_cycles)):
-        logger.debug("No edges for graphing")
-        return _get_return_code(import_cycles)
-
-    logger.info("Make graph")
-    graph = _make_graph(project_path, args, edges)
-    graph.view()
-
-    return _get_return_code(import_cycles)
-
-
 def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -682,6 +565,69 @@ def _setup_logging(args: argparse.Namespace) -> None:
     logger.addHandler(handler)
 
 
+@dataclass
+class ModuleImport:
+    module_name: str
+    context: ImportContext
+
+
+ModuleImports = Mapping[str, Sequence[ModuleImport]]
+
+
+def _get_module_imports(
+    mapping: Mapping[str, str],
+    project_path: Path,
+    visitors: Sequence[NodeVisitorImports],
+) -> ModuleImports:
+    module_imports: Dict[str, List[ModuleImport]] = {}
+    for visitor in visitors:
+        if (
+            module_name_from_path := _get_module_name_from_path(
+                mapping, project_path, visitor.path
+            )
+        ) is None:
+            continue
+
+        for import_stmt in visitor.imports_stmt:
+            for imported_module_name in import_stmt.get_imported_module_names(
+                mapping,
+                project_path,
+                module_name_from_path,
+            ):
+                module_imports.setdefault(module_name_from_path, []).append(
+                    ModuleImport(imported_module_name, import_stmt.context)
+                )
+
+        for import_from_stmt in visitor.imports_from_stmt:
+            for imported_module_name in import_from_stmt.get_imported_module_names(
+                mapping,
+                project_path,
+                module_name_from_path,
+            ):
+                module_imports.setdefault(module_name_from_path, []).append(
+                    ModuleImport(imported_module_name, import_from_stmt.context)
+                )
+
+    return module_imports
+
+
+def _get_module_name_from_path(
+    mapping: Mapping[str, str], project_path: Path, module_path: Path
+) -> Optional[str]:
+    rel_path = module_path.relative_to(project_path).with_suffix("")
+    if rel_path.name == "__init__":
+        logger.debug("Ignore %s", module_path)
+        return None
+
+    parts = rel_path.parts
+    for key in mapping:
+        if key == parts[0]:
+            parts = parts[1:]
+            break
+
+    return ".".join(parts)
+
+
 def _show_import_cycles(
     args: argparse.Namespace, import_cycles: Sequence[CycleAndChains]
 ) -> None:
@@ -700,6 +646,60 @@ def _show_import_cycles(
 
 def _get_return_code(import_cycles: Sequence[CycleAndChains]) -> bool:
     return bool(import_cycles)
+
+
+# .
+
+
+def main(argv: Sequence[str]) -> int:
+    args = _parse_arguments(argv)
+
+    _setup_logging(args)
+
+    project_path = Path(args.project_path)
+    if not project_path.exists() or not project_path.is_dir():
+        logger.debug("No such directory: %s", project_path)
+        return 1
+
+    folder_path = project_path.joinpath(args.folder)
+    if not folder_path.exists():
+        logger.debug("No such directory: %s", folder_path)
+        return 1
+
+    mapping = (
+        dict([entry.split(":") for entry in args.map]) if args.map is not None else {}
+    )
+
+    logger.info("Get Python files")
+    python_files = _get_python_files(folder_path)
+
+    logger.info("Load Python files")
+    loaded_python_files = _load_python_contents(set(python_files))
+
+    logger.info("Visit Python contents")
+    visitors = _visit_python_contents(loaded_python_files)
+
+    logger.info("Parse Python contents into module relationships")
+    module_imports = _get_module_imports(mapping, project_path, visitors)
+    logger.info("Found %d relationships", len(module_imports))
+
+    logger.info("Detect import cycles")
+    import_cycles = _find_import_cycles(module_imports)
+
+    _show_import_cycles(args, import_cycles)
+
+    if args.graph == "no":
+        return _get_return_code(import_cycles)
+
+    if not (edges := _make_edges(args, module_imports, import_cycles)):
+        logger.debug("No edges for graphing")
+        return _get_return_code(import_cycles)
+
+    logger.info("Make graph")
+    graph = _make_graph(project_path, args, edges)
+    graph.view()
+
+    return _get_return_code(import_cycles)
 
 
 if __name__ == "__main__":
