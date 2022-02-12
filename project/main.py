@@ -27,6 +27,20 @@ from typing import (
 
 logger = logging.getLogger(__name__)
 
+# TODO #1
+# load all python file not only below FOLDER
+
+# TODO #2
+# Handle:
+#   import pkg -> execute __init__.py
+#   import pkg.mod -> __init__.py already executed
+# or
+#   import pkg.mod -> execute __init__.py
+#   import pkg -> __init__.py already executed
+
+# TODO #3
+# use context in graph (nested import stmt)
+
 
 #   .--contents------------------------------------------------------------.
 #   |                                _             _                       |
@@ -142,10 +156,6 @@ def _visit_python_contents(
         visitor.visit(tree)
         visitors.append(visitor)
     return sorted(visitors, key=lambda v: v.path)
-
-
-# TODO use context in graph (nested import stmt)
-# TODO handle __init__s
 
 
 class ImportSTMT(NamedTuple):
@@ -506,7 +516,6 @@ def _get_module_imports(
     project_path: Path,
     visitors: Sequence[NodeVisitorImports],
 ) -> ModuleImports:
-    # TODO improve this
     module_imports: Dict[str, List[ModuleImport]] = {}
     for visitor in visitors:
         if (
