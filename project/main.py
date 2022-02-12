@@ -39,6 +39,9 @@ logger = logging.getLogger(__name__)
 #   import pkg -> __init__.py already executed
 
 # TODO #3
+# Is args.map really needed?
+
+# TODO #4
 # use context in graph (nested import stmt)
 
 
