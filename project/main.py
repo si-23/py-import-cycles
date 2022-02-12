@@ -105,23 +105,18 @@ ImportContext = Tuple[Union[ast.If, ast.Try, ast.ClassDef, ast.FunctionDef], ...
 class NodeVisitorImports(ast.NodeVisitor):
     def __init__(self, path: Path) -> None:
         self.path = path
-        self._imports_stmt: List[ImportSTMT] = []
-        self._imports_from_stmt: List[ImportFromSTMT] = []
+        self._import_stmts: List[Union[ImportSTMT, ImportFromSTMT]] = []
         self._context: ImportContext = tuple()
 
     @property
-    def imports_stmt(self) -> Sequence[ImportSTMT]:
-        return self._imports_stmt
-
-    @property
-    def imports_from_stmt(self) -> Sequence[ImportFromSTMT]:
-        return self._imports_from_stmt
+    def import_stmts(self) -> Sequence[Union[ImportSTMT, ImportFromSTMT]]:
+        return self._import_stmts
 
     def visit_Import(self, node: ast.Import) -> None:
-        self._imports_stmt.append(ImportSTMT(self._context, node))
+        self._import_stmts.append(ImportSTMT(self._context, node))
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        self._imports_from_stmt.append(ImportFromSTMT(self._context, node))
+        self._import_stmts.append(ImportFromSTMT(self._context, node))
 
     def visit_If(self, node: ast.If) -> None:
         self._context += (node,)
@@ -326,7 +321,7 @@ class CycleAndChains:
     chains: List[ImportChain] = field(default_factory=list)
 
 
-def _find_import_cycles(module_imports: ModuleImports) -> Sequence[CycleAndChains]:
+def _find_import_cycles(module_imports: ImportsByModule) -> Sequence[CycleAndChains]:
     detector = DetectImportCycles(module_imports)
     detector.detect_cycles()
     return detector.cycles
@@ -334,7 +329,7 @@ def _find_import_cycles(module_imports: ModuleImports) -> Sequence[CycleAndChain
 
 @dataclass(frozen=True)
 class DetectImportCycles:
-    _module_imports: ModuleImports
+    _module_imports: ImportsByModule
     _cycles: Dict[ImportChain, CycleAndChains] = field(default_factory=dict)
 
     @property
@@ -348,7 +343,7 @@ class DetectImportCycles:
     def _detect_cycles(
         self,
         base_chain: List[str],
-        module_imports: Sequence[ModuleImport],
+        module_imports: Sequence[ImportedModule],
     ) -> None:
         for module_import in module_imports:
             chain = base_chain + [module_import.module_name]
@@ -420,7 +415,7 @@ class ImportEdge(NamedTuple):
 
 def _make_edges(
     args: argparse.Namespace,
-    module_imports: ModuleImports,
+    module_imports: ImportsByModule,
     import_cycles: Sequence[CycleAndChains],
 ) -> Sequence[ImportEdge]:
     if args.graph == "all":
@@ -433,7 +428,7 @@ def _make_edges(
 
 
 def _make_all_edges(
-    module_imports: ModuleImports,
+    module_imports: ImportsByModule,
     import_cycles: Sequence[CycleAndChains],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
@@ -471,7 +466,7 @@ def _is_in_cycle(
 
 
 def _make_only_cycles_edges(
-    module_imports: ModuleImports,
+    module_imports: ImportsByModule,
     import_cycles: Sequence[CycleAndChains],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
@@ -576,44 +571,32 @@ def _setup_logging(args: argparse.Namespace) -> None:
 
 
 @dataclass
-class ModuleImport:
+class ImportedModule:
     module_name: str
     context: ImportContext
 
 
-ModuleImports = Mapping[str, Sequence[ModuleImport]]
+ImportsByModule = Mapping[str, Sequence[ImportedModule]]
 
 
-def _get_module_imports(
+def _get_imports_by_module(
     mapping: Mapping[str, str],
     project_path: Path,
     visitors: Iterable[NodeVisitorImports],
-) -> ModuleImports:
-    module_imports: Dict[str, List[ModuleImport]] = {}
-    for visitor in visitors:
-        module_name = _get_module_name_from_path(mapping, project_path, visitor.path)
-
-        for import_stmt in visitor.imports_stmt:
+) -> ImportsByModule:
+    return {
+        module_name: [
+            ImportedModule(imported_module_name, import_stmt.context)
+            for import_stmt in visitor.import_stmts
             for imported_module_name in import_stmt.get_imported_module_names(
-                mapping,
-                project_path,
-                module_name,
-            ):
-                module_imports.setdefault(module_name, []).append(
-                    ModuleImport(imported_module_name, import_stmt.context)
-                )
-
-        for import_from_stmt in visitor.imports_from_stmt:
-            for imported_module_name in import_from_stmt.get_imported_module_names(
-                mapping,
-                project_path,
-                module_name,
-            ):
-                module_imports.setdefault(module_name, []).append(
-                    ModuleImport(imported_module_name, import_from_stmt.context)
-                )
-
-    return module_imports
+                mapping, project_path, module_name
+            )
+        ]
+        for visitor in visitors
+        for module_name in (
+            _get_module_name_from_path(mapping, project_path, visitor.path),
+        )
+    }
 
 
 def _get_module_name_from_path(
@@ -621,7 +604,7 @@ def _get_module_name_from_path(
     project_path: Path,
     module_path: Path,
 ) -> str:
-    # Note: pkg/__init__.py are added two
+    # Note: pkg/__init__.py are added, too
     parts = module_path.relative_to(project_path).with_suffix("").parts
 
     for key, value in mapping.items():
@@ -678,19 +661,19 @@ def main(argv: Sequence[str]) -> int:
     logger.info("Visit Python files")
     visitors = _visit_python_files(python_files)
 
-    logger.info("Get import relationships")
-    module_imports = _get_module_imports(mapping, project_path, visitors)
-    logger.info("Found %d relationships", len(module_imports))
+    logger.info("Get imports of modules")
+    imports_by_module = _get_imports_by_module(mapping, project_path, visitors)
+    logger.info("Found %d modules with imports", len(imports_by_module))
 
     logger.info("Detect import cycles")
-    import_cycles = _find_import_cycles(module_imports)
+    import_cycles = _find_import_cycles(imports_by_module)
 
     _show_import_cycles(args, import_cycles)
 
     if args.graph == "no":
         return _get_return_code(import_cycles)
 
-    if not (edges := _make_edges(args, module_imports, import_cycles)):
+    if not (edges := _make_edges(args, imports_by_module, import_cycles)):
         logger.debug("No edges for graphing")
         return _get_return_code(import_cycles)
 
