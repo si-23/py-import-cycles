@@ -61,12 +61,12 @@ logger = logging.getLogger(__name__)
 # from path.to.mod import func/class as my_func/class
 
 
-#   .--contents------------------------------------------------------------.
-#   |                                _             _                       |
-#   |                 ___ ___  _ __ | |_ ___ _ __ | |_ ___                 |
-#   |                / __/ _ \| '_ \| __/ _ \ '_ \| __/ __|                |
-#   |               | (_| (_) | | | | ||  __/ | | | |_\__ \                |
-#   |                \___\___/|_| |_|\__\___|_| |_|\__|___/                |
+#   .--files---------------------------------------------------------------.
+#   |                           __ _ _                                     |
+#   |                          / _(_) | ___  ___                           |
+#   |                         | |_| | |/ _ \/ __|                          |
+#   |                         |  _| | |  __/\__ \                          |
+#   |                         |_| |_|_|\___||___/                          |
 #   |                                                                      |
 #   '----------------------------------------------------------------------'
 
@@ -86,18 +86,6 @@ def _get_python_files(path: Path) -> Iterable[Path]:
 
         if f.suffix == ".py":
             yield f.resolve()
-
-
-def _load_python_contents(files: Set[Path]) -> Mapping[Path, str]:
-    raw_contents: Dict[Path, str] = {}
-    for path in files:
-        try:
-            with open(path, encoding="utf-8") as f:
-                raw_contents.setdefault(path, f.read())
-        except UnicodeDecodeError as e:
-            logger.debug("Cannot read python file %s: %s", path, e)
-
-    return raw_contents
 
 
 # .
@@ -160,21 +148,24 @@ class NodeVisitorImports(ast.NodeVisitor):
         self._context = self._context[:-1]
 
 
-def _visit_python_contents(
-    python_contents: Mapping[Path, str]
-) -> Sequence[NodeVisitorImports]:
-    visitors: List[NodeVisitorImports] = []
-    for path, python_content in python_contents.items():
+def _visit_python_files(files: Iterable[Path]) -> Iterable[NodeVisitorImports]:
+    for path in files:
         try:
-            tree = ast.parse(python_content)
+            with open(path, encoding="utf-8") as f:
+                content = f.read()
+        except UnicodeDecodeError as e:
+            logger.debug("Cannot read python file %s: %s", path, e)
+            continue
+
+        try:
+            tree = ast.parse(content)
         except SyntaxError as e:
             logger.debug("Cannot visit python file %s: %s", path, e)
             continue
 
         visitor = NodeVisitorImports(path)
         visitor.visit(tree)
-        visitors.append(visitor)
-    return sorted(visitors, key=lambda v: v.path)
+        yield visitor
 
 
 class ImportSTMT(NamedTuple):
@@ -596,7 +587,7 @@ ModuleImports = Mapping[str, Sequence[ModuleImport]]
 def _get_module_imports(
     mapping: Mapping[str, str],
     project_path: Path,
-    visitors: Sequence[NodeVisitorImports],
+    visitors: Iterable[NodeVisitorImports],
 ) -> ModuleImports:
     module_imports: Dict[str, List[ModuleImport]] = {}
     for visitor in visitors:
@@ -692,13 +683,10 @@ def main(argv: Sequence[str]) -> int:
     logger.info("Get Python files")
     python_files = _get_python_files(folder_path)
 
-    logger.info("Load Python files")
-    loaded_python_files = _load_python_contents(set(python_files))
+    logger.info("Visit Python files")
+    visitors = _visit_python_files(python_files)
 
-    logger.info("Visit Python contents")
-    visitors = _visit_python_contents(loaded_python_files)
-
-    logger.info("Parse Python contents into module relationships")
+    logger.info("Get import relationships")
     module_imports = _get_module_imports(mapping, project_path, visitors)
     logger.info("Found %d relationships", len(module_imports))
 
