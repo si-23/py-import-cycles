@@ -248,8 +248,7 @@ def _is_builtin_or_stdlib(module_name: str) -> bool:
         return True
 
     try:
-        importlib.util.find_spec(module_name)
-        return True
+        return importlib.util.find_spec(module_name) is not None
     except ModuleNotFoundError:
         return False
 
