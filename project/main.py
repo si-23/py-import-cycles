@@ -591,20 +591,15 @@ def _get_module_imports(
 ) -> ModuleImports:
     module_imports: Dict[str, List[ModuleImport]] = {}
     for visitor in visitors:
-        if (
-            module_name_from_path := _get_module_name_from_path(
-                mapping, project_path, visitor.path
-            )
-        ) is None:
-            continue
+        module_name = _get_module_name_from_path(mapping, project_path, visitor.path)
 
         for import_stmt in visitor.imports_stmt:
             for imported_module_name in import_stmt.get_imported_module_names(
                 mapping,
                 project_path,
-                module_name_from_path,
+                module_name,
             ):
-                module_imports.setdefault(module_name_from_path, []).append(
+                module_imports.setdefault(module_name, []).append(
                     ModuleImport(imported_module_name, import_stmt.context)
                 )
 
@@ -612,9 +607,9 @@ def _get_module_imports(
             for imported_module_name in import_from_stmt.get_imported_module_names(
                 mapping,
                 project_path,
-                module_name_from_path,
+                module_name,
             ):
-                module_imports.setdefault(module_name_from_path, []).append(
+                module_imports.setdefault(module_name, []).append(
                     ModuleImport(imported_module_name, import_from_stmt.context)
                 )
 
@@ -622,16 +617,15 @@ def _get_module_imports(
 
 
 def _get_module_name_from_path(
-    mapping: Mapping[str, str], project_path: Path, module_path: Path
-) -> Optional[str]:
-    rel_path = module_path.relative_to(project_path).with_suffix("")
-    if rel_path.name == "__init__":
-        logger.debug("Ignore %s", module_path)
-        return None
+    mapping: Mapping[str, str],
+    project_path: Path,
+    module_path: Path,
+) -> str:
+    # Note: pkg/__init__.py are added two
+    parts = module_path.relative_to(project_path).with_suffix("").parts
 
-    parts = rel_path.parts
-    for key in mapping:
-        if key == parts[0]:
+    for key, value in mapping.items():
+        if key == parts[0] and value in parts[1:]:
             parts = parts[1:]
             break
 
@@ -676,9 +670,7 @@ def main(argv: Sequence[str]) -> int:
         logger.debug("No such directory: %s", folder_path)
         return 1
 
-    mapping = (
-        {} if args.map is None else dict([entry.split(":") for entry in args.map])
-    )
+    mapping = {} if args.map is None else dict([entry.split(":") for entry in args.map])
 
     logger.info("Get Python files")
     python_files = _get_python_files(folder_path)
