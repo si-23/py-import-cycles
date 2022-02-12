@@ -189,11 +189,17 @@ class ImportSTMT(NamedTuple):
 
             if module_path_and_name.init_exists():
                 logger.debug(
-                    "Unhandled %s: __init__: %s", base_module_name, module_path_and_name
+                    "Import: Unhandled %s: %s",
+                    base_module_name,
+                    ".".join([module_path_and_name.name, "__init__"]),
                 )
                 continue
 
-            logger.debug("Unhandled %s: %s", base_module_name, ast.dump(self.node))
+            logger.debug(
+                "Import: Unhandled %s: %s",
+                base_module_name,
+                ast.dump(self.node),
+            )
 
         return imported_module_names
 
@@ -231,7 +237,9 @@ class ImportFromSTMT(NamedTuple):
 
         if module_path_and_name.init_exists():
             logger.debug(
-                "Unhandled %s: __init__: %s", base_module_name, module_path_and_name
+                "ImportFrom: Unhandled %s: %s",
+                base_module_name,
+                ".".join([module_path_and_name.name, "__init__"]),
             )
             return []
 
@@ -249,11 +257,19 @@ class ImportFromSTMT(NamedTuple):
                         imported_module_names.append(sub_module_path_and_name.name)
                     continue
 
-                logger.debug("Unhandled %s: %s", base_module_name, ast.dump(self.node))
+                logger.debug(
+                    "ImportFrom: Unhandled %s: %s",
+                    base_module_name,
+                    ast.dump(self.node),
+                )
 
             return imported_module_names
 
-        logger.debug("Unhandled %s: %s", base_module_name, ast.dump(self.node))
+        logger.debug(
+            "ImportFrom: Unhandled %s: %s",
+            base_module_name,
+            ast.dump(self.node),
+        )
         return []
 
 
