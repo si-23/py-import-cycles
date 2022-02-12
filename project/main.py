@@ -677,7 +677,7 @@ def main(argv: Sequence[str]) -> int:
         return 1
 
     mapping = (
-        dict([entry.split(":") for entry in args.map]) if args.map is not None else {}
+        {} if args.map is None else dict([entry.split(":") for entry in args.map])
     )
 
     logger.info("Get Python files")
