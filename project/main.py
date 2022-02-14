@@ -167,13 +167,12 @@ class ImportSTMT(NamedTuple):
     context: ImportContext
     node: ast.Import
 
-    def get_imported_module_names(
+    def get_imported_modules(
         self,
         mapping: Mapping[str, str],
         project_path: Path,
-        base_module_name: str,
-    ) -> Sequence[str]:
-        imported_module_names: List[str] = []
+        base_module: Module,
+    ) -> Iterable[Module]:
         for alias in self.node.names:
             if _is_builtin_or_stdlib(alias.name):
                 continue
@@ -181,66 +180,63 @@ class ImportSTMT(NamedTuple):
             module = Module.from_name(mapping, project_path, alias.name, self.context)
 
             if module.py_exists():
-                if module.name not in imported_module_names:
-                    imported_module_names.append(module.name)
+                yield module
                 continue
 
             if module.init_exists():
                 logger.debug(
                     "Import: Unhandled %s: %s",
-                    base_module_name,
+                    base_module.name,
                     ".".join([module.name, "__init__"]),
                 )
                 continue
 
             logger.debug(
                 "Import: Unhandled %s: %s",
-                base_module_name,
+                base_module.name,
                 ast.dump(self.node),
             )
-
-        return imported_module_names
 
 
 class ImportFromSTMT(NamedTuple):
     context: ImportContext
     node: ast.ImportFrom
 
-    def get_imported_module_names(
+    def get_imported_modules(
         self,
         mapping: Mapping[str, str],
         project_path: Path,
-        base_module_name: str,
-    ) -> Sequence[str]:
+        base_module: Module,
+    ) -> Iterable[Module]:
         if not self.node.module:
-            return []
+            return
 
         if _is_builtin_or_stdlib(self.node.module):
-            return []
+            return
 
         if self.node.level == 0:
             module_name = self.node.module
         else:
             module_name = ".".join(
-                base_module_name.split(".")[: -self.node.level]
+                base_module.name.split(".")[: -self.node.level]
                 + self.node.module.split(".")
             )
 
         module = Module.from_name(mapping, project_path, module_name, self.context)
 
         if module.py_exists():
-            return [module.name]
+            yield module
+            return
 
         if module.init_exists():
             logger.debug(
                 "ImportFrom: Unhandled %s: %s",
-                base_module_name,
+                base_module.name,
                 ".".join([module.name, "__init__"]),
             )
-            return []
+            return
 
         if module.path.is_dir():
-            imported_module_names: List[str] = []
             for alias in self.node.names:
                 sub_module = Module.from_name(
                     mapping,
@@ -250,24 +246,29 @@ class ImportFromSTMT(NamedTuple):
                 )
 
                 if sub_module.py_exists():
-                    if sub_module.name not in imported_module_names:
-                        imported_module_names.append(sub_module.name)
+                    yield sub_module
+                    continue
+
+                if module.init_exists():
+                    logger.debug(
+                        "ImportFrom: Unhandled %s: %s",
+                        base_module.name,
+                        ".".join([sub_module.name, "__init__"]),
+                    )
                     continue
 
                 logger.debug(
                     "ImportFrom: Unhandled %s: %s",
-                    base_module_name,
+                    base_module.name,
                     ast.dump(self.node),
                 )
-
-            return imported_module_names
+            return
 
         logger.debug(
             "ImportFrom: Unhandled %s: %s",
-            base_module_name,
+            base_module.name,
             ast.dump(self.node),
         )
-        return []
 
 
 def _is_builtin_or_stdlib(module_name: str) -> bool:
@@ -302,15 +303,15 @@ class CycleAndChains:
     chains: List[ImportChain] = field(default_factory=list)
 
 
-def _find_import_cycles(module_imports: ImportsByModule) -> Sequence[CycleAndChains]:
-    detector = DetectImportCycles(module_imports)
+def _find_import_cycles(imports_by_module: ImportsByModule) -> Sequence[CycleAndChains]:
+    detector = DetectImportCycles(imports_by_module)
     detector.detect_cycles()
     return detector.cycles
 
 
 @dataclass(frozen=True)
 class DetectImportCycles:
-    _module_imports: ImportsByModule
+    _imports_by_module: ImportsByModule
     _cycles: Dict[ImportChain, CycleAndChains] = field(default_factory=dict)
 
     @property
@@ -318,24 +319,24 @@ class DetectImportCycles:
         return sorted(self._cycles.values(), key=lambda icwc: icwc.cycle)
 
     def detect_cycles(self) -> None:
-        for module_name, module_imports in self._module_imports.items():
-            self._detect_cycles([module_name], module_imports)
+        for module, imported_modules in self._imports_by_module.items():
+            self._detect_cycles([module.name], imported_modules)
 
     def _detect_cycles(
         self,
         base_chain: List[str],
-        module_imports: Sequence[ImportedModule],
+        imported_modules: Sequence[Module],
     ) -> None:
-        for module_import in module_imports:
-            chain = base_chain + [module_import.module_name]
+        for module in imported_modules:
+            chain = base_chain + [module.name]
 
-            if module_import.module_name in base_chain:
+            if module.name in base_chain:
                 self._add_cycle(chain)
                 return
 
             self._detect_cycles(
                 chain,
-                self._module_imports.get(module_import.module_name, []),
+                self._imports_by_module.get(module, []),
             )
 
     def _add_cycle(self, chain: ImportChain) -> None:
@@ -396,33 +397,31 @@ class ImportEdge(NamedTuple):
 
 def _make_edges(
     args: argparse.Namespace,
-    module_imports: ImportsByModule,
+    imports_by_module: ImportsByModule,
     import_cycles: Sequence[CycleAndChains],
 ) -> Sequence[ImportEdge]:
     if args.graph == "all":
-        return _make_all_edges(module_imports, import_cycles)
+        return _make_all_edges(imports_by_module, import_cycles)
 
     if args.graph == "only-cycles":
-        return _make_only_cycles_edges(module_imports, import_cycles)
+        return _make_only_cycles_edges(imports_by_module, import_cycles)
 
     raise NotImplementedError("Unknown graph option: %s" % args.graph)
 
 
 def _make_all_edges(
-    module_imports: ImportsByModule,
+    imports_by_module: ImportsByModule,
     import_cycles: Sequence[CycleAndChains],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
-    for module, these_module_imports in module_imports.items():
-        for module_import in these_module_imports:
-            import_cycle = _is_in_cycle(
-                module, module_import.module_name, import_cycles
-            )
+    for module, these_imports_by_module in imports_by_module.items():
+        for imported_module in these_imports_by_module:
+            import_cycle = _is_in_cycle(module, imported_module.name, import_cycles)
             edges.add(
                 ImportEdge(
                     "",
                     module,
-                    module_import.module_name,
+                    imported_module.name,
                     "black" if import_cycle is None else "red",
                     tuple(),
                 )
@@ -447,7 +446,7 @@ def _is_in_cycle(
 
 
 def _make_only_cycles_edges(
-    module_imports: ImportsByModule,
+    imports_by_module: ImportsByModule,
     import_cycles: Sequence[CycleAndChains],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
@@ -459,10 +458,10 @@ def _make_only_cycles_edges(
         )
         module = import_cycle.cycle[0]
         for module_name in import_cycle.cycle[1:]:
-            # if (module_import := module_imports.get(module_name)) is None:
+            # if (imported_module := imports_by_module.get(module_name)) is None:
             #     context = tuple()
             # else:
-            #     context = module_import.context
+            #     context = imported_module.context
 
             edges.add(
                 ImportEdge(
@@ -551,32 +550,21 @@ def _setup_logging(args: argparse.Namespace) -> None:
     logger.addHandler(handler)
 
 
-@dataclass
-class ImportedModule:
-    module_name: str
-    context: ImportContext
-
-
-ImportsByModule = Mapping[str, Sequence[ImportedModule]]
-
-
 def _get_imports_by_module(
     mapping: Mapping[str, str],
     project_path: Path,
     visitors: Iterable[NodeVisitorImports],
 ) -> ImportsByModule:
     return {
-        module_name: [
-            ImportedModule(imported_module_name, import_stmt.context)
+        module: [
+            imported_module
             for import_stmt in visitor.import_stmts
-            for imported_module_name in import_stmt.get_imported_module_names(
-                mapping, project_path, module_name
+            for imported_module in import_stmt.get_imported_modules(
+                mapping, project_path, module
             )
         ]
         for visitor in visitors
-        for module_name in (
-            Module.from_path(mapping, project_path, visitor.path, tuple()).name,
-        )
+        for module in (Module.from_path(mapping, project_path, visitor.path, tuple()),)
     }
 
 
@@ -620,7 +608,7 @@ class Module(NamedTuple):
                 break
 
         return cls(
-            path=module_path,
+            path=module_path.with_suffix(""),
             name=".".join(parts),
             context=context,
         )
@@ -629,7 +617,10 @@ class Module(NamedTuple):
         return self.path.with_suffix(".py").exists()
 
     def init_exists(self) -> bool:
-        return self.path.is_dir and self.path.joinpath("__init__.py").exists()
+        return self.path.is_dir() and self.path.joinpath("__init__.py").exists()
+
+
+ImportsByModule = Mapping[Module, Sequence[Module]]
 
 
 def _show_import_cycles(
@@ -680,7 +671,8 @@ def main(argv: Sequence[str]) -> int:
 
     logger.info("Get imports of modules")
     imports_by_module = _get_imports_by_module(mapping, project_path, visitors)
-    logger.info("Found %d modules with imports", len(imports_by_module))
+    logger.info("Found %d modules", len(imports_by_module))
+    logger.info("Found %d imported modules", sum(map(len, imports_by_module.values())))
 
     logger.info("Detect import cycles")
     import_cycles = _find_import_cycles(imports_by_module)
