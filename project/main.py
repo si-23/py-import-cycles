@@ -377,12 +377,10 @@ def _make_graph(
             ds.node(edge.imports)
             ds.attr("edge", color=edge.color)
 
-            prefix = ">" if edge.context else ""
-
             if edge.title:
-                ds.edge(edge.module, prefix + edge.imports, edge.title)
+                ds.edge(edge.module, edge.imports, edge.title)
             else:
-                ds.edge(edge.module, prefix + edge.imports)
+                ds.edge(edge.module, edge.imports)
 
     return d.unflatten(stagger=50)
 
