@@ -1,76 +1,55 @@
 #!/usr/bin/env python3
 
+from pathlib import Path
+
 import pytest
-from project.main import DetectImportCycles, ModuleImport, CycleAndChains
+from project.main import DetectImportCycles, Module
 
 
 @pytest.mark.parametrize(
     "module_imports, expected_cycles",
     [
         ({}, []),
-        ({"a": [ModuleImport("b", tuple())]}, []),
         (
-            {"a": [ModuleImport("b", tuple())], "b": [ModuleImport("a", tuple())]},
-            [
-                CycleAndChains(
-                    cycle=("a", "b", "a"), chains=[["a", "b", "a"], ["b", "a", "b"]]
-                ),
-            ],
+            {Module(Path(), "a"): [Module(Path(), "b")]},
+            [],
         ),
         (
             {
-                "a": [ModuleImport("b", tuple())],
-                "b": [ModuleImport("a", tuple()), ModuleImport("c", tuple())],
-                "c": [ModuleImport("d", tuple())],
+                Module(Path(), "a"): [Module(Path(), "b")],
+                Module(Path(), "b"): [Module(Path(), "a")],
             },
-            [
-                CycleAndChains(
-                    cycle=("a", "b", "a"), chains=[["a", "b", "a"], ["b", "a", "b"]]
-                ),
-            ],
+            [("a", "b", "a")],
         ),
         (
             {
-                "a": [ModuleImport("b", tuple())],
-                "b": [ModuleImport("c", tuple())],
-                "c": [ModuleImport("a", tuple()), ModuleImport("d", tuple())],
+                Module(Path(), "m1"): [Module(Path(), "a")],
+                Module(Path(), "m2"): [Module(Path(), "a")],
+                Module(Path(), "a"): [Module(Path(), "b")],
+                Module(Path(), "b"): [Module(Path(), "a")],
             },
-            [
-                CycleAndChains(
-                    cycle=("a", "b", "c", "a"),
-                    chains=[
-                        ["a", "b", "c", "a"],
-                        ["b", "c", "a", "b"],
-                        ["c", "a", "b", "c"],
-                    ],
-                ),
-            ],
+            [("a", "b", "a")],
         ),
         (
             {
-                "a": [ModuleImport("b", tuple())],
-                "b": [ModuleImport("c", tuple())],
-                "c": [ModuleImport("a", tuple()), ModuleImport("d", tuple())],
-                "d": [ModuleImport("b", tuple())],
+                Module(Path(), "m1"): [Module(Path(), "a")],
+                Module(Path(), "m2"): [Module(Path(), "b")],
+                Module(Path(), "a"): [Module(Path(), "b")],
+                Module(Path(), "b"): [Module(Path(), "a")],
+            },
+            [("a", "b", "a")],
+        ),
+        (
+            {
+                Module(Path(), "m"): [Module(Path(), "a"), Module(Path(), "y")],
+                Module(Path(), "a"): [Module(Path(), "b")],
+                Module(Path(), "b"): [Module(Path(), "a")],
+                Module(Path(), "y"): [Module(Path(), "z")],
+                Module(Path(), "z"): [Module(Path(), "y")],
             },
             [
-                CycleAndChains(
-                    cycle=("a", "b", "c", "a"),
-                    chains=[
-                        ["a", "b", "c", "a"],
-                        ["b", "c", "a", "b"],
-                        ["c", "a", "b", "c"],
-                        ["d", "b", "c", "a", "b"],
-                    ],
-                ),
-                CycleAndChains(
-                    cycle=("b", "c", "d", "b"),
-                    chains=[
-                        ["b", "c", "d", "b"],
-                        ["c", "d", "b", "c"],
-                        ["d", "b", "c", "d"],
-                    ],
-                ),
+                ("a", "b", "a"),
+                ("y", "z", "y"),
             ],
         ),
     ],
