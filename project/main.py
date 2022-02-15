@@ -327,7 +327,7 @@ class ImportFromSTMT(NamedTuple):
                     yield sub_module
                     continue
 
-                if module.init_exists():
+                if sub_module.init_exists():
                     logger.debug(
                         "ImportFrom: Unhandled %s: %s",
                         base_module.name,
