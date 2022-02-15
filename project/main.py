@@ -313,7 +313,6 @@ class ImportFromSTMT(NamedTuple):
                 base_module.name,
                 ".".join([module.name, "__init__"]),
             )
-            return
 
         if module.path.is_dir():
             for alias in self.node.names:
