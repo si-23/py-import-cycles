@@ -61,6 +61,75 @@ logger = logging.getLogger(__name__)
 # from path.to.mod import func/class as my_func/class
 
 
+#   .--type defs-----------------------------------------------------------.
+#   |              _                          _       __                   |
+#   |             | |_ _   _ _ __   ___    __| | ___ / _|___               |
+#   |             | __| | | | '_ \ / _ \  / _` |/ _ \ |_/ __|              |
+#   |             | |_| |_| | |_) |  __/ | (_| |  __/  _\__ \              |
+#   |              \__|\__, | .__/ \___|  \__,_|\___|_| |___/              |
+#   |                  |___/|_|                                            |
+#   '----------------------------------------------------------------------'
+
+
+ImportContext = Tuple[Union[ast.If, ast.Try, ast.ClassDef, ast.FunctionDef], ...]
+
+
+class Module(NamedTuple):
+    path: Path
+    name: str
+    # context: ImportContext
+
+    @classmethod
+    def from_name(
+        cls,
+        mapping: Mapping[str, str],
+        project_path: Path,
+        module_name: str,
+        context: ImportContext,
+    ) -> Module:
+        parts = module_name.split(".")
+        for key, value in mapping.items():
+            if value in parts:
+                parts = [key] + parts
+                break
+
+        return cls(
+            path=project_path.joinpath(Path(*parts)),
+            name=module_name,
+            # context=context,
+        )
+
+    @classmethod
+    def from_path(
+        cls,
+        mapping: Mapping[str, str],
+        project_path: Path,
+        module_path: Path,
+        context: ImportContext,
+    ) -> Module:
+        parts = module_path.relative_to(project_path).with_suffix("").parts
+        for key, value in mapping.items():
+            if key == parts[0] and value in parts[1:]:
+                parts = parts[1:]
+                break
+
+        return cls(
+            path=module_path.with_suffix(""),
+            name=".".join(parts),
+            # context=context,
+        )
+
+    def py_exists(self) -> bool:
+        return self.path.with_suffix(".py").exists()
+
+    def init_exists(self) -> bool:
+        return self.path.is_dir() and self.path.joinpath("__init__.py").exists()
+
+
+ImportsByModule = Mapping[Module, Sequence[Module]]
+
+
+# .
 #   .--files---------------------------------------------------------------.
 #   |                           __ _ _                                     |
 #   |                          / _(_) | ___  ___                           |
@@ -97,9 +166,6 @@ def _get_python_files(path: Path) -> Iterable[Path]:
 #   |       |_| |_|\___/ \__,_|\___|   \_/ |_|___/_|\__\___/|_|            |
 #   |                                                                      |
 #   '----------------------------------------------------------------------'
-
-
-ImportContext = Tuple[Union[ast.If, ast.Try, ast.ClassDef, ast.FunctionDef], ...]
 
 
 class NodeVisitorImports(ast.NodeVisitor):
@@ -576,61 +642,6 @@ def _get_imports_by_module(
             ),
         )
     }
-
-
-class Module(NamedTuple):
-    path: Path
-    name: str
-    # context: ImportContext
-
-    @classmethod
-    def from_name(
-        cls,
-        mapping: Mapping[str, str],
-        project_path: Path,
-        module_name: str,
-        context: ImportContext,
-    ) -> Module:
-        parts = module_name.split(".")
-        for key, value in mapping.items():
-            if value in parts:
-                parts = [key] + parts
-                break
-
-        return cls(
-            path=project_path.joinpath(Path(*parts)),
-            name=module_name,
-            # context=context,
-        )
-
-    @classmethod
-    def from_path(
-        cls,
-        mapping: Mapping[str, str],
-        project_path: Path,
-        module_path: Path,
-        context: ImportContext,
-    ) -> Module:
-        parts = module_path.relative_to(project_path).with_suffix("").parts
-        for key, value in mapping.items():
-            if key == parts[0] and value in parts[1:]:
-                parts = parts[1:]
-                break
-
-        return cls(
-            path=module_path.with_suffix(""),
-            name=".".join(parts),
-            # context=context,
-        )
-
-    def py_exists(self) -> bool:
-        return self.path.with_suffix(".py").exists()
-
-    def init_exists(self) -> bool:
-        return self.path.is_dir() and self.path.joinpath("__init__.py").exists()
-
-
-ImportsByModule = Mapping[Module, Sequence[Module]]
 
 
 def _show_import_cycles(
