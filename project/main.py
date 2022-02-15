@@ -177,7 +177,12 @@ class ImportSTMT(NamedTuple):
             if _is_builtin_or_stdlib(alias.name):
                 continue
 
-            module = Module.from_name(mapping, project_path, alias.name, self.context)
+            module = Module.from_name(
+                mapping,
+                project_path,
+                alias.name,
+                self.context,
+            )
 
             if module.py_exists():
                 yield module
@@ -222,7 +227,12 @@ class ImportFromSTMT(NamedTuple):
                 + self.node.module.split(".")
             )
 
-        module = Module.from_name(mapping, project_path, module_name, self.context)
+        module = Module.from_name(
+            mapping,
+            project_path,
+            module_name,
+            self.context,
+        )
 
         if module.py_exists():
             yield module
@@ -418,7 +428,7 @@ def _make_all_edges(
             edges.add(
                 ImportEdge(
                     "",
-                    module,
+                    module.name,
                     imported_module.name,
                     "black" if import_cycle is None else "red",
                     tuple(),
@@ -428,7 +438,7 @@ def _make_all_edges(
 
 
 def _is_in_cycle(
-    module: str,
+    module: Module,
     the_import: str,
     import_cycles: Sequence[CycleAndChains],
 ) -> Optional[CycleAndChains]:
@@ -456,11 +466,6 @@ def _make_only_cycles_edges(
         )
         module = import_cycle.cycle[0]
         for module_name in import_cycle.cycle[1:]:
-            # if (imported_module := imports_by_module.get(module_name)) is None:
-            #     context = tuple()
-            # else:
-            #     context = imported_module.context
-
             edges.add(
                 ImportEdge(
                     str(nr + 1),
@@ -562,14 +567,21 @@ def _get_imports_by_module(
             )
         ]
         for visitor in visitors
-        for module in (Module.from_path(mapping, project_path, visitor.path, tuple()),)
+        for module in (
+            Module.from_path(
+                mapping,
+                project_path,
+                visitor.path,
+                tuple(),
+            ),
+        )
     }
 
 
 class Module(NamedTuple):
     path: Path
     name: str
-    context: ImportContext
+    # context: ImportContext
 
     @classmethod
     def from_name(
@@ -588,7 +600,7 @@ class Module(NamedTuple):
         return cls(
             path=project_path.joinpath(Path(*parts)),
             name=module_name,
-            context=context,
+            # context=context,
         )
 
     @classmethod
@@ -608,7 +620,7 @@ class Module(NamedTuple):
         return cls(
             path=module_path.with_suffix(""),
             name=".".join(parts),
-            context=context,
+            # context=context,
         )
 
     def py_exists(self) -> bool:
