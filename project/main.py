@@ -313,6 +313,7 @@ class ImportFromSTMT(NamedTuple):
                 base_module.name,
                 ".".join([module.name, "__init__"]),
             )
+            return
 
         if module.path.is_dir():
             for alias in self.node.names:
@@ -333,6 +334,7 @@ class ImportFromSTMT(NamedTuple):
                         base_module.name,
                         ".".join([sub_module.name, "__init__"]),
                     )
+                    continue
 
                 logger.debug(
                     "ImportFrom in %s: Unhandled: %s",
