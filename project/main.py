@@ -257,19 +257,10 @@ class ImportSTMT(NamedTuple):
                 yield module
                 continue
 
-            if module.init_exists():
-                logger.debug(
-                    "Import in %s: Unhandled: %s",
-                    base_module.name,
-                    ".".join([module.name, "__init__"]),
-                )
-                continue
-
-            logger.debug(
-                "Import in %s: Unhandled: %s",
-                base_module.name,
-                ast.dump(alias),
-            )
+            logger.debug("Unhandled import in %s:", base_module.name)
+            logger.debug("  Module init: %s", module.init_exists())
+            logger.debug("  Module dir: %s", module.path.is_dir())
+            logger.debug("  Dump: %s", ast.dump(alias))
 
 
 class ImportFromSTMT(NamedTuple):
@@ -307,48 +298,27 @@ class ImportFromSTMT(NamedTuple):
             yield module
             return
 
-        if module.init_exists():
-            logger.debug(
-                "ImportFrom in %s: Unhandled: %s",
-                base_module.name,
-                ".".join([module.name, "__init__"]),
+        for alias in self.node.names:
+            sub_module = Module.from_name(
+                mapping,
+                project_path,
+                ".".join([module.name, alias.name]),
+                self.context,
             )
-            return
 
-        if module.path.is_dir():
-            for alias in self.node.names:
-                sub_module = Module.from_name(
-                    mapping,
-                    project_path,
-                    ".".join([module.name, alias.name]),
-                    self.context,
-                )
+            if sub_module.py_exists():
+                yield sub_module
+                continue
 
-                if sub_module.py_exists():
-                    yield sub_module
-                    continue
+            logger.debug("Unhandled import from in %s:", base_module.name)
+            logger.debug("  Submodule init: %s", sub_module.init_exists())
+            logger.debug("  Submodule dir: %s", sub_module.path.is_dir())
+            logger.debug("  Dump: %s", ast.dump(alias))
 
-                if sub_module.init_exists():
-                    logger.debug(
-                        "ImportFrom in %s: Unhandled: %s",
-                        base_module.name,
-                        ".".join([sub_module.name, "__init__"]),
-                    )
-                    continue
-
-                logger.debug(
-                    "ImportFrom in %s: Unhandled: %s",
-                    base_module.name,
-                    ast.dump(alias),
-                )
-
-            return
-
-        logger.debug(
-            "ImportFrom in %s: Unhandled: %s",
-            base_module.name,
-            ast.dump(self.node),
-        )
+        logger.debug("Unhandled import from in %s:", base_module.name)
+        logger.debug("  Module init: %s", module.init_exists())
+        logger.debug("  Module dir: %s", module.path.is_dir())
+        logger.debug("  Dump: %s", ast.dump(self.node))
 
 
 def _is_builtin_or_stdlib(module_name: str) -> bool:
