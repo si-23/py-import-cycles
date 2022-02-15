@@ -268,7 +268,7 @@ class ImportSTMT(NamedTuple):
             logger.debug(
                 "Import in %s: Unhandled: %s",
                 base_module.name,
-                ast.dump(self.node),
+                ast.dump(alias),
             )
 
 
@@ -333,7 +333,20 @@ class ImportFromSTMT(NamedTuple):
                         base_module.name,
                         ".".join([sub_module.name, "__init__"]),
                     )
+
+                logger.debug(
+                    "ImportFrom in %s: Unhandled: %s",
+                    base_module.name,
+                    ast.dump(alias),
+                )
+
             return
+
+        logger.debug(
+            "ImportFrom in %s: Unhandled: %s",
+            base_module.name,
+            ast.dump(self.node),
+        )
 
 
 def _is_builtin_or_stdlib(module_name: str) -> bool:
