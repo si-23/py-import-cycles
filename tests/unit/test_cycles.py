@@ -52,6 +52,22 @@ from project.main import DetectImportCycles, Module
                 ("y", "z", "y"),
             ],
         ),
+        (
+            {
+                Module(Path(), "m"): [Module(Path(), "a"), Module(Path(), "y")],
+                Module(Path(), "a"): [Module(Path(), "b")],
+                Module(Path(), "b"): [Module(Path(), "a")],
+                Module(Path(), "y"): [Module(Path(), "x"), Module(Path(), "z")],
+                Module(Path(), "x"): [Module(Path(), "x2")],
+                Module(Path(), "x2"): [Module(Path(), "x")],
+                Module(Path(), "z"): [Module(Path(), "y")],
+            },
+            [
+                ("a", "b", "a"),
+                ("x", "x2", "x"),
+                ("y", "z", "y"),
+            ],
+        ),
     ],
 )
 def test_cycles(module_imports, expected_cycles):
