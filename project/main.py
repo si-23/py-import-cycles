@@ -41,6 +41,9 @@ logger = logging.getLogger(__name__)
 # TODO #3
 # Is args.map really needed?
 
+# TODO #4
+# what to do with Packages?
+
 # TODO #5
 # Handle star imports
 
@@ -651,7 +654,6 @@ def _get_imports_by_module(
                     continue
 
                 if isinstance(imported_module, Package):
-                    # TODO what to do with packages?
                     logger.debug("Found %s", imported_module)
                     continue
 
