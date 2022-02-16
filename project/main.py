@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from graphviz import Digraph
 from pathlib import Path
 from typing import (
+    Dict,
     Iterable,
     List,
     Mapping,
@@ -39,9 +40,6 @@ logger = logging.getLogger(__name__)
 
 # TODO #3
 # Is args.map really needed?
-
-# TODO #4
-# use context in graph (nested import stmt)
 
 # TODO #5
 # Handle star imports
@@ -74,30 +72,36 @@ logger = logging.getLogger(__name__)
 ImportContext = Tuple[Union[ast.If, ast.Try, ast.ClassDef, ast.FunctionDef], ...]
 
 
-class Module(NamedTuple):
-    path: Path
-    name: str
-    # context: ImportContext
-
+class Module:
     @classmethod
     def from_name(
         cls,
         mapping: Mapping[str, str],
         project_path: Path,
         module_name: str,
-        context: ImportContext,
-    ) -> Module:
+    ) -> Optional[Union[Package, PyModule]]:
         parts = module_name.split(".")
         for key, value in mapping.items():
             if value in parts:
                 parts = [key] + parts
                 break
 
-        return cls(
-            path=project_path.joinpath(Path(*parts)),
-            name=module_name,
-            # context=context,
-        )
+        module_path = project_path.joinpath(Path(*parts))
+
+        if module_path.is_dir():
+            return Package(
+                path=module_path,
+                name=module_name,
+            )
+
+        if (py_module_path := module_path.with_suffix(".py")).exists():
+            return PyModule(
+                path=py_module_path,
+                name=module_name,
+            )
+
+        logger.debug("Module.from_name: Unhandled %s", module_name)
+        return None
 
     @classmethod
     def from_path(
@@ -105,28 +109,42 @@ class Module(NamedTuple):
         mapping: Mapping[str, str],
         project_path: Path,
         module_path: Path,
-        context: ImportContext,
-    ) -> Module:
+    ) -> Optional[Union[Package, PyModule]]:
         parts = module_path.relative_to(project_path).with_suffix("").parts
         for key, value in mapping.items():
             if key == parts[0] and value in parts[1:]:
                 parts = parts[1:]
                 break
 
-        return cls(
-            path=module_path.with_suffix(""),
-            name=".".join(parts),
-            # context=context,
-        )
+        module_name = ".".join(parts)
 
-    def py_exists(self) -> bool:
-        return self.path.with_suffix(".py").exists()
+        if module_path.is_dir():
+            return Package(
+                path=module_path,
+                name=module_name,
+            )
 
-    def init_exists(self) -> bool:
-        return self.path.is_dir() and self.path.joinpath("__init__.py").exists()
+        if module_path.is_file() and module_path.suffix == ".py":
+            return PyModule(
+                path=module_path,
+                name=module_name,
+            )
+
+        logger.debug("Module.from_path: Unhandled %s", module_path)
+        return None
 
 
-ImportsByModule = Mapping[Module, Sequence[Module]]
+class Package(NamedTuple):
+    path: Path
+    name: str
+
+
+class PyModule(NamedTuple):
+    path: Path
+    name: str
+
+
+ImportsByModule = Mapping[PyModule, Sequence[PyModule]]
 
 
 # .
@@ -172,104 +190,73 @@ class NodeVisitorImports(ast.NodeVisitor):
     def __init__(self, path: Path) -> None:
         self.path = path
         self._import_stmts: List[Union[ImportSTMT, ImportFromSTMT]] = []
-        self._context: ImportContext = tuple()
 
     @property
     def import_stmts(self) -> Sequence[Union[ImportSTMT, ImportFromSTMT]]:
         return self._import_stmts
 
     def visit_Import(self, node: ast.Import) -> None:
-        self._import_stmts.append(ImportSTMT(self._context, node))
+        self._import_stmts.append(ImportSTMT(node))
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        self._import_stmts.append(ImportFromSTMT(self._context, node))
-
-    def visit_If(self, node: ast.If) -> None:
-        self._context += (node,)
-        for child in ast.iter_child_nodes(node):
-            ast.NodeVisitor.visit(self, child)
-        self._context = self._context[:-1]
-
-    def visit_Try(self, node: ast.Try) -> None:
-        self._context += (node,)
-        for child in ast.iter_child_nodes(node):
-            ast.NodeVisitor.visit(self, child)
-        self._context = self._context[:-1]
-
-    def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        self._context += (node,)
-        for child in ast.iter_child_nodes(node):
-            ast.NodeVisitor.visit(self, child)
-        self._context = self._context[:-1]
-
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        self._context += (node,)
-        for child in ast.iter_child_nodes(node):
-            ast.NodeVisitor.visit(self, child)
-        self._context = self._context[:-1]
+        self._import_stmts.append(ImportFromSTMT(node))
 
 
 def _visit_python_files(files: Iterable[Path]) -> Iterable[NodeVisitorImports]:
     for path in files:
-        try:
-            with open(path, encoding="utf-8") as f:
-                content = f.read()
-        except UnicodeDecodeError as e:
-            logger.debug("Cannot read python file %s: %s", path, e)
-            continue
+        if (visitor := _visit_python_file(path)) is not None:
+            yield visitor
 
-        try:
-            tree = ast.parse(content)
-        except SyntaxError as e:
-            logger.debug("Cannot visit python file %s: %s", path, e)
-            continue
 
-        visitor = NodeVisitorImports(path)
-        visitor.visit(tree)
-        yield visitor
+def _visit_python_file(path: Path) -> Optional[NodeVisitorImports]:
+    if path.name in ["__pycache__", "__init__.py"]:
+        return None
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+    except UnicodeDecodeError as e:
+        logger.debug("Cannot read python file %s: %s", path, e)
+        return None
+
+    try:
+        tree = ast.parse(content)
+    except SyntaxError as e:
+        logger.debug("Cannot visit python file %s: %s", path, e)
+        return None
+
+    visitor = NodeVisitorImports(path)
+    visitor.visit(tree)
+    return visitor
 
 
 class ImportSTMT(NamedTuple):
-    context: ImportContext
     node: ast.Import
 
     def get_imported_modules(
         self,
         mapping: Mapping[str, str],
         project_path: Path,
-        base_module: Module,
-    ) -> Iterable[Module]:
-        for alias in self.node.names:
-            if _is_builtin_or_stdlib(alias.name):
-                continue
-
-            module = Module.from_name(
-                mapping,
-                project_path,
-                alias.name,
-                self.context,
-            )
-
-            if module.py_exists():
-                yield module
-                continue
-
-            logger.debug("Unhandled import in %s:", base_module.name)
-            logger.debug("  Module init: %s", module.init_exists())
-            logger.debug("  Module dir: %s", module.path.is_dir())
-            logger.debug("  Dump: %s", ast.dump(alias))
+        base_module: PyModule,
+    ) -> Iterable[Union[PyModule, Package]]:
+        yield from _get_imported_modules_from_aliases(
+            "import",
+            mapping,
+            project_path,
+            base_module,
+            self.node.names,
+        )
 
 
 class ImportFromSTMT(NamedTuple):
-    context: ImportContext
     node: ast.ImportFrom
 
     def get_imported_modules(
         self,
         mapping: Mapping[str, str],
         project_path: Path,
-        base_module: Module,
-    ) -> Iterable[Module]:
+        base_module: PyModule,
+    ) -> Iterable[Union[PyModule, Package]]:
         if not self.node.module:
             return
 
@@ -288,34 +275,59 @@ class ImportFromSTMT(NamedTuple):
             mapping,
             project_path,
             module_name,
-            self.context,
         )
 
-        if module.py_exists():
+        if module is None:
+            logger.debug("Unhandled import from in %s:", base_module.name)
+            logger.debug("  Dump: %s", ast.dump(self.node))
+            return
+
+        if isinstance(module, PyModule):
             yield module
             return
 
-        for alias in self.node.names:
-            sub_module = Module.from_name(
+        if isinstance(module, Package):
+            yield from _get_imported_modules_from_aliases(
+                "import from",
                 mapping,
                 project_path,
-                ".".join([module.name, alias.name]),
-                self.context,
+                base_module,
+                self.node.names,
+                from_name=module.name,
             )
+            return
 
-            if sub_module.py_exists():
-                yield sub_module
-                continue
 
-            logger.debug("Unhandled import from in %s:", base_module.name)
-            logger.debug("  Submodule init: %s", sub_module.init_exists())
-            logger.debug("  Submodule dir: %s", sub_module.path.is_dir())
+def _get_imported_modules_from_aliases(
+    title: str,
+    mapping: Mapping[str, str],
+    project_path: Path,
+    base_module: PyModule,
+    aliases: Sequence[ast.alias],
+    from_name: str = "",
+) -> Iterable[Union[PyModule, Package]]:
+    for alias in aliases:
+        if _is_builtin_or_stdlib(alias.name):
+            continue
+
+        module = Module.from_name(
+            mapping,
+            project_path,
+            ".".join([from_name, alias.name]) if from_name else alias.name,
+        )
+
+        if module is None:
+            logger.debug("Unhandled %s in %s:", title, base_module.name)
             logger.debug("  Dump: %s", ast.dump(alias))
+            continue
 
-        logger.debug("Unhandled import from in %s:", base_module.name)
-        logger.debug("  Module init: %s", module.init_exists())
-        logger.debug("  Module dir: %s", module.path.is_dir())
-        logger.debug("  Dump: %s", ast.dump(self.node))
+        if isinstance(module, PyModule):
+            yield module
+            continue
+
+        if isinstance(module, Package):
+            yield module
+            continue
 
 
 def _is_builtin_or_stdlib(module_name: str) -> bool:
@@ -347,7 +359,7 @@ ImportCycles = Sequence[ImportCycle]
 def _find_import_cycles(imports_by_module: ImportsByModule) -> ImportCycles:
     detector = DetectImportCycles(imports_by_module)
     detector.detect_cycles()
-    return detector.cycles
+    return sorted(detector.cycles)
 
 
 @dataclass(frozen=True)
@@ -366,8 +378,8 @@ class DetectImportCycles:
                 key=lambda t: t[0].name,
             )
         ):
+            logger.debug("Check %s (Nr %s)", module.name, nr + 1)
             self._detect_cycles([module.name], imported_modules)
-            logger.debug("Nr %d checked (%s)", nr + 1, module.name)
 
     def _get_entry_points(self, imports_by_module: ImportsByModule) -> ImportsByModule:
         known_imported_modules = set(
@@ -395,7 +407,7 @@ class DetectImportCycles:
     def _detect_cycles(
         self,
         base_chain: List[str],
-        imported_modules: Sequence[Module],
+        imported_modules: Sequence[PyModule],
     ) -> None:
         for module in imported_modules:
             chain = base_chain + [module.name]
@@ -410,10 +422,12 @@ class DetectImportCycles:
             )
 
     def _add_cycle(self, chain: Sequence[str]) -> None:
-        duplicate = chain[-1]
-        first_idx = chain.index(duplicate)
+        first_idx = chain.index(chain[-1])
         cycle = tuple(chain[first_idx:])
-        self._cycles.setdefault(tuple(sorted(cycle[:-1])), cycle)
+        if (short := tuple(sorted(cycle[:-1]))) not in self._cycles:
+            self._cycles[short] = cycle
+            logger.debug("  Found cycle in %s", chain)
+            logger.debug("  Cycle: %s", cycle)
 
 
 # .
@@ -459,7 +473,6 @@ class ImportEdge(NamedTuple):
     module: str
     imports: str
     color: str
-    context: ImportContext
 
 
 def _make_edges(
@@ -484,25 +497,23 @@ def _make_all_edges(
     for module, these_imports_by_module in imports_by_module.items():
         for imported_module in these_imports_by_module:
             import_cycle = _is_in_cycle(module, imported_module.name, import_cycles)
-            # TODO FIX
             edges.add(
                 ImportEdge(
                     "",
                     module.name,
                     imported_module.name,
                     "black" if import_cycle is None else "red",
-                    tuple(),
                 )
             )
     return sorted(edges)
 
 
 def _is_in_cycle(
-    module: Module, the_import: str, import_cycles: ImportCycles
+    module: PyModule, the_import: str, import_cycles: ImportCycles
 ) -> Optional[ImportCycle]:
     for import_cycle in import_cycles:
         try:
-            idx = import_cycle.index(module)
+            idx = import_cycle.index(module.name)
         except ValueError:
             continue
 
@@ -530,7 +541,6 @@ def _make_only_cycles_edges(
                     module,
                     module_name,
                     color,
-                    tuple(),
                 )
             )
             module = module_name
@@ -616,32 +626,39 @@ def _get_imports_by_module(
     project_path: Path,
     visitors: Iterable[NodeVisitorImports],
 ) -> ImportsByModule:
-    return {
-        module: [
-            imported_module
-            for import_stmt in visitor.import_stmts
+    imports_by_module: Dict[PyModule, List[PyModule]] = {}
+
+    for visitor in visitors:
+        module = Module.from_path(
+            mapping,
+            project_path,
+            visitor.path,
+        )
+
+        if not isinstance(module, PyModule):
+            continue
+
+        if module in imports_by_module:
+            continue
+
+        imported_modules: List[PyModule] = []
+        for import_stmt in visitor.import_stmts:
             for imported_module in import_stmt.get_imported_modules(
                 mapping, project_path, module
-            )
-        ]
-        for visitor in visitors
-        for module in (
-            Module.from_path(
-                mapping,
-                project_path,
-                visitor.path,
-                tuple(),
-            ),
-        )
-    }
+            ):
+                if isinstance(imported_module, PyModule):
+                    imported_modules.append(imported_module)
+                    continue
 
+                if isinstance(imported_module, Package):
+                    # TODO what to do with packages?
+                    logger.debug("Found %s", imported_module)
+                    continue
 
-def _show_import_cycles(args: argparse.Namespace, import_cycles: ImportCycles) -> None:
-    if import_cycles:
-        print("===== Found import cycles ====")
-        for import_cycle in import_cycles:
-            print("Cycle:", import_cycle)
-        print("Amount of cycles: %s" % len(import_cycles))
+        if imported_modules:
+            imports_by_module[module] = imported_modules
+
+    return imports_by_module
 
 
 def _get_return_code(import_cycles: ImportCycles) -> bool:
@@ -679,8 +696,6 @@ def main(argv: Sequence[str]) -> int:
 
     logger.info("Detect import cycles")
     import_cycles = _find_import_cycles(imports_by_module)
-
-    _show_import_cycles(args, import_cycles)
 
     if args.graph == "no":
         return _get_return_code(import_cycles)
