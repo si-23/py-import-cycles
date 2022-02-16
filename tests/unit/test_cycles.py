@@ -19,7 +19,9 @@ from project.main import DetectImportCycles, Module
                 Module(Path(), "a"): [Module(Path(), "b")],
                 Module(Path(), "b"): [Module(Path(), "a")],
             },
-            [("a", "b", "a")],
+            [
+                ("a", "b", "a"),
+            ],
         ),
         (
             {
@@ -28,7 +30,9 @@ from project.main import DetectImportCycles, Module
                 Module(Path(), "a"): [Module(Path(), "b")],
                 Module(Path(), "b"): [Module(Path(), "a")],
             },
-            [("a", "b", "a")],
+            [
+                ("a", "b", "a"),
+            ],
         ),
         (
             {
@@ -37,35 +41,37 @@ from project.main import DetectImportCycles, Module
                 Module(Path(), "a"): [Module(Path(), "b")],
                 Module(Path(), "b"): [Module(Path(), "a")],
             },
-            [("a", "b", "a")],
-        ),
-        (
-            {
-                Module(Path(), "m"): [Module(Path(), "a"), Module(Path(), "y")],
-                Module(Path(), "a"): [Module(Path(), "b")],
-                Module(Path(), "b"): [Module(Path(), "a")],
-                Module(Path(), "y"): [Module(Path(), "z")],
-                Module(Path(), "z"): [Module(Path(), "y")],
-            },
             [
                 ("a", "b", "a"),
-                ("y", "z", "y"),
             ],
         ),
         (
             {
-                Module(Path(), "m"): [Module(Path(), "a"), Module(Path(), "y")],
-                Module(Path(), "a"): [Module(Path(), "b")],
-                Module(Path(), "b"): [Module(Path(), "a")],
-                Module(Path(), "y"): [Module(Path(), "x"), Module(Path(), "z")],
-                Module(Path(), "x"): [Module(Path(), "x2")],
-                Module(Path(), "x2"): [Module(Path(), "x")],
-                Module(Path(), "z"): [Module(Path(), "y")],
+                Module(Path(), "m"): [Module(Path(), "c11"), Module(Path(), "c21")],
+                Module(Path(), "c11"): [Module(Path(), "c12")],
+                Module(Path(), "c12"): [Module(Path(), "c11")],
+                Module(Path(), "c21"): [Module(Path(), "c22")],
+                Module(Path(), "c22"): [Module(Path(), "c21")],
             },
             [
-                ("a", "b", "a"),
-                ("x", "x2", "x"),
-                ("y", "z", "y"),
+                ("c11", "c12", "c11"),
+                ("c21", "c22", "c21"),
+            ],
+        ),
+        (
+            {
+                Module(Path(), "m"): [Module(Path(), "c11"), Module(Path(), "c21")],
+                Module(Path(), "c11"): [Module(Path(), "c12"), Module(Path(), "c13")],
+                Module(Path(), "c12"): [Module(Path(), "c11")],
+                Module(Path(), "c13"): [Module(Path(), "c14")],
+                Module(Path(), "c14"): [Module(Path(), "c11")],
+                Module(Path(), "c21"): [Module(Path(), "c22")],
+                Module(Path(), "c22"): [Module(Path(), "c21")],
+            },
+            [
+                ("c11", "c12", "c11"),
+                ("c11", "c13", "c14", "c11"),
+                ("c21", "c22", "c21"),
             ],
         ),
     ],

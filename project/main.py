@@ -49,9 +49,6 @@ logger = logging.getLogger(__name__)
 # TODO #6
 # Handle relative imports properly
 
-# TODO #7
-# Check _checked_modules + _cycles
-
 
 # Cases:
 # import path.to.mod
@@ -356,12 +353,11 @@ def _find_import_cycles(imports_by_module: ImportsByModule) -> ImportCycles:
 @dataclass(frozen=True)
 class DetectImportCycles:
     _imports_by_module: ImportsByModule
-    _cycles: Set[ImportCycle] = field(default_factory=set)
-    _checked_modules: Set[str] = field(default_factory=set)
+    _cycles: Dict[ImportCycle, ImportCycle] = field(default_factory=dict)
 
     @property
     def cycles(self) -> ImportCycles:
-        return sorted(self._cycles)
+        return sorted(self._cycles.values())
 
     def detect_cycles(self) -> None:
         for nr, (module, imported_modules) in enumerate(
@@ -372,7 +368,6 @@ class DetectImportCycles:
         ):
             self._detect_cycles([module.name], imported_modules)
             logger.debug("Nr %d checked (%s)", nr + 1, module.name)
-            self._checked_modules.add(module.name)
 
     def _get_entry_points(self, imports_by_module: ImportsByModule) -> ImportsByModule:
         known_imported_modules = set(
@@ -403,14 +398,10 @@ class DetectImportCycles:
         imported_modules: Sequence[Module],
     ) -> None:
         for module in imported_modules:
-            if module.name in self._checked_modules:
-                continue
-
             chain = base_chain + [module.name]
 
             if module.name in base_chain:
                 self._add_cycle(chain)
-                self._checked_modules.add(module.name)
                 return
 
             self._detect_cycles(
@@ -419,8 +410,10 @@ class DetectImportCycles:
             )
 
     def _add_cycle(self, chain: Sequence[str]) -> None:
-        first_idx = chain.index(chain[-1])
-        self._cycles.add(tuple(chain[first_idx:]))
+        duplicate = chain[-1]
+        first_idx = chain.index(duplicate)
+        cycle = tuple(chain[first_idx:])
+        self._cycles.setdefault(tuple(sorted(cycle[:-1])), cycle)
 
 
 # .
