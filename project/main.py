@@ -72,9 +72,6 @@ logger = logging.getLogger(__name__)
 #   '----------------------------------------------------------------------'
 
 
-ImportContext = Tuple[Union[ast.If, ast.Try, ast.ClassDef, ast.FunctionDef], ...]
-
-
 class Module:
     @classmethod
     def from_name(
