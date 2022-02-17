@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # Is args.map really needed?
 
 # TODO #4
-# what to do with Packages?
+# what to do with Packages in _visit_python_file?
 
 # TODO #5
 # Handle star imports
@@ -62,13 +62,13 @@ logger = logging.getLogger(__name__)
 # from path.to.mod import func/class as my_func/class
 
 
-#   .--type defs-----------------------------------------------------------.
-#   |              _                          _       __                   |
-#   |             | |_ _   _ _ __   ___    __| | ___ / _|___               |
-#   |             | __| | | | '_ \ / _ \  / _` |/ _ \ |_/ __|              |
-#   |             | |_| |_| | |_) |  __/ | (_| |  __/  _\__ \              |
-#   |              \__|\__, | .__/ \___|  \__,_|\___|_| |___/              |
-#   |                  |___/|_|                                            |
+#   .--modules-------------------------------------------------------------.
+#   |                                   _       _                          |
+#   |               _ __ ___   ___   __| |_   _| | ___  ___                |
+#   |              | '_ ` _ \ / _ \ / _` | | | | |/ _ \/ __|               |
+#   |              | | | | | | (_) | (_| | |_| | |  __/\__ \               |
+#   |              |_| |_| |_|\___/ \__,_|\__,_|_|\___||___/               |
+#   |                                                                      |
 #   '----------------------------------------------------------------------'
 
 
@@ -186,32 +186,141 @@ def _get_python_files(path: Path) -> Iterable[Path]:
 #   '----------------------------------------------------------------------'
 
 
+ImportSTMT = Union[ast.Import, ast.ImportFrom]
+
+
 class NodeVisitorImports(ast.NodeVisitor):
     def __init__(self, path: Path) -> None:
         self.path = path
-        self._import_stmts: List[Union[ImportSTMT, ImportFromSTMT]] = []
+        self._import_stmts: List[ImportSTMT] = []
 
     @property
-    def import_stmts(self) -> Sequence[Union[ImportSTMT, ImportFromSTMT]]:
+    def import_stmts(self) -> Sequence[ImportSTMT]:
         return self._import_stmts
 
     def visit_Import(self, node: ast.Import) -> None:
-        self._import_stmts.append(ImportSTMT(node))
+        self._import_stmts.append(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        self._import_stmts.append(ImportFromSTMT(node))
+        self._import_stmts.append(node)
 
 
-def _visit_python_files(files: Iterable[Path]) -> Iterable[NodeVisitorImports]:
-    for path in files:
-        if (visitor := _visit_python_file(path)) is not None:
-            yield visitor
+class ImportedModulesExtractor:
+    def __init__(
+        self,
+        mapping: Mapping[str, str],
+        project_path: Path,
+        base_module: PyModule,
+        import_stmts: Sequence[ImportSTMT],
+    ) -> None:
+        self._mapping = mapping
+        self._project_path = project_path
+        self._base_module = base_module
+        self._import_stmts = import_stmts
+
+        self._imported_modules: List[Union[Package, PyModule]] = []
+
+    @property
+    def imported_modules(self) -> Sequence[Union[Package, PyModule]]:
+        return self._imported_modules
+
+    def extract(self) -> Sequence[Union[Package, PyModule]]:
+        for import_stmt in self._import_stmts:
+            if isinstance(import_stmt, ast.Import):
+                self._add_imported_modules_from_aliases("import", import_stmt.names)
+
+            elif isinstance(import_stmt, ast.ImportFrom):
+                self._add_imported_from_modules(import_stmt)
+
+        return self._imported_modules
+
+    def _add_imported_from_modules(self, import_from_stmt: ast.ImportFrom) -> None:
+        if not import_from_stmt.module:
+            return
+
+        if self._is_builtin_or_stdlib(import_from_stmt.module):
+            return
+
+        if import_from_stmt.level == 0:
+            module_name = import_from_stmt.module
+        else:
+            module_name = ".".join(
+                self._base_module.name.split(".")[: -import_from_stmt.level]
+                + import_from_stmt.module.split(".")
+            )
+
+        module = Module.from_name(
+            self._mapping,
+            self._project_path,
+            module_name,
+        )
+
+        if module is None:
+            logger.debug("Unhandled import from in %s:", self._base_module.name)
+            logger.debug("  Dump: %s", ast.dump(import_from_stmt))
+            return
+
+        if isinstance(module, PyModule):
+            self._imported_modules.append(module)
+            return
+
+        if isinstance(module, Package):
+            self._add_imported_modules_from_aliases(
+                "import from",
+                import_from_stmt.names,
+                from_name=module.name,
+            )
+            return
+
+    def _add_imported_modules_from_aliases(
+        self, title: str, aliases: Sequence[ast.alias], from_name: str = ""
+    ) -> None:
+        for alias in aliases:
+            if self._is_builtin_or_stdlib(alias.name):
+                continue
+
+            module = Module.from_name(
+                self._mapping,
+                self._project_path,
+                ".".join([from_name, alias.name]) if from_name else alias.name,
+            )
+
+            if module is None:
+                logger.debug("Unhandled %s in %s:", title, self._base_module.name)
+                logger.debug("  Dump: %s", ast.dump(alias))
+                continue
+
+            self._imported_modules.append(module)
+
+    @staticmethod
+    def _is_builtin_or_stdlib(module_name: str) -> bool:
+        if module_name in sys.builtin_module_names or module_name in sys.modules:
+            # Avail in 3.10: or name in sys.stdlib_module_names
+            return True
+
+        try:
+            return importlib.util.find_spec(module_name) is not None
+        except ModuleNotFoundError:
+            return False
 
 
-def _visit_python_file(path: Path) -> Optional[NodeVisitorImports]:
-    if path.name in ["__pycache__", "__init__.py"]:
-        return None
+def _visit_python_files(
+    mapping: Mapping[str, str],
+    project_path: Path,
+    files: Iterable[Path],
+) -> ImportsByModule:
+    return {
+        visited[0]: visited[1]
+        for path in files
+        if (visited := _visit_python_file(mapping, project_path, path)) is not None
+    }
 
+
+def _visit_python_file(
+    mapping: Mapping[str, str],
+    project_path: Path,
+    path: Path,
+) -> Optional[Tuple[PyModule, Sequence[PyModule]]]:
     try:
         with open(path, encoding="utf-8") as f:
             content = f.read()
@@ -227,118 +336,27 @@ def _visit_python_file(path: Path) -> Optional[NodeVisitorImports]:
 
     visitor = NodeVisitorImports(path)
     visitor.visit(tree)
-    return visitor
 
+    module = Module.from_path(
+        mapping,
+        project_path,
+        visitor.path,
+    )
 
-class ImportSTMT(NamedTuple):
-    node: ast.Import
+    if not isinstance(module, PyModule):
+        # Should not happen
+        logger.debug("No such Python module: %s", module)
+        return None
 
-    def get_imported_modules(
-        self,
-        mapping: Mapping[str, str],
-        project_path: Path,
-        base_module: PyModule,
-    ) -> Iterable[Union[PyModule, Package]]:
-        yield from _get_imported_modules_from_aliases(
-            "import",
-            mapping,
-            project_path,
-            base_module,
-            self.node.names,
-        )
+    extractor = ImportedModulesExtractor(
+        mapping,
+        project_path,
+        module,
+        visitor.import_stmts,
+    )
+    extractor.extract()
 
-
-class ImportFromSTMT(NamedTuple):
-    node: ast.ImportFrom
-
-    def get_imported_modules(
-        self,
-        mapping: Mapping[str, str],
-        project_path: Path,
-        base_module: PyModule,
-    ) -> Iterable[Union[PyModule, Package]]:
-        if not self.node.module:
-            return
-
-        if _is_builtin_or_stdlib(self.node.module):
-            return
-
-        if self.node.level == 0:
-            module_name = self.node.module
-        else:
-            module_name = ".".join(
-                base_module.name.split(".")[: -self.node.level]
-                + self.node.module.split(".")
-            )
-
-        module = Module.from_name(
-            mapping,
-            project_path,
-            module_name,
-        )
-
-        if module is None:
-            logger.debug("Unhandled import from in %s:", base_module.name)
-            logger.debug("  Dump: %s", ast.dump(self.node))
-            return
-
-        if isinstance(module, PyModule):
-            yield module
-            return
-
-        if isinstance(module, Package):
-            yield from _get_imported_modules_from_aliases(
-                "import from",
-                mapping,
-                project_path,
-                base_module,
-                self.node.names,
-                from_name=module.name,
-            )
-            return
-
-
-def _get_imported_modules_from_aliases(
-    title: str,
-    mapping: Mapping[str, str],
-    project_path: Path,
-    base_module: PyModule,
-    aliases: Sequence[ast.alias],
-    from_name: str = "",
-) -> Iterable[Union[PyModule, Package]]:
-    for alias in aliases:
-        if _is_builtin_or_stdlib(alias.name):
-            continue
-
-        module = Module.from_name(
-            mapping,
-            project_path,
-            ".".join([from_name, alias.name]) if from_name else alias.name,
-        )
-
-        if module is None:
-            logger.debug("Unhandled %s in %s:", title, base_module.name)
-            logger.debug("  Dump: %s", ast.dump(alias))
-            continue
-
-        if isinstance(module, PyModule):
-            yield module
-            continue
-
-        if isinstance(module, Package):
-            yield module
-            continue
-
-
-def _is_builtin_or_stdlib(module_name: str) -> bool:
-    if module_name in sys.builtin_module_names or module_name in sys.modules:
-        # Avail in 3.10: or name in sys.stdlib_module_names
-        return True
-
-    try:
-        return importlib.util.find_spec(module_name) is not None
-    except ModuleNotFoundError:
-        return False
+    return module, [im for im in extractor.imported_modules if isinstance(im, PyModule)]
 
 
 # .
@@ -372,13 +390,16 @@ class DetectImportCycles:
         return sorted(self._cycles.values())
 
     def detect_cycles(self) -> None:
-        for nr, (module, imported_modules) in enumerate(
-            sorted(
-                self._get_entry_points(self._imports_by_module).items(),
-                key=lambda t: t[0].name,
+        entry_points = sorted(
+            self._get_entry_points(self._imports_by_module).items(),
+            key=lambda t: t[0].name,
+        )
+        len_entry_points = len(entry_points)
+
+        for nr, (module, imported_modules) in enumerate(entry_points):
+            logger.debug(
+                "Check %s (Nr %s of %s)", module.name, nr + 1, len_entry_points
             )
-        ):
-            logger.debug("Check %s (Nr %s)", module.name, nr + 1)
             self._detect_cycles([module.name], imported_modules)
 
     def _get_entry_points(self, imports_by_module: ImportsByModule) -> ImportsByModule:
@@ -621,45 +642,6 @@ def _setup_logging(args: argparse.Namespace) -> None:
     logger.addHandler(handler)
 
 
-def _get_imports_by_module(
-    mapping: Mapping[str, str],
-    project_path: Path,
-    visitors: Iterable[NodeVisitorImports],
-) -> ImportsByModule:
-    imports_by_module: Dict[PyModule, List[PyModule]] = {}
-
-    for visitor in visitors:
-        module = Module.from_path(
-            mapping,
-            project_path,
-            visitor.path,
-        )
-
-        if not isinstance(module, PyModule):
-            continue
-
-        if module in imports_by_module:
-            continue
-
-        imported_modules: List[PyModule] = []
-        for import_stmt in visitor.import_stmts:
-            for imported_module in import_stmt.get_imported_modules(
-                mapping, project_path, module
-            ):
-                if isinstance(imported_module, PyModule):
-                    imported_modules.append(imported_module)
-                    continue
-
-                if isinstance(imported_module, Package):
-                    logger.debug("Found %s", imported_module)
-                    continue
-
-        if imported_modules:
-            imports_by_module[module] = imported_modules
-
-    return imports_by_module
-
-
 def _get_return_code(import_cycles: ImportCycles) -> bool:
     return bool(import_cycles)
 
@@ -687,11 +669,8 @@ def main(argv: Sequence[str]) -> int:
     logger.info("Get Python files")
     python_files = _get_python_files(folder_path)
 
-    logger.info("Visit Python files")
-    visitors = _visit_python_files(python_files)
-
-    logger.info("Get imports of modules")
-    imports_by_module = _get_imports_by_module(mapping, project_path, visitors)
+    logger.info("Visit Python files, get imports by module")
+    imports_by_module = _visit_python_files(mapping, project_path, python_files)
 
     logger.info("Detect import cycles")
     import_cycles = _find_import_cycles(imports_by_module)
