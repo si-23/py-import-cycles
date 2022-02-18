@@ -27,6 +27,9 @@ from typing import (
 
 logger = logging.getLogger(__name__)
 
+# TODO #1
+# handle __init__.py?
+
 # TODO #2
 # Handle:
 #   import pkg -> execute __init__.py
@@ -157,11 +160,18 @@ ImportsByModule = Mapping[PyModule, Sequence[PyModule]]
 
 def _get_python_files(args: argparse.Namespace, path: Path) -> Iterable[Path]:
     if path.is_file() and path.suffix == ".py":
+        if path.name == "__init__.py":
+             return
+
         if all(ns in path.parts for ns in args.namespaces):
             yield path.resolve()
             return
 
-        logger.debug("Any of namespaces %r not found in path %r", args.namespaces, path)
+        logger.debug(
+            "Some of the namespaces %r are not found in path %r",
+            args.namespaces,
+            path.relative_to(args.project_path),
+        )
         return
 
     if path.is_dir():
@@ -378,6 +388,7 @@ def _find_import_cycles(imports_by_module: ImportsByModule) -> ImportCycles:
 class DetectImportCycles:
     _imports_by_module: ImportsByModule
     _cycles: Dict[ImportCycle, ImportCycle] = field(default_factory=dict)
+    _checked_modules: Set[PyModule] = field(default_factory=set)
 
     @property
     def cycles(self) -> ImportCycles:
@@ -391,9 +402,16 @@ class DetectImportCycles:
         len_entry_points = len(entry_points)
 
         for nr, (module, imported_modules) in enumerate(entry_points):
+            if module in self._checked_modules:
+                continue
+
             logger.debug(
-                "Check %s (Nr %s of %s)", module.name, nr + 1, len_entry_points
+                "Check %s (Nr %s of %s)",
+                module.name,
+                nr + 1,
+                len_entry_points,
             )
+
             self._detect_cycles([module.name], imported_modules)
 
     def _get_entry_points(self, imports_by_module: ImportsByModule) -> ImportsByModule:
@@ -435,6 +453,8 @@ class DetectImportCycles:
                 chain,
                 self._imports_by_module.get(module, []),
             )
+
+            self._checked_modules.add(module)
 
     def _add_cycle(self, chain: Sequence[str]) -> None:
         first_idx = chain.index(chain[-1])
@@ -661,6 +681,7 @@ def main(argv: Sequence[str]) -> int:
 
     logger.info("Detect import cycles")
     import_cycles = _find_import_cycles(imports_by_module)
+    logger.info("Found %d import cycles", len(import_cycles))
 
     if args.graph == "no":
         return _get_return_code(import_cycles)
