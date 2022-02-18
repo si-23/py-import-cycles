@@ -53,6 +53,10 @@ logger = logging.getLogger(__name__)
 # TODO #7
 # Exclude specific folders like tests...
 
+# TODO #8
+# more log levels: verbose: log nrealy every step
+#                  debug: only log steps which are useful for dev
+
 
 # Cases:
 # import path.to.mod
