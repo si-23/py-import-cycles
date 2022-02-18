@@ -25,7 +25,7 @@ from typing import (
     Union,
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 
 # TODO #1
 # handle __init__.py?
@@ -168,7 +168,7 @@ ImportsByModule = Mapping[PyModule, Sequence[PyModule]]
 def _get_python_files(args: argparse.Namespace, path: Path) -> Iterable[Path]:
     if path.is_file() and path.suffix == ".py":
         if path.name == "__init__.py":
-             return
+            return
 
         if all(ns in path.parts for ns in args.namespaces):
             yield path.resolve()
@@ -650,9 +650,7 @@ def _setup_logging(args: argparse.Namespace) -> None:
     handler = logging.StreamHandler()
     handler.setLevel(log_level)
 
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
