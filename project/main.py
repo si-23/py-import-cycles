@@ -575,6 +575,7 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawTextHelpFormatter,
+        allow_abbrev=False,
     )
     parser.add_argument(
         "-d",
