@@ -27,9 +27,6 @@ from typing import (
 
 logger = logging.getLogger(__name__)
 
-# TODO #1
-# load all python file not only below FOLDER
-
 # TODO #2
 # Handle:
 #   import pkg -> execute __init__.py
@@ -158,21 +155,18 @@ ImportsByModule = Mapping[PyModule, Sequence[PyModule]]
 #   '----------------------------------------------------------------------'
 
 
-def _get_python_files(path: Path) -> Iterable[Path]:
-    if path.is_symlink():
-        return
-
+def _get_python_files(args: argparse.Namespace, path: Path) -> Iterable[Path]:
     if path.is_file() and path.suffix == ".py":
-        yield path.resolve()
+        if all(ns in path.parts for ns in args.namespaces):
+            yield path.resolve()
+            return
+
+        logger.debug("Any of namespaces %r not found in path %r", args.namespaces, path)
         return
 
-    for f in path.iterdir():
-        if f.is_dir():
-            yield from _get_python_files(f)
-            continue
-
-        if f.suffix == ".py":
-            yield f.resolve()
+    if path.is_dir():
+        for f in path.iterdir():
+            yield from _get_python_files(args, f)
 
 
 # .
@@ -462,18 +456,16 @@ class DetectImportCycles:
 #   '----------------------------------------------------------------------'
 
 
-def _make_graph(
-    project_path: Path, args: argparse.Namespace, edges: Sequence[ImportEdge]
-) -> Digraph:
+def _make_graph(args: argparse.Namespace, edges: Sequence[ImportEdge]) -> Digraph:
     target_dir = Path(os.path.abspath(__file__)).parent.parent.joinpath("outputs")
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    d = Digraph(
-        "unix",
-        filename=target_dir.joinpath(
-            "%s-import-cycles.gv" % args.folder.replace("/", "-")
-        ),
+    filename = "%s-%s-import-cycles.gv" % (
+        "-".join(Path(args.project_path).parts[1:]),
+        "-".join(sorted(args.namespaces)),
     )
+
+    d = Digraph("unix", filename=target_dir.joinpath(filename))
 
     with d.subgraph() as ds:
         for edge in edges:
@@ -588,25 +580,19 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         "-d",
         "--debug",
         action="store_true",
-        help="Show errors",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Show chains",
+        help="show additional information for debug purposes",
     )
     parser.add_argument(
         "--graph",
         choices=["all", "only-cycles", "no"],
         default="only-cycles",
-        help="Only show cycles",
+        help="how the graph is drawn; default: only-cycles",
     )
     parser.add_argument(
         "--map",
         nargs="+",
         help=(
-            "Hack with symlinks: Sanitize module paths or import statments,"
+            "hack with symlinks: Sanitize module paths or import statments,"
             " ie. PREFIX:SHORT, eg.:"
             " from path.to.SHORT.module -> PREFIX/path/to/SHORT/module.py"
             " PREFIX/path/to/SHORT/module.py -> path.to.SHORT.module"
@@ -614,12 +600,13 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--project-path",
-        help="Path to project",
+        help="path to project",
         required=True,
     )
     parser.add_argument(
-        "folder",
-        help="Folder for cycle analysis which is appended to project path.",
+        "--namespaces",
+        nargs="+",
+        help="Visit Python file if all of these namespaces are part of this file path",
     )
     return parser.parse_args(argv)
 
@@ -659,15 +646,14 @@ def main(argv: Sequence[str]) -> int:
         logger.debug("No such directory: %s", project_path)
         return 1
 
-    folder_path = project_path.joinpath(args.folder)
-    if not folder_path.exists():
-        logger.debug("No such directory: %s", folder_path)
+    if not args.namespaces:
+        logger.debug("No namespaces given")
         return 1
 
     mapping = {} if args.map is None else dict([entry.split(":") for entry in args.map])
 
     logger.info("Get Python files")
-    python_files = _get_python_files(folder_path)
+    python_files = _get_python_files(args, project_path)
 
     logger.info("Visit Python files, get imports by module")
     imports_by_module = _visit_python_files(mapping, project_path, python_files)
@@ -683,7 +669,7 @@ def main(argv: Sequence[str]) -> int:
         return _get_return_code(import_cycles)
 
     logger.info("Make graph")
-    graph = _make_graph(project_path, args, edges)
+    graph = _make_graph(args, edges)
     graph.view()
 
     return _get_return_code(import_cycles)
