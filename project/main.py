@@ -50,6 +50,9 @@ logger = logging.getLogger(__name__)
 # TODO #6
 # Handle relative imports properly
 
+# TODO #7
+# Exclude specific folders like tests...
+
 
 # Cases:
 # import path.to.mod
