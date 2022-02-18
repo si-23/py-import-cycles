@@ -25,7 +25,7 @@ from typing import (
     Union,
 )
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 # TODO #1
 # handle __init__.py?
