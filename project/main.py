@@ -486,8 +486,8 @@ class DetectImportCycles:
         cycle = tuple(chain[first_idx:])
         if (short := tuple(sorted(cycle[:-1]))) not in self._cycles:
             self._cycles[short] = cycle
-            logger.debug("  Found cycle in %s", chain)
             logger.debug("  Cycle: %s", cycle)
+            logger.debug("  Chain: %s", chain)
 
 
 # .
