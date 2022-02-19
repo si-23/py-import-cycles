@@ -436,7 +436,7 @@ def _find_import_cycles(args: argparse.Namespace, imports_by_module: ImportsByMo
         detector.detect_cycles()
     except ImportCycleError as e:
         pass
-    return sorted(detector.cycles)
+    return detector.cycles
 
 
 class ImportCycleError(Exception):
