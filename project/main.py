@@ -430,15 +430,23 @@ ImportCycle = Tuple[str, ...]
 ImportCycles = Sequence[ImportCycle]
 
 
-def _find_import_cycles(imports_by_module: ImportsByModule) -> ImportCycles:
-    detector = DetectImportCycles(imports_by_module)
-    detector.detect_cycles()
+def _find_import_cycles(args: argparse.Namespace, imports_by_module: ImportsByModule) -> ImportCycles:
+    detector = DetectImportCycles(imports_by_module, args.raise_on_first_cycle)
+    try:
+        detector.detect_cycles()
+    except ImportCycleError:
+        pass
     return sorted(detector.cycles)
+
+
+class ImportCycleError(Exception):
+    pass
 
 
 @dataclass(frozen=True)
 class DetectImportCycles:
     _imports_by_module: ImportsByModule
+    _raise_on_first_cycle: bool
     _cycles: Dict[ImportCycle, ImportCycle] = field(default_factory=dict)
     _checked_modules: Set[PyModule] = field(default_factory=set)
 
@@ -449,7 +457,7 @@ class DetectImportCycles:
     def detect_cycles(self) -> None:
         len_imports_by_module = len(self._imports_by_module)
         for nr, (module, imported_modules) in enumerate(
-            self._imports_by_module.items()
+            sorted(self._imports_by_module.items())
         ):
             if module in self._checked_modules:
                 continue
@@ -473,6 +481,8 @@ class DetectImportCycles:
 
             if module.name in base_chain:
                 self._add_cycle(chain)
+                if self._raise_on_first_cycle:
+                    raise ImportCycleError()
                 return
 
             self._detect_cycles(
@@ -663,10 +673,16 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         required=True,
         help="Visit Python file if all of these namespaces are part of this file path",
     )
+
     parser.add_argument(
         "--recursively",
         action="store_true",
         help="Visit Python modules or packages if not yet collected from Python files.",
+    )
+    parser.add_argument(
+        "--raise-on-first-cycle",
+        action="store_true",
+        help="Stop if first cycle is found",
     )
     return parser.parse_args(argv)
 
@@ -719,7 +735,7 @@ def main(argv: Sequence[str]) -> int:
     # entry_points = _get_entry_points(imports_by_module)
 
     logger.info("Detect import cycles")
-    import_cycles = _find_import_cycles(entry_points)
+    import_cycles = _find_import_cycles(args, entry_points)
     logger.info("Found %d import cycles", len(import_cycles))
 
     if args.graph == "no":
