@@ -79,6 +79,20 @@ logger = logging.getLogger(__name__)
 #   '----------------------------------------------------------------------'
 
 
+class Package(NamedTuple):
+    path: Path
+    name: str
+
+
+class PyModule(NamedTuple):
+    path: Path
+    name: str
+
+
+TModule = Union[Package, PyModule]
+ImportsByModule = Mapping[TModule, Sequence[TModule]]
+
+
 class Module:
     @classmethod
     def from_name(
@@ -86,7 +100,7 @@ class Module:
         mapping: Mapping[str, str],
         project_path: Path,
         module_name: str,
-    ) -> Optional[Union[Package, PyModule]]:
+    ) -> Optional[TModule]:
         parts = module_name.split(".")
         for key, value in mapping.items():
             if value in parts:
@@ -115,7 +129,7 @@ class Module:
         mapping: Mapping[str, str],
         project_path: Path,
         module_path: Path,
-    ) -> Optional[Union[Package, PyModule]]:
+    ) -> Optional[TModule]:
         parts = module_path.relative_to(project_path).with_suffix("").parts
         for key, value in mapping.items():
             if key == parts[0] and value in parts[1:]:
@@ -137,19 +151,6 @@ class Module:
             )
 
         return None
-
-
-class Package(NamedTuple):
-    path: Path
-    name: str
-
-
-class PyModule(NamedTuple):
-    path: Path
-    name: str
-
-
-ImportsByModule = Mapping[Union[PyModule, Package], Sequence[Union[Package, PyModule]]]
 
 
 # .
@@ -236,13 +237,13 @@ class ImportedModulesExtractor:
         self._base_module = base_module
         self._import_stmts = import_stmts
 
-        self._imported_modules: List[Union[Package, PyModule]] = []
+        self._imported_modules: List[TModule] = []
 
     @property
-    def imported_modules(self) -> Sequence[Union[Package, PyModule]]:
+    def imported_modules(self) -> Sequence[TModule]:
         return self._imported_modules
 
-    def extract(self) -> Sequence[Union[Package, PyModule]]:
+    def extract(self) -> Sequence[TModule]:
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
                 self._add_imported_modules_from_aliases(import_stmt.names)
@@ -423,13 +424,13 @@ def _get_entry_points(imports_by_module: ImportsByModule) -> ImportsByModule:
 #   '----------------------------------------------------------------------'
 
 
-ImportCycle = Tuple[Union[Package, PyModule], ...]
+ImportCycle = Tuple[TModule, ...]
 ImportCycles = Sequence[ImportCycle]
 
 
 def _find_import_cycles(
     args: argparse.Namespace,
-    entry_points: Sequence[Union[PyModule, Package]],
+    entry_points: Sequence[TModule],
     imports_by_module: ImportsByModule,
 ) -> ImportCycles:
     detector = DetectImportCycles(
@@ -448,7 +449,7 @@ class ImportCycleError(Exception):
 
 @dataclass(frozen=True)
 class DetectImportCycles:
-    _entry_points: Sequence[Union[PyModule, Package]]
+    _entry_points: Sequence[TModule]
     _imports_by_module: ImportsByModule
     _raise_on_first_cycle: bool
     _cycles: Dict[ImportCycle, ImportCycle] = field(default_factory=dict)
@@ -539,14 +540,14 @@ def _make_graph(args: argparse.Namespace, edges: Sequence[ImportEdge]) -> Digrap
     return d.unflatten(stagger=50)
 
 
-def _get_shape(module: Union[Package, PyModule]) -> str:
+def _get_shape(module: TModule) -> str:
     return "" if isinstance(module, PyModule) else "box"
 
 
 class ImportEdge(NamedTuple):
     title: str
-    from_module: Union[Package, PyModule]
-    to_module: Union[Package, PyModule]
+    from_module: TModule
+    to_module: TModule
     color: str
 
 
