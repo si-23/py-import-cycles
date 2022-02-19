@@ -506,8 +506,9 @@ def _make_graph(args: argparse.Namespace, edges: Sequence[ImportEdge]) -> Digrap
     target_dir = Path(os.path.abspath(__file__)).parent.parent.joinpath("outputs")
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = "%s-%s-import-cycles.gv" % (
+    filename = "%s-%s-%s-import-cycles.gv" % (
         "-".join(Path(args.project_path).parts[1:]),
+        "-".join(sorted(args.folders)),
         "-".join(sorted(args.namespaces)),
     )
 
