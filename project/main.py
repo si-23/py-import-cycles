@@ -434,9 +434,13 @@ def _find_import_cycles(args: argparse.Namespace, imports_by_module: ImportsByMo
     detector = DetectImportCycles(imports_by_module, args.raise_on_first_cycle)
     try:
         detector.detect_cycles()
-    except ImportCycleError:
+    except ImportCycleError as e:
         pass
-    return sorted(detector.cycles)
+
+    sorted_cycles = sorted(detector.cycles)
+    for chain_with_cycle in sorted_cycles:
+        sys.stderr.write("Found cycle in: %s\n" % chain_with_cycle)
+    return sorted_cycles
 
 
 class ImportCycleError(Exception):
@@ -482,7 +486,7 @@ class DetectImportCycles:
             if module.name in base_chain:
                 self._add_cycle(chain)
                 if self._raise_on_first_cycle:
-                    raise ImportCycleError()
+                    raise ImportCycleError(chain)
                 return
 
             self._detect_cycles(
@@ -496,9 +500,8 @@ class DetectImportCycles:
         first_idx = chain.index(chain[-1])
         cycle = tuple(chain[first_idx:])
         if (short := tuple(sorted(cycle[:-1]))) not in self._cycles:
-            self._cycles[short] = cycle
-            logger.debug("  Cycle: %s", cycle)
-            logger.debug("  Chain: %s", chain)
+            self._cycles[short] = chain
+            logger.debug("  Found cycle in: %s", chain)
 
 
 # .
