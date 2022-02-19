@@ -107,7 +107,6 @@ class Module:
                 name=module_name,
             )
 
-        logger.debug("Module.from_name: Unhandled %s", module_name)
         return None
 
     @classmethod
@@ -137,7 +136,6 @@ class Module:
                 name=module_name,
             )
 
-        logger.debug("Module.from_path: Unhandled %s", module_path)
         return None
 
 
@@ -246,7 +244,7 @@ class ImportedModulesExtractor:
     def extract(self) -> Sequence[Union[Package, PyModule]]:
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
-                self._add_imported_modules_from_aliases("import", import_stmt.names)
+                self._add_imported_modules_from_aliases(import_stmt.names)
 
             elif isinstance(import_stmt, ast.ImportFrom):
                 self._add_imported_from_modules(import_stmt)
@@ -275,14 +273,25 @@ class ImportedModulesExtractor:
         )
 
         if module is None:
-            logger.debug("Unhandled import from in %s:", self._base_module.name)
-            logger.debug("  Dump: %s", ast.dump(import_from_stmt))
+            logger.debug(
+                "Unhandled import in %s: %s",
+                self._base_module.name,
+                ast.dump(import_from_stmt),
+            )
             return
 
-        self._imported_modules.append(module)
+        if isinstance(module, PyModule):
+            self._imported_modules.append(module)
+            return
+
+        if isinstance(module, Package):
+            self._add_imported_modules_from_aliases(
+                import_from_stmt.names,
+                from_name=module.name,
+            )
 
     def _add_imported_modules_from_aliases(
-        self, title: str, aliases: Sequence[ast.alias], from_name: str = ""
+        self, aliases: Sequence[ast.alias], from_name: str = ""
     ) -> None:
         for alias in aliases:
             if self._is_builtin_or_stdlib(alias.name):
@@ -295,8 +304,11 @@ class ImportedModulesExtractor:
             )
 
             if module is None:
-                logger.debug("Unhandled %s in %s:", title, self._base_module.name)
-                logger.debug("  Dump: %s", ast.dump(alias))
+                logger.debug(
+                    "Unhandled import in %s: %s",
+                    self._base_module.name,
+                    ast.dump(alias),
+                )
                 continue
 
             self._imported_modules.append(module)
@@ -435,7 +447,9 @@ class DetectImportCycles:
 
     def detect_cycles(self) -> None:
         len_imports_by_module = len(self._imports_by_module)
-        for nr, (module, imported_modules) in enumerate(self._imports_by_module.items()):
+        for nr, (module, imported_modules) in enumerate(
+            self._imports_by_module.items()
+        ):
             if module in self._checked_modules:
                 continue
 
