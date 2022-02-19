@@ -423,7 +423,7 @@ def _get_entry_points(imports_by_module: ImportsByModule) -> ImportsByModule:
 #   '----------------------------------------------------------------------'
 
 
-ImportCycle = Tuple[str, ...]
+ImportCycle = Tuple[Union[Package, PyModule], ...]
 ImportCycles = Sequence[ImportCycle]
 
 
@@ -471,7 +471,7 @@ class DetectImportCycles:
                 len_entry_points,
             )
 
-            self._detect_cycles([module.name], self._imports_by_module.get(module, []))
+            self._detect_cycles([module], self._imports_by_module.get(module, []))
 
     def _detect_cycles(
         self,
@@ -479,9 +479,9 @@ class DetectImportCycles:
         imported_modules: Sequence[PyModule],
     ) -> None:
         for module in imported_modules:
-            chain = base_chain + [module.name]
+            chain = base_chain + [module]
 
-            if module.name in base_chain:
+            if module in base_chain:
                 self._add_cycle(chain)
                 if self._raise_on_first_cycle:
                     raise ImportCycleError(chain)
@@ -499,7 +499,7 @@ class DetectImportCycles:
         cycle = tuple(chain[first_idx:])
         if (short := tuple(sorted(cycle[:-1]))) not in self._cycles:
             self._cycles[short] = chain
-            logger.debug("  Found cycle in: %s", chain)
+            logger.debug("  Found cycle in: %s", [e.name for e in chain])
 
 
 # .
@@ -527,22 +527,26 @@ def _make_graph(args: argparse.Namespace, edges: Sequence[ImportEdge]) -> Digrap
 
     with d.subgraph() as ds:
         for edge in edges:
-            ds.node(edge.module)
-            ds.node(edge.imports)
+            ds.node(edge.from_module.name, shape=_get_shape(edge.from_module))
+            ds.node(edge.to_module.name, shape=_get_shape(edge.to_module))
             ds.attr("edge", color=edge.color)
 
             if edge.title:
-                ds.edge(edge.module, edge.imports, edge.title)
+                ds.edge(edge.from_module.name, edge.to_module.name, edge.title)
             else:
-                ds.edge(edge.module, edge.imports)
+                ds.edge(edge.from_module.name, edge.to_module.name)
 
     return d.unflatten(stagger=50)
 
 
+def _get_shape(module: Union[Package, PyModule]) -> str:
+    return "" if isinstance(module, PyModule) else "box"
+
+
 class ImportEdge(NamedTuple):
     title: str
-    module: str
-    imports: str
+    from_module: Union[Package, PyModule]
+    to_module: Union[Package, PyModule]
     color: str
 
 
@@ -571,8 +575,8 @@ def _make_all_edges(
             edges.add(
                 ImportEdge(
                     "",
-                    module.name,
-                    imported_module.name,
+                    module,
+                    imported_module,
                     "black" if import_cycle is None else "red",
                 )
             )
@@ -584,7 +588,7 @@ def _is_in_cycle(
 ) -> Optional[ImportCycle]:
     for import_cycle in import_cycles:
         try:
-            idx = import_cycle.index(module.name)
+            idx = import_cycle.index(module)
         except ValueError:
             continue
 
@@ -604,17 +608,17 @@ def _make_only_cycles_edges(
             random.randint(50, 200),
             random.randint(50, 200),
         )
-        module = import_cycle[0]
-        for module_name in import_cycle[1:]:
+        start_module = import_cycle[0]
+        for module in import_cycle[1:]:
             edges.add(
                 ImportEdge(
                     str(nr + 1),
+                    start_module,
                     module,
-                    module_name,
                     color,
                 )
             )
-            module = module_name
+            start_module = module
     return sorted(edges)
 
 
@@ -704,10 +708,6 @@ def _setup_logging(args: argparse.Namespace) -> None:
     logger.addHandler(handler)
 
 
-def _get_return_code(import_cycles: ImportCycles) -> bool:
-    return bool(import_cycles)
-
-
 # .
 
 
@@ -737,22 +737,23 @@ def main(argv: Sequence[str]) -> int:
     logger.info("Detect import cycles")
     import_cycles = _find_import_cycles(args, entry_points, imports_by_module)
     logger.info("Found %d import cycles", len(import_cycles))
+    return_code = bool(import_cycles)
 
     for chain_with_cycle in import_cycles:
-        sys.stderr.write("Found cycle in: %s\n" % chain_with_cycle)
+        sys.stderr.write("Found cycle in: %s\n" % [e.name for e in chain_with_cycle])
 
     if args.graph == "no":
-        return _get_return_code(import_cycles)
+        return return_code
 
     if not (edges := _make_edges(args, imports_by_module, import_cycles)):
         logger.debug("No edges for graphing")
-        return _get_return_code(import_cycles)
+        return return_code
 
     logger.info("Make graph")
     graph = _make_graph(args, edges)
     graph.view()
 
-    return _get_return_code(import_cycles)
+    return return_code
 
 
 if __name__ == "__main__":
