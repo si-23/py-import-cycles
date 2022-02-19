@@ -229,7 +229,7 @@ class ImportedModulesExtractor:
         self,
         mapping: Mapping[str, str],
         project_path: Path,
-        base_module: PyModule,
+        base_module: TModule,
         import_stmts: Sequence[ImportSTMT],
     ) -> None:
         self._mapping = mapping
@@ -363,7 +363,7 @@ def _visit_python_file(
     mapping: Mapping[str, str],
     project_path: Path,
     path: Path,
-) -> Optional[Tuple[PyModule, Sequence[PyModule]]]:
+) -> Optional[Tuple[TModule, Sequence[TModule]]]:
     module = Module.from_path(mapping, project_path, path)
 
     if module is None:
@@ -453,7 +453,7 @@ class DetectImportCycles:
     _imports_by_module: ImportsByModule
     _raise_on_first_cycle: bool
     _cycles: Dict[ImportCycle, ImportCycle] = field(default_factory=dict)
-    _checked_modules: Set[PyModule] = field(default_factory=set)
+    _checked_modules: Set[TModule] = field(default_factory=set)
 
     @property
     def cycles(self) -> ImportCycles:
@@ -477,7 +477,7 @@ class DetectImportCycles:
     def _detect_cycles(
         self,
         base_chain: List[str],
-        imported_modules: Sequence[PyModule],
+        imported_modules: Sequence[TModule],
     ) -> None:
         for module in imported_modules:
             chain = base_chain + [module]
@@ -585,7 +585,7 @@ def _make_all_edges(
 
 
 def _is_in_cycle(
-    module: PyModule, the_import: str, import_cycles: ImportCycles
+    module: TModule, the_import: str, import_cycles: ImportCycles
 ) -> Optional[ImportCycle]:
     for import_cycle in import_cycles:
         try:
