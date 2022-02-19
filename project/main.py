@@ -188,6 +188,7 @@ def _get_python_files_recursively(
 
     if all(ns in path.parts for ns in namespaces):
         yield path.resolve()
+        return
 
     logger.debug("Ignore path %r", path.relative_to(project_path))
 
