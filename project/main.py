@@ -151,7 +151,7 @@ class PyModule(NamedTuple):
     name: str
 
 
-ImportsByModule = Mapping[PyModule, Sequence[PyModule]]
+ImportsByModule = Mapping[Union[PyModule, Package], Sequence[Union[Package, PyModule]]]
 
 
 # .
@@ -185,16 +185,13 @@ def _get_python_files_recursively(
         for fp in path.iterdir():
             yield from _get_python_files_recursively(project_path, fp, namespaces)
 
-    if path.suffix != ".py":
-        return
-
-    if path.stem == "__init__":
+    if path.suffix != ".py" or path.stem == "__init__":
         return
 
     if all(ns in path.parts for ns in namespaces):
         yield path.resolve()
 
-    logger.debug("Unhandled path %r", path.relative_to(project_path))
+    logger.debug("Ignore path %r", path.relative_to(project_path))
 
 
 # .
@@ -282,17 +279,7 @@ class ImportedModulesExtractor:
             logger.debug("  Dump: %s", ast.dump(import_from_stmt))
             return
 
-        if isinstance(module, PyModule):
-            self._imported_modules.append(module)
-            return
-
-        if isinstance(module, Package):
-            self._add_imported_modules_from_aliases(
-                "import from",
-                import_from_stmt.names,
-                from_name=module.name,
-            )
-            return
+        self._imported_modules.append(module)
 
     def _add_imported_modules_from_aliases(
         self, title: str, aliases: Sequence[ast.alias], from_name: str = ""
@@ -337,6 +324,21 @@ def _visit_python_files(
         if (visited := _visit_python_file(mapping, project_path, path)) is not None
     }
 
+    # Collect imported modules and their imports
+    for module in set(
+        imported_module
+        for imported_modules in imports_by_module.values()
+        for imported_module in imported_modules
+    ).difference(imports_by_module):
+        if module in imports_by_module:
+            continue
+
+        if (visited := _visit_python_file(mapping, project_path, module.path)) is None:
+            continue
+
+        new_module, new_imported_modules = visited
+        imports_by_module[new_module] = new_imported_modules
+
     return imports_by_module
 
 
@@ -345,32 +347,31 @@ def _visit_python_file(
     project_path: Path,
     path: Path,
 ) -> Optional[Tuple[PyModule, Sequence[PyModule]]]:
+    module = Module.from_path(mapping, project_path, path)
+
+    if module is None:
+        # Should not happen
+        logger.debug("No such Python module: %s", module)
+        return None
+
+    if isinstance(module, Package):
+        return module, []
+
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(module.path, encoding="utf-8") as f:
             content = f.read()
     except UnicodeDecodeError as e:
-        logger.debug("Cannot read python file %s: %s", path, e)
+        logger.debug("Cannot read python file %s: %s", module.path, e)
         return None
 
     try:
         tree = ast.parse(content)
     except SyntaxError as e:
-        logger.debug("Cannot visit python file %s: %s", path, e)
+        logger.debug("Cannot visit python file %s: %s", module.path, e)
         return None
 
-    visitor = NodeVisitorImports(path)
+    visitor = NodeVisitorImports(module.path)
     visitor.visit(tree)
-
-    module = Module.from_path(
-        mapping,
-        project_path,
-        visitor.path,
-    )
-
-    if not isinstance(module, PyModule):
-        # Should not happen
-        logger.debug("No such Python module: %s", module)
-        return None
 
     extractor = ImportedModulesExtractor(
         mapping,
@@ -380,7 +381,7 @@ def _visit_python_file(
     )
     extractor.extract()
 
-    return module, [im for im in extractor.imported_modules if isinstance(im, PyModule)]
+    return module, extractor.imported_modules
 
 
 # .
