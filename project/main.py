@@ -340,8 +340,7 @@ def _visit_python_files(
         if (visited := _visit_python_file(mapping, project_path, module.path)) is None:
             continue
 
-        new_module, new_imported_modules = visited
-        imports_by_module[new_module] = new_imported_modules
+        imports_by_module[visited[0]] = visited[1]
 
     return imports_by_module
 
@@ -388,6 +387,21 @@ def _visit_python_file(
     return module, extractor.imported_modules
 
 
+def _get_entry_points(imports_by_module: ImportsByModule) -> ImportsByModule:
+    known_imported_modules = set(
+        imported_module.name
+        for imported_modules in imports_by_module.values()
+        for imported_module in imported_modules
+    )
+    if entry_points := {
+        module: imported_modules
+        for module, imported_modules in imports_by_module.items()
+        if module.name not in known_imported_modules
+    }:
+        return entry_points
+    return imports_by_module
+
+
 # .
 #   .--cycles--------------------------------------------------------------.
 #   |                                     _                                |
@@ -420,13 +434,8 @@ class DetectImportCycles:
         return sorted(self._cycles.values())
 
     def detect_cycles(self) -> None:
-        entry_points = sorted(
-            self._get_entry_points(self._imports_by_module).items(),
-            key=lambda t: t[0].name,
-        )
-        len_entry_points = len(entry_points)
-
-        for nr, (module, imported_modules) in enumerate(entry_points):
+        len_imports_by_module = len(self._imports_by_module)
+        for nr, (module, imported_modules) in enumerate(self._imports_by_module.items()):
             if module in self._checked_modules:
                 continue
 
@@ -434,33 +443,10 @@ class DetectImportCycles:
                 "Check %s (Nr %s of %s)",
                 module.name,
                 nr + 1,
-                len_entry_points,
+                len_imports_by_module,
             )
 
             self._detect_cycles([module.name], imported_modules)
-
-    def _get_entry_points(self, imports_by_module: ImportsByModule) -> ImportsByModule:
-        known_imported_modules = set(
-            imported_module.name
-            for imported_modules in imports_by_module.values()
-            for imported_module in imported_modules
-        )
-        entry_points = {
-            module: imported_modules
-            for module, imported_modules in imports_by_module.items()
-            if module.name not in known_imported_modules
-        }
-
-        logger.info(
-            "Found %d modules, %d imported modules and %d entry points",
-            len(imports_by_module),
-            len(known_imported_modules),
-            len(entry_points),
-        )
-
-        if entry_points:
-            return entry_points
-        return imports_by_module
 
     def _detect_cycles(
         self,
@@ -708,18 +694,22 @@ def main(argv: Sequence[str]) -> int:
     python_files = _get_python_files(project_path, args.folders, args.namespaces)
 
     logger.info("Visit Python files, get imports by module")
-    imports_by_module = _visit_python_files(
+    entry_points = _visit_python_files(
         mapping, project_path, python_files, args.recursively
     )
 
+    # TODO
+    # logger.info("Calculate entry points")
+    # entry_points = _get_entry_points(imports_by_module)
+
     logger.info("Detect import cycles")
-    import_cycles = _find_import_cycles(imports_by_module)
+    import_cycles = _find_import_cycles(entry_points)
     logger.info("Found %d import cycles", len(import_cycles))
 
     if args.graph == "no":
         return _get_return_code(import_cycles)
 
-    if not (edges := _make_edges(args, imports_by_module, import_cycles)):
+    if not (edges := _make_edges(args, entry_points, import_cycles)):
         logger.debug("No edges for graphing")
         return _get_return_code(import_cycles)
 
