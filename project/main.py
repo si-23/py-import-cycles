@@ -436,11 +436,7 @@ def _find_import_cycles(args: argparse.Namespace, imports_by_module: ImportsByMo
         detector.detect_cycles()
     except ImportCycleError as e:
         pass
-
-    sorted_cycles = sorted(detector.cycles)
-    for chain_with_cycle in sorted_cycles:
-        sys.stderr.write("Found cycle in: %s\n" % chain_with_cycle)
-    return sorted_cycles
+    return sorted(detector.cycles)
 
 
 class ImportCycleError(Exception):
@@ -740,6 +736,9 @@ def main(argv: Sequence[str]) -> int:
     logger.info("Detect import cycles")
     import_cycles = _find_import_cycles(args, entry_points)
     logger.info("Found %d import cycles", len(import_cycles))
+
+    for chain_with_cycle in import_cycles:
+        sys.stderr.write("Found cycle in: %s\n" % chain_with_cycle)
 
     if args.graph == "no":
         return _get_return_code(import_cycles)
