@@ -317,12 +317,16 @@ def _visit_python_files(
     mapping: Mapping[str, str],
     project_path: Path,
     files: Iterable[Path],
+    recursively: bool,
 ) -> ImportsByModule:
     imports_by_module = {
         visited[0]: visited[1]
         for path in files
         if (visited := _visit_python_file(mapping, project_path, path)) is not None
     }
+
+    if not recursively:
+        return imports_by_module
 
     # Collect imported modules and their imports
     for module in set(
@@ -657,6 +661,11 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         required=True,
         help="Visit Python file if all of these namespaces are part of this file path",
     )
+    parser.add_argument(
+        "--recursively",
+        action="store_true",
+        help="Visit Python modules or packages if not yet collected from Python files.",
+    )
     return parser.parse_args(argv)
 
 
@@ -699,7 +708,9 @@ def main(argv: Sequence[str]) -> int:
     python_files = _get_python_files(project_path, args.folders, args.namespaces)
 
     logger.info("Visit Python files, get imports by module")
-    imports_by_module = _visit_python_files(mapping, project_path, python_files)
+    imports_by_module = _visit_python_files(
+        mapping, project_path, python_files, args.recursively
+    )
 
     logger.info("Detect import cycles")
     import_cycles = _find_import_cycles(imports_by_module)
