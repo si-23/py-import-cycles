@@ -165,25 +165,36 @@ ImportsByModule = Mapping[PyModule, Sequence[PyModule]]
 #   '----------------------------------------------------------------------'
 
 
-def _get_python_files(args: argparse.Namespace, path: Path) -> Iterable[Path]:
-    if path.is_file() and path.suffix == ".py":
-        if path.name == "__init__.py":
-            return
+def _get_python_files(
+    project_path: Path, folders: Sequence[str], namespaces: Sequence[str]
+) -> Iterable[Path]:
+    for fp in project_path.iterdir():
+        if not fp.is_dir():
+            continue
 
-        if all(ns in path.parts for ns in args.namespaces):
-            yield path.resolve()
-            return
+        if fp.name not in folders:
+            continue
 
-        logger.debug(
-            "Some of the namespaces %r are not found in path %r",
-            args.namespaces,
-            path.relative_to(args.project_path),
-        )
+        yield from _get_python_files_recursively(project_path, fp, namespaces)
+
+
+def _get_python_files_recursively(
+    project_path: Path, path: Path, namespaces: Sequence[str]
+) -> Iterable[Path]:
+    if path.is_dir():
+        for fp in path.iterdir():
+            yield from _get_python_files_recursively(project_path, fp, namespaces)
+
+    if path.suffix != ".py":
         return
 
-    if path.is_dir():
-        for f in path.iterdir():
-            yield from _get_python_files(args, f)
+    if path.stem == "__init__":
+        return
+
+    if all(ns in path.parts for ns in namespaces):
+        yield path.resolve()
+
+    logger.debug("Unhandled path %r", path.relative_to(project_path))
 
 
 # .
@@ -320,11 +331,13 @@ def _visit_python_files(
     project_path: Path,
     files: Iterable[Path],
 ) -> ImportsByModule:
-    return {
+    imports_by_module = {
         visited[0]: visited[1]
         for path in files
         if (visited := _visit_python_file(mapping, project_path, path)) is not None
     }
+
+    return imports_by_module
 
 
 def _visit_python_file(
@@ -628,12 +641,19 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--project-path",
-        help="path to project",
         required=True,
+        help="path to project",
+    )
+    parser.add_argument(
+        "--folders",
+        nargs="+",
+        required=True,
+        help="collect Python files from top-level folders",
     )
     parser.add_argument(
         "--namespaces",
         nargs="+",
+        required=True,
         help="Visit Python file if all of these namespaces are part of this file path",
     )
     return parser.parse_args(argv)
@@ -672,14 +692,10 @@ def main(argv: Sequence[str]) -> int:
         logger.debug("No such directory: %s", project_path)
         return 1
 
-    if not args.namespaces:
-        logger.debug("No namespaces given")
-        return 1
-
     mapping = {} if args.map is None else dict([entry.split(":") for entry in args.map])
 
     logger.info("Get Python files")
-    python_files = _get_python_files(args, project_path)
+    python_files = _get_python_files(project_path, args.folders, args.namespaces)
 
     logger.info("Visit Python files, get imports by module")
     imports_by_module = _visit_python_files(mapping, project_path, python_files)
