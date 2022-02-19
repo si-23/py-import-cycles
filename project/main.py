@@ -401,18 +401,15 @@ def _visit_python_file(
 
 
 def _get_entry_points(imports_by_module: ImportsByModule) -> ImportsByModule:
-    known_imported_modules = set(
-        imported_module.name
-        for imported_modules in imports_by_module.values()
-        for imported_module in imported_modules
-    )
-    if entry_points := {
-        module: imported_modules
-        for module, imported_modules in imports_by_module.items()
-        if module.name not in known_imported_modules
-    }:
-        return entry_points
-    return imports_by_module
+    if not (
+        entry_points := set(imports_by_module).difference(
+            imported_module
+            for imported_modules in imports_by_module.values()
+            for imported_module in imported_modules
+        )
+    ):
+        entry_points = set(imports_by_module)
+    return sorted(entry_points)
 
 
 # .
@@ -430,8 +427,14 @@ ImportCycle = Tuple[str, ...]
 ImportCycles = Sequence[ImportCycle]
 
 
-def _find_import_cycles(args: argparse.Namespace, imports_by_module: ImportsByModule) -> ImportCycles:
-    detector = DetectImportCycles(imports_by_module, args.raise_on_first_cycle)
+def _find_import_cycles(
+    args: argparse.Namespace,
+    entry_points: Sequence[Union[PyModule, Package]],
+    imports_by_module: ImportsByModule,
+) -> ImportCycles:
+    detector = DetectImportCycles(
+        entry_points, imports_by_module, args.raise_on_first_cycle
+    )
     try:
         detector.detect_cycles()
     except ImportCycleError as e:
@@ -445,6 +448,7 @@ class ImportCycleError(Exception):
 
 @dataclass(frozen=True)
 class DetectImportCycles:
+    _entry_points: Sequence[Union[PyModule, Package]]
     _imports_by_module: ImportsByModule
     _raise_on_first_cycle: bool
     _cycles: Dict[ImportCycle, ImportCycle] = field(default_factory=dict)
@@ -455,10 +459,8 @@ class DetectImportCycles:
         return sorted(self._cycles.values())
 
     def detect_cycles(self) -> None:
-        len_imports_by_module = len(self._imports_by_module)
-        for nr, (module, imported_modules) in enumerate(
-            sorted(self._imports_by_module.items())
-        ):
+        len_entry_points = len(self._entry_points)
+        for nr, module in enumerate(self._entry_points):
             if module in self._checked_modules:
                 continue
 
@@ -466,10 +468,10 @@ class DetectImportCycles:
                 "Check %s (Nr %s of %s)",
                 module.name,
                 nr + 1,
-                len_imports_by_module,
+                len_entry_points,
             )
 
-            self._detect_cycles([module.name], imported_modules)
+            self._detect_cycles([module.name], self._imports_by_module.get(module, []))
 
     def _detect_cycles(
         self,
@@ -725,16 +727,15 @@ def main(argv: Sequence[str]) -> int:
     python_files = _get_python_files(project_path, args.folders, args.namespaces)
 
     logger.info("Visit Python files, get imports by module")
-    entry_points = _visit_python_files(
+    imports_by_module = _visit_python_files(
         mapping, project_path, python_files, args.recursively
     )
 
-    # TODO
-    # logger.info("Calculate entry points")
-    # entry_points = _get_entry_points(imports_by_module)
+    logger.info("Calculate entry points")
+    entry_points = _get_entry_points(imports_by_module)
 
     logger.info("Detect import cycles")
-    import_cycles = _find_import_cycles(args, entry_points)
+    import_cycles = _find_import_cycles(args, entry_points, imports_by_module)
     logger.info("Found %d import cycles", len(import_cycles))
 
     for chain_with_cycle in import_cycles:
@@ -743,7 +744,7 @@ def main(argv: Sequence[str]) -> int:
     if args.graph == "no":
         return _get_return_code(import_cycles)
 
-    if not (edges := _make_edges(args, entry_points, import_cycles)):
+    if not (edges := _make_edges(args, imports_by_module, import_cycles)):
         logger.debug("No edges for graphing")
         return _get_return_code(import_cycles)
 
