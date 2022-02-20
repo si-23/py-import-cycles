@@ -10,7 +10,6 @@ import logging
 import random
 import sys
 from dataclasses import dataclass, field
-from graphviz import Digraph
 from pathlib import Path
 from typing import (
     Dict,
@@ -24,6 +23,7 @@ from typing import (
     Tuple,
     Union,
 )
+from graphviz import Digraph
 
 logger = logging.getLogger(__name__)
 
@@ -399,12 +399,12 @@ def _visit_python_file(
     extractor.extract()
 
     if imported_modules := extractor.imported_modules:
-        return module, extractor.imported_modules
+        return module, imported_modules
 
     return None
 
 
-def _get_entry_points(imports_by_module: ImportsByModule) -> ImportsByModule:
+def _get_entry_points(imports_by_module: ImportsByModule) -> Sequence[TModule]:
     if not (
         entry_points := set(imports_by_module).difference(
             imported_module
@@ -427,8 +427,7 @@ def _get_entry_points(imports_by_module: ImportsByModule) -> ImportsByModule:
 #   '----------------------------------------------------------------------'
 
 
-ChainWithCycle = Tuple[TModule, ...]
-ChainsWithCycle = Sequence[ChainWithCycle]
+ChainsWithCycle = Sequence[Sequence[TModule]]
 
 
 def _find_chains_with_cycle(
@@ -441,7 +440,7 @@ def _find_chains_with_cycle(
     )
     try:
         detector.detect_cycles()
-    except ChainWithCycleError as e:
+    except ChainWithCycleError:
         pass
     return detector.cycles
 
@@ -455,12 +454,12 @@ class DetectChainsWithCycle:
     _entry_points: Sequence[TModule]
     _imports_by_module: ImportsByModule
     _raise_on_first_cycle: bool
-    _cycles: Dict[ChainWithCycle, ChainWithCycle] = field(default_factory=dict)
+    _cycles: Dict[Tuple[TModule, ...], Sequence[TModule]] = field(default_factory=dict)
     _checked_modules: Set[TModule] = field(default_factory=set)
 
     @property
     def cycles(self) -> ChainsWithCycle:
-        return sorted(self._cycles.values())
+        return sorted(self._cycles.values(), key=lambda c: c[0].name)
 
     def detect_cycles(self) -> None:
         len_entry_points = len(self._entry_points)
@@ -488,7 +487,7 @@ class DetectChainsWithCycle:
             if module in base_chain:
                 self._add_cycle(chain)
                 if self._raise_on_first_cycle:
-                    raise ChainWithCycleError(chain)
+                    raise ChainWithCycleError()
                 return
 
             self._detect_cycles(
@@ -498,7 +497,7 @@ class DetectChainsWithCycle:
 
             self._checked_modules.add(module)
 
-    def _add_cycle(self, chain: Sequence[str]) -> None:
+    def _add_cycle(self, chain: Sequence[TModule]) -> None:
         cycle = _extract_cycle_from_chain(chain)
         if (short := tuple(sorted(cycle[:-1]))) not in self._cycles:
             self._cycles[short] = chain
@@ -574,7 +573,7 @@ def _make_edges(
         return _make_all_edges(imports_by_module, chains_with_cycle)
 
     if args.graph == "only-cycles":
-        return _make_only_cycles_edges(imports_by_module, chains_with_cycle)
+        return _make_only_cycles_edges(chains_with_cycle)
 
     raise NotImplementedError("Unknown graph option: %s" % args.graph)
 
@@ -620,10 +619,7 @@ def _has_cycle(
     return False
 
 
-def _make_only_cycles_edges(
-    imports_by_module: ImportsByModule,
-    chains_with_cycle: ChainsWithCycle,
-) -> Sequence[ImportEdge]:
+def _make_only_cycles_edges(chains_with_cycle: ChainsWithCycle) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
     for nr, chain_with_cycle in enumerate(chains_with_cycle):
         cycle = _extract_cycle_from_chain(chain_with_cycle)
