@@ -427,39 +427,39 @@ def _get_entry_points(imports_by_module: ImportsByModule) -> ImportsByModule:
 #   '----------------------------------------------------------------------'
 
 
-ImportCycle = Tuple[TModule, ...]
-ImportCycles = Sequence[ImportCycle]
+ChainWithCycle = Tuple[TModule, ...]
+ChainsWithCycle = Sequence[ChainWithCycle]
 
 
-def _find_import_cycles(
+def _find_chains_with_cycle(
     args: argparse.Namespace,
     entry_points: Sequence[TModule],
     imports_by_module: ImportsByModule,
-) -> ImportCycles:
-    detector = DetectImportCycles(
+) -> ChainsWithCycle:
+    detector = DetectChainsWithCycle(
         entry_points, imports_by_module, args.raise_on_first_cycle
     )
     try:
         detector.detect_cycles()
-    except ImportCycleError as e:
+    except ChainWithCycleError as e:
         pass
     return detector.cycles
 
 
-class ImportCycleError(Exception):
+class ChainWithCycleError(Exception):
     pass
 
 
 @dataclass(frozen=True)
-class DetectImportCycles:
+class DetectChainsWithCycle:
     _entry_points: Sequence[TModule]
     _imports_by_module: ImportsByModule
     _raise_on_first_cycle: bool
-    _cycles: Dict[ImportCycle, ImportCycle] = field(default_factory=dict)
+    _cycles: Dict[ChainWithCycle, ChainWithCycle] = field(default_factory=dict)
     _checked_modules: Set[TModule] = field(default_factory=set)
 
     @property
-    def cycles(self) -> ImportCycles:
+    def cycles(self) -> ChainsWithCycle:
         return sorted(self._cycles.values())
 
     def detect_cycles(self) -> None:
@@ -488,7 +488,7 @@ class DetectImportCycles:
             if module in base_chain:
                 self._add_cycle(chain)
                 if self._raise_on_first_cycle:
-                    raise ImportCycleError(chain)
+                    raise ChainWithCycleError(chain)
                 return
 
             self._detect_cycles(
@@ -556,57 +556,63 @@ class ImportEdge(NamedTuple):
 def _make_edges(
     args: argparse.Namespace,
     imports_by_module: ImportsByModule,
-    import_cycles: ImportCycles,
+    chains_with_cycle: ChainsWithCycle,
 ) -> Sequence[ImportEdge]:
     if args.graph == "all":
-        return _make_all_edges(imports_by_module, import_cycles)
+        return _make_all_edges(imports_by_module, chains_with_cycle)
 
     if args.graph == "only-cycles":
-        return _make_only_cycles_edges(imports_by_module, import_cycles)
+        return _make_only_cycles_edges(imports_by_module, chains_with_cycle)
 
     raise NotImplementedError("Unknown graph option: %s" % args.graph)
 
 
 def _make_all_edges(
     imports_by_module: ImportsByModule,
-    import_cycles: ImportCycles,
+    chains_with_cycle: ChainsWithCycle,
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
-    for module, these_imports_by_module in imports_by_module.items():
-        for imported_module in these_imports_by_module:
-            import_cycle = _is_in_cycle(module, imported_module.name, import_cycles)
+    for module, imported_modules in imports_by_module.items():
+        for imported_module in imported_modules:
             edges.add(
                 ImportEdge(
                     "",
                     module,
                     imported_module,
-                    "black" if import_cycle is None else "red",
+                    (
+                        "red"
+                        if _has_cycle(module, imported_module, chains_with_cycle)
+                        is None
+                        else "black"
+                    ),
                 )
             )
     return sorted(edges)
 
 
-def _is_in_cycle(
-    module: TModule, the_import: str, import_cycles: ImportCycles
-) -> Optional[ImportCycle]:
-    for import_cycle in import_cycles:
+def _has_cycle(
+    module: TModule, imported_module: TModule, chains_with_cycle: ChainsWithCycle
+) -> bool:
+    for chain_with_cycle in chains_with_cycle:
+        cycle = _extract_cycle_from_chain(chain_with_cycle)
+
         try:
-            idx = import_cycle.index(module)
+            idx = cycle.index(module)
         except ValueError:
             continue
 
-        if import_cycle[idx + 1] == the_import:
-            return import_cycle
-    return None
+        if cycle[idx + 1] == imported_module:
+            return True
+    return False
 
 
 def _make_only_cycles_edges(
     imports_by_module: ImportsByModule,
-    import_cycles: ImportCycles,
+    chains_with_cycle: ChainsWithCycle,
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
-    for nr, chain_with_cycle in enumerate(import_cycles):
-        import_cycle = _extract_cycle_from_chain(chain_with_cycle)
+    for nr, chain_with_cycle in enumerate(chains_with_cycle):
+        cycle = _extract_cycle_from_chain(chain_with_cycle)
 
         color = "#%02x%02x%02x" % (
             random.randint(50, 200),
@@ -614,8 +620,8 @@ def _make_only_cycles_edges(
             random.randint(50, 200),
         )
 
-        start_module = import_cycle[0]
-        for module in import_cycle[1:]:
+        start_module = cycle[0]
+        for module in cycle[1:]:
             edges.add(
                 ImportEdge(
                     str(nr + 1),
@@ -746,17 +752,17 @@ def main(argv: Sequence[str]) -> int:
     entry_points = _get_entry_points(imports_by_module)
 
     logger.info("Detect import cycles")
-    import_cycles = _find_import_cycles(args, entry_points, imports_by_module)
-    logger.info("Found %d import cycles", len(import_cycles))
-    return_code = bool(import_cycles)
+    chains_with_cycle = _find_chains_with_cycle(args, entry_points, imports_by_module)
+    logger.info("Found %d import cycles", len(chains_with_cycle))
+    return_code = bool(chains_with_cycle)
 
-    for chain_with_cycle in import_cycles:
+    for chain_with_cycle in chains_with_cycle:
         sys.stderr.write("Found cycle in: %s\n" % [e.name for e in chain_with_cycle])
 
     if args.graph == "no":
         return return_code
 
-    if not (edges := _make_edges(args, imports_by_module, import_cycles)):
+    if not (edges := _make_edges(args, imports_by_module, chains_with_cycle)):
         logger.debug("No edges for graphing")
         return return_code
 
