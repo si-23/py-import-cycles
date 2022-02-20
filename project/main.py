@@ -530,9 +530,19 @@ def _make_graph(args: argparse.Namespace, edges: Sequence[ImportEdge]) -> Digrap
 
     with d.subgraph() as ds:
         for edge in edges:
-            ds.node(edge.from_module.name, shape=_get_shape(edge.from_module))
-            ds.node(edge.to_module.name, shape=_get_shape(edge.to_module))
-            ds.attr("edge", color=edge.color)
+            ds.node(
+                edge.from_module.name,
+                shape=_get_shape(edge.from_module),
+                style="filled",
+                fillcolor=edge.from_module_color,
+            )
+            ds.node(
+                edge.to_module.name,
+                shape=_get_shape(edge.to_module),
+                style="filled",
+                fillcolor=edge.from_module_color,
+            )
+            ds.attr("edge", color=edge.edge_color)
 
             if edge.title:
                 ds.edge(edge.from_module.name, edge.to_module.name, edge.title)
@@ -549,8 +559,10 @@ def _get_shape(module: TModule) -> str:
 class ImportEdge(NamedTuple):
     title: str
     from_module: TModule
+    from_module_color: str
     to_module: TModule
-    color: str
+    to_module_color: str
+    edge_color: str
 
 
 def _make_edges(
@@ -578,7 +590,9 @@ def _make_all_edges(
                 ImportEdge(
                     "",
                     module,
+                    "white",
                     imported_module,
+                    "white",
                     (
                         "red"
                         if _has_cycle(module, imported_module, chains_with_cycle)
@@ -626,7 +640,9 @@ def _make_only_cycles_edges(
                 ImportEdge(
                     str(nr + 1),
                     start_module,
+                    "gray" if start_module == cycle[0] else "white",
                     module,
+                    "gray" if module == cycle[0] else "white",
                     color,
                 )
             )
