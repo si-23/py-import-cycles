@@ -499,8 +499,7 @@ class DetectImportCycles:
             self._checked_modules.add(module)
 
     def _add_cycle(self, chain: Sequence[str]) -> None:
-        first_idx = chain.index(chain[-1])
-        cycle = tuple(chain[first_idx:])
+        cycle = _extract_cycle_from_chain(chain)
         if (short := tuple(sorted(cycle[:-1]))) not in self._cycles:
             self._cycles[short] = chain
             logger.debug("  Found cycle in: %s", [e.name for e in chain])
@@ -606,12 +605,15 @@ def _make_only_cycles_edges(
     import_cycles: ImportCycles,
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
-    for nr, import_cycle in enumerate(import_cycles):
+    for nr, chain_with_cycle in enumerate(import_cycles):
+        import_cycle = _extract_cycle_from_chain(chain_with_cycle)
+
         color = "#%02x%02x%02x" % (
             random.randint(50, 200),
             random.randint(50, 200),
             random.randint(50, 200),
         )
+
         start_module = import_cycle[0]
         for module in import_cycle[1:]:
             edges.add(
@@ -710,6 +712,11 @@ def _setup_logging(args: argparse.Namespace) -> None:
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+
+
+def _extract_cycle_from_chain(chain: Sequence[TModule]) -> Sequence[TModule]:
+    first_idx = chain.index(chain[-1])
+    return chain[first_idx:]
 
 
 # .
