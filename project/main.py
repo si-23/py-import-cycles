@@ -372,7 +372,7 @@ def _visit_python_file(
         return None
 
     if isinstance(module, Package):
-        return module, []
+        return None
 
     try:
         with open(module.path, encoding="utf-8") as f:
@@ -398,7 +398,10 @@ def _visit_python_file(
     )
     extractor.extract()
 
-    return module, extractor.imported_modules
+    if imported_modules := extractor.imported_modules:
+        return module, extractor.imported_modules
+
+    return None
 
 
 def _get_entry_points(imports_by_module: ImportsByModule) -> ImportsByModule:
