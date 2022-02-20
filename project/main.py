@@ -479,7 +479,7 @@ class DetectChainsWithCycle:
 
     def _detect_cycles(
         self,
-        base_chain: List[str],
+        base_chain: List[TModule],
         imported_modules: Sequence[TModule],
     ) -> None:
         for module in imported_modules:
