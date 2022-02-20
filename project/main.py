@@ -638,7 +638,7 @@ def _make_only_cycles_edges(
         for module in cycle[1:]:
             edges.add(
                 ImportEdge(
-                    str(nr + 1),
+                    "%s (%s)" % (str(nr + 1), len(cycle) - 1),
                     start_module,
                     "gray" if start_module == cycle[0] else "white",
                     module,
