@@ -12,7 +12,6 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
-    Dict,
     Iterable,
     List,
     Mapping,
@@ -438,11 +437,11 @@ def _find_chains_with_cycle(
     detector = DetectChainsWithCycle(
         entry_points, imports_by_module, args.raise_on_first_cycle
     )
-    try:
-        detector.detect_cycles()
-    except ChainWithCycleError:
-        pass
-    return detector.cycles
+    return sorted(
+        {
+            tuple(sorted(cycle[:-1])): cycle for cycle in set(detector.get_cycles())
+        }.values()
+    )
 
 
 class ChainWithCycleError(Exception):
@@ -454,54 +453,45 @@ class DetectChainsWithCycle:
     _entry_points: Sequence[TModule]
     _imports_by_module: ImportsByModule
     _raise_on_first_cycle: bool
-    _cycles: Dict[Tuple[TModule, ...], Sequence[TModule]] = field(default_factory=dict)
-    _checked_modules: Set[TModule] = field(default_factory=set)
 
-    @property
-    def cycles(self) -> ChainsWithCycle:
-        return sorted(self._cycles.values(), key=lambda c: c[0].name)
+    def get_cycles(self) -> Iterable[Tuple[TModule, ...]]:
+        try:
+            yield from self._detect_cycles()
+        except ChainWithCycleError:
+            pass
 
-    def detect_cycles(self) -> None:
+    def _detect_cycles(self) -> Iterable[Tuple[TModule, ...]]:
         len_entry_points = len(self._entry_points)
         for nr, module in enumerate(self._entry_points):
-            if module in self._checked_modules:
-                continue
-
             logger.debug(
                 "Check %s (Nr %s of %s)",
                 module.name,
                 nr + 1,
                 len_entry_points,
             )
+            yield from self._recursively_detect_cycles(
+                [module], self._imports_by_module.get(module, [])
+            )
 
-            self._detect_cycles([module], self._imports_by_module.get(module, []))
-
-    def _detect_cycles(
+    def _recursively_detect_cycles(
         self,
         base_chain: List[TModule],
         imported_modules: Sequence[TModule],
-    ) -> None:
+    ) -> Iterable[Tuple[TModule, ...]]:
         for module in imported_modules:
             chain = base_chain + [module]
 
             if module in base_chain:
-                self._add_cycle(chain)
+                logger.debug("  Found cycle in: %s", [e.name for e in chain])
+                yield tuple(_extract_cycle_from_chain(chain))
                 if self._raise_on_first_cycle:
                     raise ChainWithCycleError()
                 return
 
-            self._detect_cycles(
+            yield from self._recursively_detect_cycles(
                 chain,
                 self._imports_by_module.get(module, []),
             )
-
-            self._checked_modules.add(module)
-
-    def _add_cycle(self, chain: Sequence[TModule]) -> None:
-        cycle = _extract_cycle_from_chain(chain)
-        if (short := tuple(sorted(cycle[:-1]))) not in self._cycles:
-            self._cycles[short] = chain
-            logger.debug("  Found cycle in: %s", [e.name for e in chain])
 
 
 # .
