@@ -715,14 +715,16 @@ def _get_outputs_filepath(args: argparse.Namespace) -> Path:
 
 
 def _setup_logging(args: argparse.Namespace, outputs_filepath) -> None:
+    log_filepath = outputs_filepath.with_suffix(".log")
     if args.debug:
+        sys.stderr.write("Write log to %s\n" % log_filepath)
         log_level = logging.DEBUG
     else:
         log_level = logging.NOTSET
 
     logger.setLevel(log_level)
 
-    handler = logging.FileHandler(filename=outputs_filepath.with_suffix(".log"))
+    handler = logging.FileHandler(filename=log_filepath)
     handler.setLevel(log_level)
 
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
