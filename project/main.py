@@ -505,17 +505,12 @@ class DetectChainsWithCycle:
 #   '----------------------------------------------------------------------'
 
 
-def _make_graph(args: argparse.Namespace, edges: Sequence[ImportEdge]) -> Digraph:
-    target_dir = Path(os.path.abspath(__file__)).parent.parent.joinpath("outputs")
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    filename = "%s-%s-%s-import-cycles.gv" % (
-        "-".join(Path(args.project_path).parts[1:]),
-        "-".join(sorted(args.folders)),
-        "-".join(sorted(args.namespaces)),
-    )
-
-    d = Digraph("unix", filename=target_dir.joinpath(filename))
+def _make_graph(
+    args: argparse.Namespace,
+    edges: Sequence[ImportEdge],
+    outputs_filepath: Path,
+) -> Digraph:
+    d = Digraph("unix", filename=outputs_filepath.with_suffix(".gv"))
 
     with d.subgraph() as ds:
         for edge in edges:
@@ -706,7 +701,20 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _setup_logging(args: argparse.Namespace) -> None:
+def _get_outputs_filepath(args: argparse.Namespace) -> Path:
+    target_dir = Path(os.path.abspath(__file__)).parent.parent.joinpath("outputs")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return target_dir.joinpath(
+        "%s-%s-%s-import-cycles.log"
+        % (
+            "-".join(Path(args.project_path).parts[1:]),
+            "-".join(sorted(args.folders)),
+            "-".join(sorted(args.namespaces)),
+        )
+    )
+
+
+def _setup_logging(args: argparse.Namespace, outputs_filepath) -> None:
     if args.debug:
         log_level = logging.DEBUG
     else:
@@ -714,7 +722,7 @@ def _setup_logging(args: argparse.Namespace) -> None:
 
     logger.setLevel(log_level)
 
-    handler = logging.StreamHandler()
+    handler = logging.FileHandler(filename=outputs_filepath.with_suffix(".log"))
     handler.setLevel(log_level)
 
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
@@ -733,7 +741,9 @@ def _extract_cycle_from_chain(chain: Sequence[TModule]) -> Sequence[TModule]:
 def main(argv: Sequence[str]) -> int:
     args = _parse_arguments(argv)
 
-    _setup_logging(args)
+    outputs_filepath = _get_outputs_filepath(args)
+
+    _setup_logging(args, outputs_filepath)
 
     project_path = Path(args.project_path)
     if not project_path.exists() or not project_path.is_dir():
@@ -769,7 +779,7 @@ def main(argv: Sequence[str]) -> int:
         return return_code
 
     logger.info("Make graph")
-    graph = _make_graph(args, edges)
+    graph = _make_graph(args, edges, outputs_filepath)
     graph.view()
 
     return return_code
