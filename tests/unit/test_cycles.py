@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from project.main import DetectImportCycles, Module
+from project.main import DetectorImportCycles, PyModule
 
 
 @pytest.mark.parametrize(
@@ -11,72 +11,114 @@ from project.main import DetectImportCycles, Module
     [
         ({}, []),
         (
-            {Module(Path(), "a"): [Module(Path(), "b")]},
+            {PyModule(Path(), "a"): [PyModule(Path(), "b")]},
             [],
         ),
         (
             {
-                Module(Path(), "a"): [Module(Path(), "b")],
-                Module(Path(), "b"): [Module(Path(), "a")],
+                PyModule(Path(), "a"): [PyModule(Path(), "b")],
+                PyModule(Path(), "b"): [PyModule(Path(), "a")],
             },
             [
-                ("a", "b", "a"),
+                (
+                    PyModule(path=Path(), name="a"),
+                    PyModule(path=Path(), name="b"),
+                    PyModule(path=Path(), name="a"),
+                ),
             ],
         ),
         (
             {
-                Module(Path(), "m1"): [Module(Path(), "a")],
-                Module(Path(), "m2"): [Module(Path(), "a")],
-                Module(Path(), "a"): [Module(Path(), "b")],
-                Module(Path(), "b"): [Module(Path(), "a")],
+                PyModule(Path(), "m1"): [PyModule(Path(), "a")],
+                PyModule(Path(), "m2"): [PyModule(Path(), "a")],
+                PyModule(Path(), "a"): [PyModule(Path(), "b")],
+                PyModule(Path(), "b"): [PyModule(Path(), "a")],
             },
             [
-                ("a", "b", "a"),
+                (
+                    PyModule(path=Path(), name="a"),
+                    PyModule(path=Path(), name="b"),
+                    PyModule(path=Path(), name="a"),
+                ),
             ],
         ),
         (
             {
-                Module(Path(), "m1"): [Module(Path(), "a")],
-                Module(Path(), "m2"): [Module(Path(), "b")],
-                Module(Path(), "a"): [Module(Path(), "b")],
-                Module(Path(), "b"): [Module(Path(), "a")],
+                PyModule(Path(), "m1"): [PyModule(Path(), "a")],
+                PyModule(Path(), "m2"): [PyModule(Path(), "b")],
+                PyModule(Path(), "a"): [PyModule(Path(), "b")],
+                PyModule(Path(), "b"): [PyModule(Path(), "a")],
             },
             [
-                ("a", "b", "a"),
+                (
+                    PyModule(path=Path(), name="a"),
+                    PyModule(path=Path(), name="b"),
+                    PyModule(path=Path(), name="a"),
+                ),
             ],
         ),
         (
             {
-                Module(Path(), "m"): [Module(Path(), "c11"), Module(Path(), "c21")],
-                Module(Path(), "c11"): [Module(Path(), "c12")],
-                Module(Path(), "c12"): [Module(Path(), "c11")],
-                Module(Path(), "c21"): [Module(Path(), "c22")],
-                Module(Path(), "c22"): [Module(Path(), "c21")],
+                PyModule(Path(), "m"): [
+                    PyModule(Path(), "c11"),
+                    PyModule(Path(), "c21"),
+                ],
+                PyModule(Path(), "c11"): [PyModule(Path(), "c12")],
+                PyModule(Path(), "c12"): [PyModule(Path(), "c11")],
+                PyModule(Path(), "c21"): [PyModule(Path(), "c22")],
+                PyModule(Path(), "c22"): [PyModule(Path(), "c21")],
             },
             [
-                ("c11", "c12", "c11"),
-                ("c21", "c22", "c21"),
+                (
+                    PyModule(path=Path(), name="c11"),
+                    PyModule(path=Path(), name="c12"),
+                    PyModule(path=Path(), name="c11"),
+                ),
+                (
+                    PyModule(path=Path(), name="c21"),
+                    PyModule(path=Path(), name="c22"),
+                    PyModule(path=Path(), name="c21"),
+                ),
             ],
         ),
         (
             {
-                Module(Path(), "m"): [Module(Path(), "c11"), Module(Path(), "c21")],
-                Module(Path(), "c11"): [Module(Path(), "c12"), Module(Path(), "c13")],
-                Module(Path(), "c12"): [Module(Path(), "c11")],
-                Module(Path(), "c13"): [Module(Path(), "c14")],
-                Module(Path(), "c14"): [Module(Path(), "c11")],
-                Module(Path(), "c21"): [Module(Path(), "c22")],
-                Module(Path(), "c22"): [Module(Path(), "c21")],
+                PyModule(Path(), "m"): [
+                    PyModule(Path(), "c11"),
+                    PyModule(Path(), "c21"),
+                ],
+                PyModule(Path(), "c11"): [
+                    PyModule(Path(), "c12"),
+                    PyModule(Path(), "c13"),
+                ],
+                PyModule(Path(), "c12"): [PyModule(Path(), "c11")],
+                PyModule(Path(), "c13"): [PyModule(Path(), "c14")],
+                PyModule(Path(), "c14"): [PyModule(Path(), "c11")],
+                PyModule(Path(), "c21"): [PyModule(Path(), "c22")],
+                PyModule(Path(), "c22"): [PyModule(Path(), "c21")],
             },
             [
-                ("c11", "c12", "c11"),
-                ("c11", "c13", "c14", "c11"),
-                ("c21", "c22", "c21"),
+                (
+                    PyModule(path=Path(), name="c11"),
+                    PyModule(path=Path(), name="c12"),
+                    PyModule(path=Path(), name="c11"),
+                ),
+                (
+                    PyModule(path=Path(), name="c11"),
+                    PyModule(path=Path(), name="c13"),
+                    PyModule(path=Path(), name="c14"),
+                    PyModule(path=Path(), name="c11"),
+                ),
+                (
+                    PyModule(path=Path(), name="c21"),
+                    PyModule(path=Path(), name="c22"),
+                    PyModule(path=Path(), name="c21"),
+                ),
             ],
         ),
     ],
 )
 def test_cycles(module_imports, expected_cycles):
-    detector = DetectImportCycles(module_imports)
-    detector.detect_cycles()
-    assert detector.cycles == expected_cycles
+    detector = DetectorImportCycles(module_imports)
+    detector.detect()
+    assert list(detector.detect()) == expected_cycles
