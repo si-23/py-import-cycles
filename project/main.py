@@ -698,8 +698,12 @@ def _setup_logging(args: argparse.Namespace, outputs_filepath: Path) -> None:
 def _show_or_store_cycles(
     args: argparse.Namespace, import_cycles: ImportCycles
 ) -> None:
+    if not import_cycles:
+        return
+
+    sys.stderr.write("Found %d import cycles\n" % len(import_cycles))
+
     if not args.store_cycles:
-        sys.stderr.write("Found %d import cycles:\n" % len(import_cycles))
         for nr, import_cycle in import_cycles:
             sys.stderr.write("  %d: %s\n" % (nr, [ic.name for ic in import_cycle]))
         return
