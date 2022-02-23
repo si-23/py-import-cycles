@@ -5,8 +5,8 @@ from __future__ import annotations
 import argparse
 import ast
 import importlib
-import os
 import logging
+import os
 import random
 import sys
 from dataclasses import dataclass, field
@@ -22,6 +22,7 @@ from typing import (
     Tuple,
     Union,
 )
+
 from graphviz import Digraph
 
 logger = logging.getLogger(__name__)
@@ -489,15 +490,11 @@ def _make_graph(
             ds.node(
                 edge.from_module.name,
                 shape=_get_shape(edge.from_module),
-                style="filled",
-                fillcolor=edge.from_module_color,
             )
 
             ds.node(
                 edge.to_module.name,
                 shape=_get_shape(edge.to_module),
-                style="filled",
-                fillcolor=edge.from_module_color,
             )
 
             ds.attr("edge", color=edge.edge_color)
@@ -517,9 +514,7 @@ def _get_shape(module: TModule) -> str:
 class ImportEdge(NamedTuple):
     title: str
     from_module: TModule
-    from_module_color: str
     to_module: TModule
-    to_module_color: str
     edge_color: str
 
 
@@ -548,9 +543,7 @@ def _make_all_edges(
                 ImportEdge(
                     "",
                     module,
-                    "white",
                     imported_module,
-                    "white",
                     (
                         "red"
                         if _has_cycle(module, imported_module, import_cycles) is None
@@ -594,9 +587,7 @@ def _make_only_cycles_edges(
                 ImportEdge(
                     "%s (%s)" % (str(nr), len(import_cycle) - 1),
                     start_module,
-                    "gray" if start_module == import_cycle[0] else "white",
                     next_module,
-                    "gray" if next_module == import_cycle[0] else "white",
                     color,
                 )
             )

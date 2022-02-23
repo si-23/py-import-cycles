@@ -5,12 +5,12 @@ from pathlib import Path
 from typing import Sequence
 
 from project.main import (
+    CycleAndChains,
+    _find_import_cycles,
+    _get_module_imports,
     _get_python_files,
     _load_python_contents,
     _visit_python_contents,
-    _get_module_imports,
-    _find_import_cycles,
-    CycleAndChains,
 )
 
 

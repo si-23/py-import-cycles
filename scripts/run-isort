@@ -14,7 +14,7 @@ else
 fi
 
 # shellcheck disable=SC2086
-output=$(pipenv run isort --diff "$@" $python_files 2>&1)
+output=$(pipenv run isort --trailing-comma --multi-line 3 --diff "$@" $python_files 2>&1)
 if [ -n "$output" ]; then
     echo -e "$output"
     exit 1
