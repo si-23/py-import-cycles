@@ -458,7 +458,7 @@ class DetectorImportCycles:
             path = parent_path + [imported_module]
 
             if imported_module in parent_path:
-                yield tuple(self._extract_cycle_from_chain(path))
+                yield tuple(self._extract_cycle_from_path(path))
                 continue
 
             yield from self._depth_first_search(
@@ -469,7 +469,7 @@ class DetectorImportCycles:
         self._visited.add(module.name)
 
     @staticmethod
-    def _extract_cycle_from_chain(chain: Sequence[TModule]) -> ImportCycle:
+    def _extract_cycle_from_path(chain: Sequence[TModule]) -> ImportCycle:
         first_idx = chain.index(chain[-1])
         return tuple(chain[first_idx:])
 
