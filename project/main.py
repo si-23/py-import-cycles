@@ -724,7 +724,7 @@ def main(argv: Sequence[str]) -> int:
 
     project_path = Path(args.project_path)
     if not project_path.exists() or not project_path.is_dir():
-        logger.debug("No such directory: %s", project_path)
+        sys.stderr.write("No such directory: %s\n" % project_path)
         return 1
 
     mapping = {} if args.map is None else dict([entry.split(":") for entry in args.map])
