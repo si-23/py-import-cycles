@@ -339,14 +339,7 @@ def _visit_python_files(
     }
 
     if not recursively:
-        return {
-            module: [
-                imported_module
-                for imported_module in imported_modules
-                if imported_module in imports_by_module
-            ]
-            for module, imported_modules in imports_by_module.items()
-        }
+        return imports_by_module
 
     # Collect imported modules and their imports
     for module in set(
