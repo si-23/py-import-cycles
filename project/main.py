@@ -426,10 +426,7 @@ def _detect_cycles(imports_by_module: ImportsByModule) -> ImportCycles:
 
     logger.info("Sort import cycles")
     return [
-        (nr + 1, import_cycle)
-        for nr, import_cycle in enumerate(
-            sorted({tuple(sorted(ic[:-1])): ic for ic in import_cycles}.values())
-        )
+        (nr + 1, import_cycle) for nr, import_cycle in enumerate(sorted(import_cycles))
     ]
 
 
