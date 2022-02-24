@@ -11,6 +11,7 @@ mypy = "*"
 
 [packages]
 graphviz = "*"
+networkx = "*"
 
 [requires]
 python_version = "3.9"

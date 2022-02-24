@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import abc
 import argparse
 import ast
 import importlib
@@ -9,7 +10,7 @@ import logging
 import os
 import random
 import sys
-from dataclasses import dataclass, field
+import networkx
 from pathlib import Path
 from typing import (
     Iterable,
@@ -419,9 +420,18 @@ ImportCycle = Tuple[TModule, ...]
 ImportCycles = Sequence[Tuple[int, ImportCycle]]
 
 
-def _detect_cycles(imports_by_module: ImportsByModule) -> ImportCycles:
-    logger.info("Detect import cycles")
-    detector = DetectorImportCycles(imports_by_module)
+def _detect_cycles(
+    args: argparse.Namespace, imports_by_module: ImportsByModule
+) -> ImportCycles:
+    logger.info("Detect import cycles with strategy %s", args.strategy)
+    detector: ABCCycleDetector
+    if args.strategy == "dfs":
+        detector = DFS(imports_by_module)
+    elif args.strategy == "tarjan":
+        detector = TarjanPathBasedStrongComponents(imports_by_module)
+    else:
+        raise NotImplementedError()
+
     import_cycles = set(detector.detect())
 
     logger.info("Sort import cycles")
@@ -430,10 +440,19 @@ def _detect_cycles(imports_by_module: ImportsByModule) -> ImportCycles:
     ]
 
 
-@dataclass(frozen=True)
-class DetectorImportCycles:
-    _imports_by_module: ImportsByModule
-    _visited: Set[str] = field(default_factory=set)
+class ABCCycleDetector(abc.ABC):
+    def __init__(self, imports_by_module: ImportsByModule) -> None:
+        self._imports_by_module = imports_by_module
+
+    @abc.abstractmethod
+    def detect(self) -> Iterable[ImportCycle]:
+        raise NotImplementedError
+
+
+class DFS(ABCCycleDetector):
+    def __init__(self, imports_by_module: ImportsByModule) -> None:
+        super().__init__(imports_by_module)
+        self._visited: Set[str] = set()
 
     def detect(self) -> Iterable[ImportCycle]:
         for module in self._imports_by_module:
@@ -456,6 +475,84 @@ class DetectorImportCycles:
             )
 
         self._visited.add(module.name)
+
+    @staticmethod
+    def _extract_cycle_from_path(
+        imported_module: TModule, path: Sequence[TModule]
+    ) -> ImportCycle:
+        first_idx = path.index(imported_module)
+        return tuple(path[first_idx:]) + (imported_module,)
+
+
+class TarjanPathBasedStrongComponents(ABCCycleDetector):
+    def __init__(self, imports_by_module: ImportsByModule) -> None:
+        super().__init__(imports_by_module)
+        self._graph = networkx.DiGraph()
+        self._graph.add_nodes_from(imports_by_module)
+
+    def detect(self) -> Iterable[ImportCycle]:
+        for path in networkx.weakly_connected_components(self._graph):
+            print([p.name for p in path])
+            yield tuple(path)
+        # for module in self._imports_by_module:
+        #     if module not in self._low_links:
+        #         yield from self._tarjan(module)
+
+    # def _tarjan(self, module: TModule) -> Iterable[ImportCycle]:
+    #     self._index[module] = self._index_counter[0]
+    #     self._low_links[module] = self._index_counter[0]
+    #     self._index_counter[0] += 1
+    #     self._stack.append(module)
+
+    #     for successor in self._imports_by_module.get(module, []):
+    #         if successor not in self._low_links:
+    #             yield from self._tarjan(successor)
+    #             self._low_links[module] = min(
+    #                 self._low_links[module],
+    #                 self._low_links[successor],
+    #             )
+
+    #         elif successor in self._stack:
+    #             self._low_links[module] = min(
+    #                 self._low_links[module],
+    #                 self._index[successor],
+    #             )
+
+    #     if self._low_links[module] == self._index[module]:
+    #         connected_component = []
+    #         while True:
+    #             successor = self._stack.pop()
+    #             connected_component.append(successor)
+    #             if successor == module:
+    #                 break
+    #             yield tuple(connected_component)
+
+    #             self._fill_order(module, stack)
+
+    #     # Second DFS
+    #     self._visited = set()
+    #     while stack:
+    #         module = stack.pop()
+    #         if module in self._visited:
+    #             continue
+
+    #         if len(path := list(self._depth_first_search(module))) > 1:
+    #             yield tuple(self._extract_cycle_from_path(module, path))
+
+    # def _fill_order(self, module: TModule, stack: List[TModule]) -> None:
+    #     self._visited.add(module)
+    #     for imported_module in self._imports_by_module.get(module, []):
+    #         if imported_module not in self._visited:
+    #             self._fill_order(imported_module, stack)
+    #     stack.append(module)
+
+    # def _depth_first_search(self, module: TModule) -> Iterable[TModule]:
+    #     self._visited.add(module)
+    #     yield module
+
+    #     for imported_module in self._imports_by_module.get(module, []):
+    #         if imported_module not in self._visited:
+    #             yield from self._depth_first_search(imported_module)
 
     @staticmethod
     def _extract_cycle_from_path(
@@ -616,6 +713,12 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="show additional information for debug purposes",
     )
     parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="show cycles if some are found",
+    )
+    parser.add_argument(
         "--graph",
         choices=["all", "only-cycles", "no"],
         default="only-cycles",
@@ -648,11 +751,16 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         required=True,
         help="Visit Python file if all of these namespaces are part of this file path",
     )
-
     parser.add_argument(
         "--recursively",
         action="store_true",
         help="Visit Python modules or packages if not yet collected from Python files.",
+    )
+    parser.add_argument(
+        "--strategy",
+        choices=["dfs", "tarjan"],
+        default="dfs",
+        help="path-based strong component algorithm",
     )
 
     parser.add_argument(
@@ -704,6 +812,9 @@ def _show_or_store_cycles(
     sys.stderr.write("Found %d import cycles\n" % len(import_cycles))
 
     if not args.store_cycles:
+        if not args.verbose:
+            return
+
         for nr, import_cycle in import_cycles:
             sys.stderr.write("  %d: %s\n" % (nr, [ic.name for ic in import_cycle]))
         return
@@ -737,7 +848,7 @@ def main(argv: Sequence[str]) -> int:
         mapping, project_path, python_files, args.recursively
     )
 
-    import_cycles = _detect_cycles(imports_by_module)
+    import_cycles = _detect_cycles(args, imports_by_module)
     return_code = bool(import_cycles)
 
     _show_or_store_cycles(args, import_cycles)
