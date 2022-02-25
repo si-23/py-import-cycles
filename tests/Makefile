@@ -1,21 +1,16 @@
 SHELL := /bin/bash -e
-BLACK := pipenv run ../scripts/run-black
-ISORT := pipenv run ../scripts/run-isort
-PYTEST := pipenv run py.test -vv unit
-MYPY := pipenv run ../scripts/run-mypy
-PYLINT := pipenv run ../scripts/run-pylint
+BLACK := ../scripts/run-black
+ISORT := ../scripts/run-isort
+PYTEST := py.test -vv unit
+MYPY := ../scripts/run-mypy
+PYLINT := ../scripts/run-pylint
 SHELLCHECK := ../scripts/run-shellcheck
-
-.PHONY: venv-lock
-
-venv:
-	pipenv install --dev
 
 test-format-python:
 	@$(BLACK) --diff
 	@$(ISORT)
 
-test-unit: venv
+test-unit:
 	@$(PYTEST)
 
 test-mypy:
