@@ -2,20 +2,4 @@
 
 REPO_PATH=$(dirname "$(dirname "$(realpath "$0")")")
 
-skip_tests_folder=false
-while test -n "$1"; do
-    case "$1" in
-        --mypy|--pylint)
-            skip_tests_folder=true
-            shift
-            ;;
-    esac
-done
-
-if $skip_tests_folder; then
-    folder="${REPO_PATH}/project"
-else
-    folder="${REPO_PATH}"
-fi
-
-find "$folder" -name "*.py" 2>/dev/null
+find "$REPO_PATH/tests" "$REPO_PATH/project" -name "*.py" 2>/dev/null

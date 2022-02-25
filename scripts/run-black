@@ -1,11 +1,7 @@
 #!/bin/bash
 
 REPO_PATH=$(dirname "$(dirname "$(realpath "$0")")")
-
-if [ "$PIPENV_ACTIVE" != "1" ]; then
-    echo "Run black within pipenv"
-    exit 1
-fi
+run_pipenv=$REPO_PATH/scripts/run-pipenv
 
 if [ -n "$1" ]; then
 	python_files="$1"
@@ -14,7 +10,7 @@ else
 fi
 
 # shellcheck disable=SC2086
-reformatted_files=$(pipenv run black "$@" $python_files 2>&1 | grep "^reformatted\|^would reformat")
+reformatted_files=$($run_pipenv black "$@" $python_files 2>&1 | grep "^reformatted\|^would reformat")
 if [ -n "$reformatted_files" ]; then
     echo -e "$reformatted_files"
     exit 1

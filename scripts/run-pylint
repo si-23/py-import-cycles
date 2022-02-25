@@ -1,11 +1,7 @@
 #!/bin/bash
 
 REPO_PATH=$(dirname "$(dirname "$(realpath "$0")")")
-
-if [ "$PIPENV_ACTIVE" != "1" ]; then
-    echo "Run pylint within pipenv"
-    exit 1
-fi
+run_pipenv=$REPO_PATH/scripts/run-pipenv
 
 if [ -n "$1" ]; then
 	python_files="$1"
@@ -18,6 +14,4 @@ if [ -z "$python_files" ]; then
 fi
 
 # shellcheck disable=SC2086
-pipenv run pylint \
-    --rcfile=../.pylintrc \
-    $python_files
+$run_pipenv pylint --rcfile=../.pylintrc $python_files

@@ -1,0 +1,10 @@
+#!/bin/bash
+
+REPO_PATH=$(dirname "$(dirname "$(realpath "$0")")")
+
+if [ ! -d "$REPO_PATH/.venv" ]; then
+    pipenv --rm
+    PIPENV_VENV_IN_PROJECT=true pipenv install --dev
+fi
+
+PIPENV_VENV_IN_PROJECT=true pipenv run "$@"
