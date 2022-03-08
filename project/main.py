@@ -11,18 +11,8 @@ import os
 import random
 import sys
 from pathlib import Path
-from typing import (
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    NamedTuple,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import (Dict, Iterable, List, Mapping, NamedTuple, Optional,
+                    Sequence, Set, Tuple, Union)
 
 from graphviz import Digraph
 
@@ -428,6 +418,8 @@ def _detect_cycles(
     detector: ABCCycleDetector
     if args.strategy == "dfs":
         detector = DFS(imports_by_module)
+    elif args.strategy == "johnson":
+        detector = Johnson(imports_by_module)
     else:
         raise NotImplementedError()
 
@@ -466,8 +458,8 @@ class ABCCycleDetector(abc.ABC):
 
 
 class DFS(ABCCycleDetector):
-    def __init__(self, graph: ImportsByModule) -> None:
-        super().__init__(graph)
+    def __init__(self, imports_by_module: ImportsByModule) -> None:
+        super().__init__(imports_by_module)
         self._visited: Set[TModule] = set()
 
     def detect(self) -> Iterable[ImportCycle]:
@@ -491,6 +483,17 @@ class DFS(ABCCycleDetector):
             )
 
         self._visited.add(vertex_u)
+
+
+class Johnson(ABCCycleDetector):
+    def __init__(self, imports_by_module: ImportsByModule) -> None:
+        super().__init__(imports_by_module)
+        # Does not matter if it's a Package or PyModule
+        self._root = Package(Path(), "root")
+        self._blocked: Dict[TModule, bool] = {}
+
+    def detect(self) -> Iterable[ImportCycle]:
+        pass
 
 
 # .
@@ -689,7 +692,7 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--strategy",
-        choices=["dfs"],
+        choices=["dfs", "johnson"],
         default="dfs",
         help="path-based strong component algorithm",
     )
