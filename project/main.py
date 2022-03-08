@@ -10,9 +10,9 @@ import logging
 import os
 import random
 import sys
-import networkx
 from pathlib import Path
 from typing import (
+    Dict,
     Iterable,
     List,
     Mapping,
@@ -424,11 +424,10 @@ def _detect_cycles(
     args: argparse.Namespace, imports_by_module: ImportsByModule
 ) -> ImportCycles:
     logger.info("Detect import cycles with strategy %s", args.strategy)
+
     detector: ABCCycleDetector
     if args.strategy == "dfs":
         detector = DFS(imports_by_module)
-    elif args.strategy == "tarjan":
-        detector = TarjanPathBasedStrongComponents(imports_by_module)
     else:
         raise NotImplementedError()
 
@@ -442,124 +441,56 @@ def _detect_cycles(
 
 class ABCCycleDetector(abc.ABC):
     def __init__(self, imports_by_module: ImportsByModule) -> None:
-        self._imports_by_module = imports_by_module
+        self._adjacency_list = imports_by_module
+        self._vertices = self._get_vertices(imports_by_module)
+
+    def _get_vertices(self, graph: ImportsByModule) -> Sequence[TModule]:
+        vertices = set(graph)
+        vertices = vertices.union(
+            imported_module
+            for imported_modules in graph.values()
+            for imported_module in imported_modules
+        )
+        return sorted(vertices)
 
     @abc.abstractmethod
     def detect(self) -> Iterable[ImportCycle]:
         raise NotImplementedError
 
+    @staticmethod
+    def _extract_cycle_from_path(
+        vertex: TModule, path: Sequence[TModule]
+    ) -> ImportCycle:
+        first_idx = path.index(vertex)
+        return tuple(path[first_idx:]) + (vertex,)
+
 
 class DFS(ABCCycleDetector):
-    def __init__(self, imports_by_module: ImportsByModule) -> None:
-        super().__init__(imports_by_module)
-        self._visited: Set[str] = set()
+    def __init__(self, graph: ImportsByModule) -> None:
+        super().__init__(graph)
+        self._visited: Set[TModule] = set()
 
     def detect(self) -> Iterable[ImportCycle]:
-        for module in self._imports_by_module:
-            yield from self._depth_first_search(module, [module])
+        for vertex in self._vertices:
+            yield from self._depth_first_search(vertex, [vertex])
 
     def _depth_first_search(
-        self, module: TModule, parent_path: List[TModule]
+        self, vertex_u: TModule, path: List[TModule]
     ) -> Iterable[ImportCycle]:
-        if module.name in self._visited:
+        if vertex_u in self._visited:
             return
 
-        for imported_module in self._imports_by_module.get(module, []):
-            if imported_module in parent_path:
-                yield tuple(self._extract_cycle_from_path(imported_module, parent_path))
+        for vertex_v in self._adjacency_list.get(vertex_u, []):
+            if vertex_v in path:
+                yield tuple(self._extract_cycle_from_path(vertex_v, path))
                 continue
 
             yield from self._depth_first_search(
-                imported_module,
-                parent_path + [imported_module],
+                vertex_v,
+                path + [vertex_v],
             )
 
-        self._visited.add(module.name)
-
-    @staticmethod
-    def _extract_cycle_from_path(
-        imported_module: TModule, path: Sequence[TModule]
-    ) -> ImportCycle:
-        first_idx = path.index(imported_module)
-        return tuple(path[first_idx:]) + (imported_module,)
-
-
-class TarjanPathBasedStrongComponents(ABCCycleDetector):
-    def __init__(self, imports_by_module: ImportsByModule) -> None:
-        super().__init__(imports_by_module)
-        self._graph = networkx.DiGraph()
-        self._graph.add_nodes_from(imports_by_module)
-
-    def detect(self) -> Iterable[ImportCycle]:
-        for path in networkx.weakly_connected_components(self._graph):
-            print([p.name for p in path])
-            yield tuple(path)
-        # for module in self._imports_by_module:
-        #     if module not in self._low_links:
-        #         yield from self._tarjan(module)
-
-    # def _tarjan(self, module: TModule) -> Iterable[ImportCycle]:
-    #     self._index[module] = self._index_counter[0]
-    #     self._low_links[module] = self._index_counter[0]
-    #     self._index_counter[0] += 1
-    #     self._stack.append(module)
-
-    #     for successor in self._imports_by_module.get(module, []):
-    #         if successor not in self._low_links:
-    #             yield from self._tarjan(successor)
-    #             self._low_links[module] = min(
-    #                 self._low_links[module],
-    #                 self._low_links[successor],
-    #             )
-
-    #         elif successor in self._stack:
-    #             self._low_links[module] = min(
-    #                 self._low_links[module],
-    #                 self._index[successor],
-    #             )
-
-    #     if self._low_links[module] == self._index[module]:
-    #         connected_component = []
-    #         while True:
-    #             successor = self._stack.pop()
-    #             connected_component.append(successor)
-    #             if successor == module:
-    #                 break
-    #             yield tuple(connected_component)
-
-    #             self._fill_order(module, stack)
-
-    #     # Second DFS
-    #     self._visited = set()
-    #     while stack:
-    #         module = stack.pop()
-    #         if module in self._visited:
-    #             continue
-
-    #         if len(path := list(self._depth_first_search(module))) > 1:
-    #             yield tuple(self._extract_cycle_from_path(module, path))
-
-    # def _fill_order(self, module: TModule, stack: List[TModule]) -> None:
-    #     self._visited.add(module)
-    #     for imported_module in self._imports_by_module.get(module, []):
-    #         if imported_module not in self._visited:
-    #             self._fill_order(imported_module, stack)
-    #     stack.append(module)
-
-    # def _depth_first_search(self, module: TModule) -> Iterable[TModule]:
-    #     self._visited.add(module)
-    #     yield module
-
-    #     for imported_module in self._imports_by_module.get(module, []):
-    #         if imported_module not in self._visited:
-    #             yield from self._depth_first_search(imported_module)
-
-    @staticmethod
-    def _extract_cycle_from_path(
-        imported_module: TModule, path: Sequence[TModule]
-    ) -> ImportCycle:
-        first_idx = path.index(imported_module)
-        return tuple(path[first_idx:]) + (imported_module,)
+        self._visited.add(vertex_u)
 
 
 # .
@@ -758,7 +689,7 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--strategy",
-        choices=["dfs", "tarjan"],
+        choices=["dfs"],
         default="dfs",
         help="path-based strong component algorithm",
     )
