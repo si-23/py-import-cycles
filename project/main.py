@@ -11,8 +11,18 @@ import os
 import random
 import sys
 from pathlib import Path
-from typing import (Dict, Iterable, List, Mapping, NamedTuple, Optional,
-                    Sequence, Set, Tuple, Union)
+from typing import (
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 from graphviz import Digraph
 
@@ -80,68 +90,64 @@ class PyModule(NamedTuple):
     name: str
 
 
-TModule = Union[Package, PyModule]
-ImportsByModule = Mapping[TModule, Sequence[TModule]]
+Module = Union[Package, PyModule]
+ImportsByModule = Mapping[Module, Sequence[Module]]
 
 
-class Module:
-    @classmethod
-    def from_name(
-        cls,
-        mapping: Mapping[str, str],
-        project_path: Path,
-        module_name: str,
-    ) -> Optional[TModule]:
-        parts = module_name.split(".")
-        for key, value in mapping.items():
-            if value in parts:
-                parts = [key] + parts
-                break
+def make_module_from_name(
+    mapping: Mapping[str, str],
+    project_path: Path,
+    module_name: str,
+) -> Optional[Module]:
+    parts = module_name.split(".")
+    for key, value in mapping.items():
+        if value in parts:
+            parts = [key] + parts
+            break
 
-        module_path = project_path.joinpath(Path(*parts))
+    module_path = project_path.joinpath(Path(*parts))
 
-        if module_path.is_dir():
-            return Package(
-                path=module_path,
-                name=module_name,
-            )
+    if module_path.is_dir():
+        return Package(
+            path=module_path,
+            name=module_name,
+        )
 
-        if (py_module_path := module_path.with_suffix(".py")).exists():
-            return PyModule(
-                path=py_module_path,
-                name=module_name,
-            )
+    if (py_module_path := module_path.with_suffix(".py")).exists():
+        return PyModule(
+            path=py_module_path,
+            name=module_name,
+        )
 
-        return None
+    return None
 
-    @classmethod
-    def from_path(
-        cls,
-        mapping: Mapping[str, str],
-        project_path: Path,
-        module_path: Path,
-    ) -> Optional[TModule]:
-        parts = module_path.relative_to(project_path).with_suffix("").parts
-        for key, value in mapping.items():
-            if key == parts[0] and value in parts[1:]:
-                parts = parts[1:]
-                break
 
-        module_name = ".".join(parts)
+def make_module_from_path(
+    mapping: Mapping[str, str],
+    project_path: Path,
+    module_path: Path,
+) -> Optional[Module]:
+    parts = module_path.relative_to(project_path).with_suffix("").parts
+    for key, value in mapping.items():
+        if key == parts[0] and value in parts[1:]:
+            parts = parts[1:]
+            break
 
-        if module_path.is_dir():
-            return Package(
-                path=module_path,
-                name=module_name,
-            )
+    module_name = ".".join(parts)
 
-        if module_path.is_file() and module_path.suffix == ".py":
-            return PyModule(
-                path=module_path,
-                name=module_name,
-            )
+    if module_path.is_dir():
+        return Package(
+            path=module_path,
+            name=module_name,
+        )
 
-        return None
+    if module_path.is_file() and module_path.suffix == ".py":
+        return PyModule(
+            path=module_path,
+            name=module_name,
+        )
+
+    return None
 
 
 # .
@@ -220,7 +226,7 @@ class ImportedModulesExtractor:
         self,
         mapping: Mapping[str, str],
         project_path: Path,
-        base_module: TModule,
+        base_module: Module,
         import_stmts: Sequence[ImportSTMT],
     ) -> None:
         self._mapping = mapping
@@ -228,13 +234,13 @@ class ImportedModulesExtractor:
         self._base_module = base_module
         self._import_stmts = import_stmts
 
-        self._imported_modules: List[TModule] = []
+        self._imported_modules: List[Module] = []
 
     @property
-    def imported_modules(self) -> Sequence[TModule]:
+    def imported_modules(self) -> Sequence[Module]:
         return self._imported_modules
 
-    def extract(self) -> Sequence[TModule]:
+    def extract(self) -> Sequence[Module]:
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
                 self._add_imported_modules_from_aliases(import_stmt.names)
@@ -259,7 +265,7 @@ class ImportedModulesExtractor:
                 + import_from_stmt.module.split(".")
             )
 
-        module = Module.from_name(
+        module = make_module_from_name(
             self._mapping,
             self._project_path,
             module_name,
@@ -290,7 +296,7 @@ class ImportedModulesExtractor:
             if self._is_builtin_or_stdlib(alias.name):
                 continue
 
-            module = Module.from_name(
+            module = make_module_from_name(
                 self._mapping,
                 self._project_path,
                 ".".join([from_name, alias.name]) if from_name else alias.name,
@@ -354,8 +360,8 @@ def _visit_python_file(
     mapping: Mapping[str, str],
     project_path: Path,
     path: Path,
-) -> Optional[Tuple[TModule, Sequence[TModule]]]:
-    module = Module.from_path(mapping, project_path, path)
+) -> Optional[Tuple[Module, Sequence[Module]]]:
+    module = make_module_from_path(mapping, project_path, path)
 
     if module is None:
         # Should not happen
@@ -406,7 +412,7 @@ def _visit_python_file(
 #   '----------------------------------------------------------------------'
 
 
-ImportCycle = Tuple[TModule, ...]
+ImportCycle = Tuple[Module, ...]
 ImportCycles = Sequence[Tuple[int, ImportCycle]]
 
 
@@ -436,7 +442,7 @@ class ABCCycleDetector(abc.ABC):
         self._adjacency_list = imports_by_module
         self._vertices = self._get_vertices(imports_by_module)
 
-    def _get_vertices(self, graph: ImportsByModule) -> Sequence[TModule]:
+    def _get_vertices(self, graph: ImportsByModule) -> Sequence[Module]:
         vertices = set(graph)
         vertices = vertices.union(
             imported_module
@@ -450,9 +456,7 @@ class ABCCycleDetector(abc.ABC):
         raise NotImplementedError
 
     @staticmethod
-    def _extract_cycle_from_path(
-        vertex: TModule, path: Sequence[TModule]
-    ) -> ImportCycle:
+    def _extract_cycle_from_path(vertex: Module, path: Sequence[Module]) -> ImportCycle:
         first_idx = path.index(vertex)
         return tuple(path[first_idx:]) + (vertex,)
 
@@ -460,14 +464,14 @@ class ABCCycleDetector(abc.ABC):
 class DFS(ABCCycleDetector):
     def __init__(self, imports_by_module: ImportsByModule) -> None:
         super().__init__(imports_by_module)
-        self._visited: Set[TModule] = set()
+        self._visited: Set[Module] = set()
 
     def detect(self) -> Iterable[ImportCycle]:
         for vertex in self._vertices:
             yield from self._depth_first_search(vertex, [vertex])
 
     def _depth_first_search(
-        self, vertex_u: TModule, path: List[TModule]
+        self, vertex_u: Module, path: List[Module]
     ) -> Iterable[ImportCycle]:
         if vertex_u in self._visited:
             return
@@ -490,7 +494,7 @@ class Johnson(ABCCycleDetector):
         super().__init__(imports_by_module)
         # Does not matter if it's a Package or PyModule
         self._root = Package(Path(), "root")
-        self._blocked: Dict[TModule, bool] = {}
+        self._blocked: Dict[Module, bool] = {}
 
     def detect(self) -> Iterable[ImportCycle]:
         pass
@@ -535,14 +539,14 @@ def _make_graph(
     return d.unflatten(stagger=50)
 
 
-def _get_shape(module: TModule) -> str:
+def _get_shape(module: Module) -> str:
     return "" if isinstance(module, PyModule) else "box"
 
 
 class ImportEdge(NamedTuple):
     title: str
-    from_module: TModule
-    to_module: TModule
+    from_module: Module
+    to_module: Module
     edge_color: str
 
 
@@ -583,8 +587,8 @@ def _make_all_edges(
 
 
 def _has_cycle(
-    module: TModule,
-    imported_module: TModule,
+    module: Module,
+    imported_module: Module,
     import_cycles: ImportCycles,
 ) -> bool:
     for _nr, import_cycle in import_cycles:
