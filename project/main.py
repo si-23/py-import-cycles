@@ -442,7 +442,12 @@ class ABCCycleDetector(abc.ABC):
         self._adjacency_list = imports_by_module
         self._vertices = self._get_vertices(imports_by_module)
 
-    def _get_vertices(self, graph: ImportsByModule) -> Sequence[Module]:
+    @abc.abstractmethod
+    def detect(self) -> Iterable[ImportCycle]:
+        raise NotImplementedError
+
+    @staticmethod
+    def _get_vertices(graph: ImportsByModule) -> Sequence[Module]:
         vertices = set(graph)
         vertices = vertices.union(
             imported_module
@@ -450,10 +455,6 @@ class ABCCycleDetector(abc.ABC):
             for imported_module in imported_modules
         )
         return sorted(vertices)
-
-    @abc.abstractmethod
-    def detect(self) -> Iterable[ImportCycle]:
-        raise NotImplementedError
 
     @staticmethod
     def _extract_cycle_from_path(vertex: Module, path: Sequence[Module]) -> ImportCycle:
