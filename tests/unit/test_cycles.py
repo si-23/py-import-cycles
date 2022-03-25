@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+
 from project.main import DetectorImportCycles, PyModule
 
 

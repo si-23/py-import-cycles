@@ -10,7 +10,7 @@ else
 fi
 
 # shellcheck disable=SC2086
-output=$($run_pipenv isort --trailing-comma --multi-line 3 --diff "$@" $python_files 2>&1)
+output=$($run_pipenv isort --profile black "$@" $python_files 2>&1)
 if [ -n "$output" ]; then
     echo -e "$output"
     exit 1
