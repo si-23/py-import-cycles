@@ -432,9 +432,7 @@ def _detect_cycles(
     import_cycles = set(detector.detect())
 
     logger.info("Sort import cycles")
-    return [
-        (nr + 1, import_cycle) for nr, import_cycle in enumerate(sorted(import_cycles))
-    ]
+    return list(enumerate(sorted(import_cycles), start=1))
 
 
 class ABCCycleDetector(abc.ABC):
