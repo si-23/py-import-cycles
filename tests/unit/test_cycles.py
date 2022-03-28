@@ -5,7 +5,7 @@ from typing import Mapping, Sequence, Tuple
 
 import pytest
 
-from project.main import DFS, Module, PyModule  # pylint: disable=import-error
+from project.main import detect_cycles, Module, PyModule  # pylint: disable=import-error
 
 
 @pytest.mark.parametrize(
@@ -124,6 +124,4 @@ def test_cycles(
     module_imports: Mapping[Module, Sequence[Module]],
     expected_cycles: Sequence[Tuple[Module, ...]],
 ) -> None:
-    detector = DFS(module_imports)
-    detector.detect()
-    assert list(detector.detect()) == expected_cycles
+    assert list(detect_cycles("dfs", module_imports)) == expected_cycles
