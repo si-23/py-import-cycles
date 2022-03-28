@@ -11,7 +11,19 @@ import os
 import random
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, NamedTuple, Optional, Sequence, Set, Tuple, Union
+from typing import (
+    Dict,
+    Iterable,
+    List,
+    Literal,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 from graphviz import Digraph
 
@@ -405,21 +417,18 @@ ImportCycle = Tuple[Module, ...]
 ImportCycles = Sequence[Tuple[int, ImportCycle]]
 
 
-def _detect_cycles(args: argparse.Namespace, imports_by_module: ImportsByModule) -> ImportCycles:
-    logger.info("Detect import cycles with strategy %s", args.strategy)
-
+def detect_cycles(
+    strategy: Literal["dfs", "johnson"], imports_by_module: ImportsByModule
+) -> Iterable[ImportCycle]:
     detector: ABCCycleDetector
-    if args.strategy == "dfs":
+    if strategy == "dfs":
         detector = DFS(imports_by_module)
-    elif args.strategy == "johnson":
+    elif strategy == "johnson":
         detector = Johnson(imports_by_module)
     else:
         raise NotImplementedError()
 
-    import_cycles = set(detector.detect())
-
-    logger.info("Sort import cycles")
-    return list(enumerate(sorted(import_cycles), start=1))
+    return detector.detect()
 
 
 class ABCCycleDetector(abc.ABC):
@@ -766,8 +775,12 @@ def main(argv: Sequence[str]) -> int:
     logger.info("Visit Python files, get imports by module")
     imports_by_module = _visit_python_files(mapping, project_path, python_files, args.recursively)
 
-    import_cycles = _detect_cycles(args, imports_by_module)
-    return_code = bool(import_cycles)
+    logger.info("Detect import cycles with strategy %s", args.strategy)
+    unsorted_cycles = detect_cycles(args.strategy, imports_by_module)
+    return_code = bool(unsorted_cycles)
+
+    logger.info("Sort import cycles")
+    import_cycles = list(enumerate(sorted(set(unsorted_cycles)), start=1))
 
     _show_or_store_cycles(args, import_cycles)
 
