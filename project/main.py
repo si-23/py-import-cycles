@@ -444,11 +444,6 @@ def _get_vertices(graph: Mapping[T, Sequence[T]]) -> Sequence[T]:
     return sorted(vertices)
 
 
-def _extract_cycle_from_path(vertex: T, path: Sequence[T]) -> Tuple[T, ...]:
-    first_idx = path.index(vertex)
-    return tuple(path[first_idx:]) + (vertex,)
-
-
 class DFS(Generic[T]):
     def __init__(self, graph: Mapping[T, Sequence[T]]) -> None:
         self._adjacency_list = graph
@@ -464,7 +459,8 @@ class DFS(Generic[T]):
 
         for vertex_v in self._adjacency_list.get(vertex_u, []):
             if vertex_v in path:
-                yield tuple(_extract_cycle_from_path(vertex_v, path))
+                first_idx = path.index(vertex_v)
+                yield tuple(path[first_idx:]) + (vertex_v,)
                 continue
 
             yield from self._depth_first_search(
