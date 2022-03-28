@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import abc
 import argparse
 import ast
 import importlib
@@ -420,49 +419,35 @@ ImportCycles = Sequence[Tuple[int, ImportCycle]]
 def detect_cycles(
     strategy: Literal["dfs", "johnson"], imports_by_module: ImportsByModule
 ) -> Iterable[ImportCycle]:
-    detector: ABCCycleDetector
     if strategy == "dfs":
-        detector = DFS(imports_by_module)
-    elif strategy == "johnson":
-        detector = Johnson(imports_by_module)
-    else:
-        raise NotImplementedError()
-
-    return detector.detect()
+        return DFS(imports_by_module).detect()
+    if strategy == "johnson":
+        return Johnson(imports_by_module).detect()
+    raise NotImplementedError()
 
 
-class ABCCycleDetector(abc.ABC):
+def _get_vertices(graph: ImportsByModule) -> Sequence[Module]:
+    vertices = set(graph)
+    vertices = vertices.union(
+        imported_module
+        for imported_modules in graph.values()
+        for imported_module in imported_modules
+    )
+    return sorted(vertices)
+
+
+def _extract_cycle_from_path(vertex: Module, path: Sequence[Module]) -> ImportCycle:
+    first_idx = path.index(vertex)
+    return tuple(path[first_idx:]) + (vertex,)
+
+
+class DFS:
     def __init__(self, imports_by_module: ImportsByModule) -> None:
         self._adjacency_list = imports_by_module
-        self._vertices = self._get_vertices(imports_by_module)
-
-    @abc.abstractmethod
-    def detect(self) -> Iterable[ImportCycle]:
-        raise NotImplementedError
-
-    @staticmethod
-    def _get_vertices(graph: ImportsByModule) -> Sequence[Module]:
-        vertices = set(graph)
-        vertices = vertices.union(
-            imported_module
-            for imported_modules in graph.values()
-            for imported_module in imported_modules
-        )
-        return sorted(vertices)
-
-    @staticmethod
-    def _extract_cycle_from_path(vertex: Module, path: Sequence[Module]) -> ImportCycle:
-        first_idx = path.index(vertex)
-        return tuple(path[first_idx:]) + (vertex,)
-
-
-class DFS(ABCCycleDetector):
-    def __init__(self, imports_by_module: ImportsByModule) -> None:
-        super().__init__(imports_by_module)
         self._visited: Set[Module] = set()
 
     def detect(self) -> Iterable[ImportCycle]:
-        for vertex in self._vertices:
+        for vertex in _get_vertices(self._adjacency_list):
             yield from self._depth_first_search(vertex, [vertex])
 
     def _depth_first_search(self, vertex_u: Module, path: List[Module]) -> Iterable[ImportCycle]:
@@ -471,7 +456,7 @@ class DFS(ABCCycleDetector):
 
         for vertex_v in self._adjacency_list.get(vertex_u, []):
             if vertex_v in path:
-                yield tuple(self._extract_cycle_from_path(vertex_v, path))
+                yield tuple(_extract_cycle_from_path(vertex_v, path))
                 continue
 
             yield from self._depth_first_search(
@@ -482,9 +467,9 @@ class DFS(ABCCycleDetector):
         self._visited.add(vertex_u)
 
 
-class Johnson(ABCCycleDetector):
+class Johnson:
     def __init__(self, imports_by_module: ImportsByModule) -> None:
-        super().__init__(imports_by_module)
+        self._adjacency_list = imports_by_module
         # Does not matter if it's a Package or PyModule
         self._root = Package(Path(), "root")
         self._blocked: Dict[Module, bool] = {}
