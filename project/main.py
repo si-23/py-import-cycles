@@ -405,9 +405,7 @@ ImportCycle = Tuple[Module, ...]
 ImportCycles = Sequence[Tuple[int, ImportCycle]]
 
 
-def _detect_cycles(
-    args: argparse.Namespace, imports_by_module: ImportsByModule
-) -> ImportCycles:
+def _detect_cycles(args: argparse.Namespace, imports_by_module: ImportsByModule) -> ImportCycles:
     logger.info("Detect import cycles with strategy %s", args.strategy)
 
     detector: ABCCycleDetector
@@ -458,9 +456,7 @@ class DFS(ABCCycleDetector):
         for vertex in self._vertices:
             yield from self._depth_first_search(vertex, [vertex])
 
-    def _depth_first_search(
-        self, vertex_u: Module, path: List[Module]
-    ) -> Iterable[ImportCycle]:
+    def _depth_first_search(self, vertex_u: Module, path: List[Module]) -> Iterable[ImportCycle]:
         if vertex_u in self._visited:
             return
 
@@ -729,9 +725,7 @@ def _setup_logging(args: argparse.Namespace, outputs_filepath: Path) -> None:
     logger.addHandler(handler)
 
 
-def _show_or_store_cycles(
-    args: argparse.Namespace, import_cycles: ImportCycles
-) -> None:
+def _show_or_store_cycles(args: argparse.Namespace, import_cycles: ImportCycles) -> None:
     if not import_cycles:
         return
 
@@ -770,9 +764,7 @@ def main(argv: Sequence[str]) -> int:
     python_files = _get_python_files(project_path, args.folders, args.namespaces)
 
     logger.info("Visit Python files, get imports by module")
-    imports_by_module = _visit_python_files(
-        mapping, project_path, python_files, args.recursively
-    )
+    imports_by_module = _visit_python_files(mapping, project_path, python_files, args.recursively)
 
     import_cycles = _detect_cycles(args, imports_by_module)
     return_code = bool(import_cycles)
