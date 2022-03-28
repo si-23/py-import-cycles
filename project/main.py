@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import abc
 import argparse
 import ast
 import importlib
@@ -12,15 +13,18 @@ import sys
 from pathlib import Path
 from typing import (
     Dict,
+    Generic,
     Iterable,
     List,
     Literal,
     Mapping,
     NamedTuple,
     Optional,
+    Protocol,
     Sequence,
     Set,
     Tuple,
+    TypeVar,
     Union,
 )
 
@@ -412,21 +416,28 @@ def _visit_python_file(
 #   '----------------------------------------------------------------------'
 
 
+class Comparable(Protocol):
+    @abc.abstractmethod
+    def __lt__(self: T, other: T) -> bool:
+        ...
+
+
+T = TypeVar("T", bound=Comparable)
 ImportCycle = Tuple[Module, ...]
 ImportCycles = Sequence[Tuple[int, ImportCycle]]
 
 
 def detect_cycles(
-    strategy: Literal["dfs", "johnson"], imports_by_module: ImportsByModule
-) -> Iterable[ImportCycle]:
+    strategy: Literal["dfs", "johnson"], graph: Mapping[T, Sequence[T]]
+) -> Iterable[Tuple[T, ...]]:
     if strategy == "dfs":
-        return DFS(imports_by_module).detect()
+        return DFS[T](graph).detect()
     if strategy == "johnson":
-        return Johnson(imports_by_module).detect()
+        return Johnson[T](graph).detect()
     raise NotImplementedError()
 
 
-def _get_vertices(graph: ImportsByModule) -> Sequence[Module]:
+def _get_vertices(graph: Mapping[T, Sequence[T]]) -> Sequence[T]:
     vertices = set(graph)
     vertices = vertices.union(
         imported_module
@@ -436,21 +447,21 @@ def _get_vertices(graph: ImportsByModule) -> Sequence[Module]:
     return sorted(vertices)
 
 
-def _extract_cycle_from_path(vertex: Module, path: Sequence[Module]) -> ImportCycle:
+def _extract_cycle_from_path(vertex: T, path: Sequence[T]) -> Tuple[T, ...]:
     first_idx = path.index(vertex)
     return tuple(path[first_idx:]) + (vertex,)
 
 
-class DFS:
-    def __init__(self, imports_by_module: ImportsByModule) -> None:
-        self._adjacency_list = imports_by_module
-        self._visited: Set[Module] = set()
+class DFS(Generic[T]):
+    def __init__(self, graph: Mapping[T, Sequence[T]]) -> None:
+        self._adjacency_list = graph
+        self._visited: Set[T] = set()
 
-    def detect(self) -> Iterable[ImportCycle]:
+    def detect(self) -> Iterable[Tuple[T, ...]]:
         for vertex in _get_vertices(self._adjacency_list):
             yield from self._depth_first_search(vertex, [vertex])
 
-    def _depth_first_search(self, vertex_u: Module, path: List[Module]) -> Iterable[ImportCycle]:
+    def _depth_first_search(self, vertex_u: T, path: List[T]) -> Iterable[Tuple[T, ...]]:
         if vertex_u in self._visited:
             return
 
@@ -467,14 +478,14 @@ class DFS:
         self._visited.add(vertex_u)
 
 
-class Johnson:
-    def __init__(self, imports_by_module: ImportsByModule) -> None:
-        self._adjacency_list = imports_by_module
+class Johnson(Generic[T]):
+    def __init__(self, graph: Mapping[T, Sequence[T]]) -> None:
+        self._adjacency_list = graph
         # Does not matter if it's a Package or PyModule
         self._root = Package(Path(), "root")
-        self._blocked: Dict[Module, bool] = {}
+        self._blocked: Dict[T, bool] = {}
 
-    def detect(self) -> Iterable[ImportCycle]:
+    def detect(self) -> Iterable[Tuple[T, ...]]:
         pass
 
 
