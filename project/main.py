@@ -451,7 +451,7 @@ class DFS(Generic[T]):
 
     def detect(self) -> Iterable[Tuple[T, ...]]:
         for vertex in _get_vertices(self._adjacency_list):
-            yield from self._depth_first_search(vertex, [vertex])
+            yield from self._depth_first_search(vertex, [])
 
     def _depth_first_search(self, vertex_u: T, path: List[T]) -> Iterable[Tuple[T, ...]]:
         if vertex_u in self._visited:
@@ -459,8 +459,7 @@ class DFS(Generic[T]):
 
         for vertex_v in self._adjacency_list.get(vertex_u, []):
             if vertex_v in path:
-                first_idx = path.index(vertex_v)
-                yield tuple(path[first_idx:]) + (vertex_v,)
+                yield tuple(path[path.index(vertex_v):])
                 continue
 
             yield from self._depth_first_search(

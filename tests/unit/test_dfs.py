@@ -14,15 +14,15 @@ from project.main import detect_cycles  # pylint: disable=import-error
         ({"a": ["b"]}, []),
         (
             {"a": ["b"], "b": ["a"]},
-            [("a", "b", "a")],
+            [("b", "a")],
         ),
         (
             {"m1": ["a"], "m2": ["a"], "a": ["b"], "b": ["a"]},
-            [("a", "b", "a")],
+            [("b", "a")],
         ),
         (
             {"m1": ["a"], "m2": ["b"], "a": ["b"], "b": ["a"]},
-            [("a", "b", "a")],
+            [("b", "a")],
         ),
         (
             {
@@ -32,7 +32,7 @@ from project.main import detect_cycles  # pylint: disable=import-error
                 "c21": ["c22"],
                 "c22": ["c21"],
             },
-            [("c11", "c12", "c11"), ("c21", "c22", "c21")],
+            [("c12", "c11"), ("c22", "c21")],
         ),
         (
             {
@@ -45,9 +45,9 @@ from project.main import detect_cycles  # pylint: disable=import-error
                 "c22": ["c21"],
             },
             [
-                ("c11", "c12", "c11"),
-                ("c11", "c13", "c14", "c11"),
-                ("c21", "c22", "c21"),
+                ("c12", "c11"),
+                ("c11", "c13", "c14"),
+                ("c22", "c21"),
             ],
         ),
     ],
