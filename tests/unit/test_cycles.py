@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Mapping, Sequence, Tuple
 
 import pytest
+
 from project.main import DFS, Module, PyModule  # pylint: disable=import-error
 
 

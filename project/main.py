@@ -11,18 +11,7 @@ import os
 import random
 import sys
 from pathlib import Path
-from typing import (
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    NamedTuple,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import Dict, Iterable, List, Mapping, NamedTuple, Optional, Sequence, Set, Tuple, Union
 
 from graphviz import Digraph
 
