@@ -1,14 +1,16 @@
 SHELL := /bin/bash -e
 BLACK := ../scripts/run-black
 ISORT := ../scripts/run-isort
-PYTEST := py.test -vv unit
+PYTEST := ../scripts/run-pytest
 MYPY := ../scripts/run-mypy
 PYLINT := ../scripts/run-pylint
 SHELLCHECK := ../scripts/run-shellcheck
 
+.PHONY: test-format-python test-unit test-mypy test-pylint test-scripts
+
 test-format-python:
 	@$(BLACK) --diff
-	@$(ISORT)
+	@$(ISORT) --check
 
 test-unit:
 	@$(PYTEST)

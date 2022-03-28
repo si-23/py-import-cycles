@@ -1,17 +1,13 @@
 #!/bin/bash
 
 REPO_PATH=$(dirname "$(dirname "$(realpath "$0")")")
-run_pipenv=$REPO_PATH/scripts/run-pipenv
 
-if [ -n "$1" ]; then
-	python_files="$1"
-else
-	python_files="$("$REPO_PATH/scripts/find-python-files" --mypy)"
-fi
-
+python_files=$("${REPO_PATH}"/scripts/find-python-files)
 if [ -z "$python_files" ]; then
     exit 0
 fi
 
 # shellcheck disable=SC2086
-$run_pipenv mypy --config-file ../mypy.ini $python_files
+exec "$REPO_PATH/scripts/run-pipenv" run mypy \
+    --config-file ../mypy.ini \
+    $python_files

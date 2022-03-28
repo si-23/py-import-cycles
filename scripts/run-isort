@@ -1,17 +1,21 @@
 #!/bin/bash
 
 REPO_PATH=$(dirname "$(dirname "$(realpath "$0")")")
-run_pipenv=$REPO_PATH/scripts/run-pipenv
 
-if [ -n "$1" ]; then
-	python_files="$1"
-else
-	python_files="$("$REPO_PATH/scripts/find-python-files")"
+python_files=$("${REPO_PATH}"/scripts/find-python-files)
+if [ -z "$python_files" ]; then
+    exit 0
 fi
 
 # shellcheck disable=SC2086
-output=$($run_pipenv isort --profile black "$@" $python_files 2>&1)
-if [ -n "$output" ]; then
-    echo -e "$output"
+reformatted_files=$(
+    "$REPO_PATH/scripts/run-pipenv" run isort \
+    --settings-path "$REPO_PATH"/pyproject.toml \
+    "$@" $python_files 2>&1 |\
+    grep "^ERROR:"
+)
+
+if [ -n "$reformatted_files" ]; then
+    echo -e "$reformatted_files"
     exit 1
 fi

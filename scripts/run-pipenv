@@ -7,4 +7,10 @@ if [ ! -d "$REPO_PATH/.venv" ]; then
     PIPENV_VENV_IN_PROJECT=true pipenv install --dev
 fi
 
-PIPENV_VENV_IN_PROJECT=true pipenv run "$@"
+PIPENV_VENV_IN_PROJECT=true \
+    PIPENV_NOSPIN=true \
+    PIPENV_HIDE_EMOJIS=true \
+    PIPENV_NO_INHERIT=true \
+    PIPENV_PIPFILE="$REPO_PATH/Pipfile" \
+    PIPENV_IGNORE_VIRTUALENVS=1 \
+    pipenv "$@"
