@@ -9,5 +9,5 @@ fi
 
 # shellcheck disable=SC2086
 exec "$REPO_PATH/scripts/run-pipenv" run mypy \
-    --config-file ../mypy.ini \
+    --config-file "$REPO_PATH"/mypy.ini \
     $python_files
