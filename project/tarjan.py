@@ -1,6 +1,8 @@
-from typing import Hashable, List, Mapping, MutableMapping, Sequence, Tuple, TypeVar
+from typing import List, Mapping, MutableMapping, Sequence, Tuple, TypeVar
 
-T = TypeVar("T", bound=Hashable)
+from project.typing import Comparable
+
+T = TypeVar("T", bound=Comparable)
 
 
 def strongly_connected_components(graph: Mapping[T, Sequence[T]]) -> Sequence[Tuple[T, ...]]:

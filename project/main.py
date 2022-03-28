@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import abc
 import argparse
 import ast
 import importlib
@@ -20,7 +19,6 @@ from typing import (
     Mapping,
     NamedTuple,
     Optional,
-    Protocol,
     Sequence,
     Set,
     Tuple,
@@ -29,6 +27,9 @@ from typing import (
 )
 
 from graphviz import Digraph
+
+from project.tarjan import strongly_connected_components as tarjan_scc
+from project.typing import Comparable
 
 logger = logging.getLogger(__name__)
 
@@ -416,24 +417,20 @@ def _visit_python_file(
 #   '----------------------------------------------------------------------'
 
 
-class Comparable(Protocol):
-    @abc.abstractmethod
-    def __lt__(self: T, other: T) -> bool:
-        ...
-
-
 T = TypeVar("T", bound=Comparable)
 ImportCycle = Tuple[Module, ...]
 ImportCycles = Sequence[Tuple[int, ImportCycle]]
 
 
 def detect_cycles(
-    strategy: Literal["dfs", "johnson"], graph: Mapping[T, Sequence[T]]
+    strategy: Literal["dfs", "johnson", "tarjan"], graph: Mapping[T, Sequence[T]]
 ) -> Iterable[Tuple[T, ...]]:
     if strategy == "dfs":
         return DFS[T](graph).detect()
     if strategy == "johnson":
         return Johnson[T](graph).detect()
+    if strategy == "tarjan":
+        return (scc for scc in tarjan_scc(graph) if len(scc) > 1)
     raise NotImplementedError()
 
 
@@ -685,7 +682,7 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--strategy",
-        choices=["dfs", "johnson"],
+        choices=["dfs", "johnson", "tarjan"],
         default="dfs",
         help="path-based strong component algorithm",
     )
