@@ -17,8 +17,8 @@ jobs:
         run: pipenv install && pipenv install --dev
       - name: QA
         run: |
-          ./scripts/run-black
-          ./scripts/run-isort
+          ./scripts/run-black --check
+          ./scripts/run-isort --check
           ./scripts/run-mypy
           ./scripts/run-pylint
           ./scripts/run-shellcheck

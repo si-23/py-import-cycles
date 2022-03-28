@@ -10,7 +10,7 @@ fi
 # shellcheck disable=SC2086
 reformatted_files=$(
     "$REPO_PATH/scripts/run-pipenv" run black \
-    --settings-path "$REPO_PATH"/pyproject.toml \
+    --config "$REPO_PATH"/pyproject.toml \
     "$@" $python_files 2>&1 |\
     grep "^reformatted\|^would reformat"
 )
