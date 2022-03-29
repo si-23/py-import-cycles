@@ -768,7 +768,7 @@ def main(argv: Sequence[str]) -> int:
     return_code = bool(unsorted_cycles)
 
     logger.info("Sort import cycles")
-    import_cycles = list(enumerate(sorted(set(unsorted_cycles)), start=1))
+    import_cycles = list(enumerate(sorted(set(unsorted_cycles), key=len), start=1))
 
     _show_or_store_cycles(args, import_cycles)
 
