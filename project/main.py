@@ -28,6 +28,7 @@ from typing import (
 
 from graphviz import Digraph
 
+from project.dfs import depth_first_search
 from project.tarjan import strongly_connected_components as tarjan_scc
 from project.typing import Comparable
 
@@ -426,48 +427,12 @@ def detect_cycles(
     strategy: Literal["dfs", "johnson", "tarjan"], graph: Mapping[T, Sequence[T]]
 ) -> Iterable[Tuple[T, ...]]:
     if strategy == "dfs":
-        return DFS[T](graph).detect()
+        return depth_first_search(graph)
     if strategy == "johnson":
         return Johnson[T](graph).detect()
     if strategy == "tarjan":
         return (scc for scc in tarjan_scc(graph) if len(scc) > 1)
     raise NotImplementedError()
-
-
-def _get_vertices(graph: Mapping[T, Sequence[T]]) -> Sequence[T]:
-    vertices = set(graph)
-    vertices = vertices.union(
-        imported_module
-        for imported_modules in graph.values()
-        for imported_module in imported_modules
-    )
-    return sorted(vertices)
-
-
-class DFS(Generic[T]):
-    def __init__(self, graph: Mapping[T, Sequence[T]]) -> None:
-        self._adjacency_list = graph
-        self._visited: Set[T] = set()
-
-    def detect(self) -> Iterable[Tuple[T, ...]]:
-        for vertex in _get_vertices(self._adjacency_list):
-            yield from self._depth_first_search(vertex, [])
-
-    def _depth_first_search(self, vertex_u: T, path: List[T]) -> Iterable[Tuple[T, ...]]:
-        if vertex_u in self._visited:
-            return
-
-        for vertex_v in self._adjacency_list.get(vertex_u, []):
-            if vertex_v in path:
-                yield tuple(path[path.index(vertex_v) :])
-                continue
-
-            yield from self._depth_first_search(
-                vertex_v,
-                path + [vertex_v],
-            )
-
-        self._visited.add(vertex_u)
 
 
 class Johnson(Generic[T]):
