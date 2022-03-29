@@ -23,5 +23,5 @@ def depth_first_search(graph: Mapping[T, Sequence[T]]) -> Iterable[Tuple[T, ...]
 
         visited.add(vertex_u)
 
-    for vertex in graph:
+    for vertex in sorted(graph):
         yield from _dfs_util(vertex, [])
