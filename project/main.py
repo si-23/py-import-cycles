@@ -459,7 +459,7 @@ class DFS(Generic[T]):
 
         for vertex_v in self._adjacency_list.get(vertex_u, []):
             if vertex_v in path:
-                yield tuple(path[path.index(vertex_v):])
+                yield tuple(path[path.index(vertex_v) :])
                 continue
 
             yield from self._depth_first_search(
