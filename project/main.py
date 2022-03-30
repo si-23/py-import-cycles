@@ -30,7 +30,6 @@ from graphviz import Digraph
 
 from project.dfs import depth_first_search
 from project.tarjan import strongly_connected_components as tarjan_scc
-from project.typing import Comparable
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +96,6 @@ class PyModule(NamedTuple):
 
 
 Module = Union[Package, PyModule]
-ImportsByModule = Mapping[Module, Sequence[Module]]
 
 
 def make_module_from_name(
@@ -335,7 +333,7 @@ def _visit_python_files(
     project_path: Path,
     files: Iterable[Path],
     recursively: bool,
-) -> ImportsByModule:
+) -> Mapping[Module, Sequence[Module]]:
     imports_by_module = {
         visited[0]: visited[1]
         for path in files
@@ -418,21 +416,20 @@ def _visit_python_file(
 #   '----------------------------------------------------------------------'
 
 
-T = TypeVar("T", bound=Comparable)
-ImportCycle = Tuple[Module, ...]
-ImportCycles = Sequence[Tuple[int, ImportCycle]]
-
-
 def detect_cycles(
-    strategy: Literal["dfs", "johnson", "tarjan"], graph: Mapping[T, Sequence[T]]
-) -> Iterable[Tuple[T, ...]]:
+    strategy: Literal["dfs", "johnson", "tarjan"],
+    graph: Mapping[Module, Sequence[Module]],
+) -> Iterable[Tuple[Module, ...]]:
     if strategy == "dfs":
         return depth_first_search(graph)
     if strategy == "johnson":
-        return Johnson[T](graph).detect()
+        return Johnson[Module](graph).detect()
     if strategy == "tarjan":
         return (scc for scc in tarjan_scc(graph) if len(scc) > 1)
     raise NotImplementedError()
+
+
+T = TypeVar("T")
 
 
 class Johnson(Generic[T]):
@@ -498,8 +495,8 @@ class ImportEdge(NamedTuple):
 
 def _make_edges(
     args: argparse.Namespace,
-    imports_by_module: ImportsByModule,
-    import_cycles: ImportCycles,
+    imports_by_module: Mapping[Module, Sequence[Module]],
+    import_cycles: Sequence[Tuple[int, Tuple[Module, ...]]],
 ) -> Sequence[ImportEdge]:
     if args.graph == "all":
         return _make_all_edges(imports_by_module, import_cycles)
@@ -511,8 +508,8 @@ def _make_edges(
 
 
 def _make_all_edges(
-    imports_by_module: ImportsByModule,
-    import_cycles: ImportCycles,
+    imports_by_module: Mapping[Module, Sequence[Module]],
+    import_cycles: Sequence[Tuple[int, Tuple[Module, ...]]],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
     for module, imported_modules in imports_by_module.items():
@@ -535,7 +532,7 @@ def _make_all_edges(
 def _has_cycle(
     module: Module,
     imported_module: Module,
-    import_cycles: ImportCycles,
+    import_cycles: Sequence[Tuple[int, Tuple[Module, ...]]],
 ) -> bool:
     for _nr, import_cycle in import_cycles:
         try:
@@ -549,7 +546,7 @@ def _has_cycle(
 
 
 def _make_only_cycles_edges(
-    import_cycles: ImportCycles,
+    import_cycles: Sequence[Tuple[int, Tuple[Module, ...]]],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
     for nr, import_cycle in import_cycles:
@@ -687,7 +684,10 @@ def _setup_logging(args: argparse.Namespace, outputs_filepath: Path) -> None:
     logger.addHandler(handler)
 
 
-def _show_or_store_cycles(args: argparse.Namespace, import_cycles: ImportCycles) -> None:
+def _show_or_store_cycles(
+    args: argparse.Namespace,
+    import_cycles: Sequence[Tuple[int, Tuple[Module, ...]]],
+) -> None:
     if not import_cycles:
         return
 
