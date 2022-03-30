@@ -30,7 +30,6 @@ from graphviz import Digraph
 
 from project.dfs import depth_first_search
 from project.tarjan import strongly_connected_components as tarjan_scc
-from project.typing import Comparable
 
 logger = logging.getLogger(__name__)
 
@@ -417,19 +416,20 @@ def _visit_python_file(
 #   '----------------------------------------------------------------------'
 
 
-T = TypeVar("T", bound=Comparable)
-
-
 def detect_cycles(
-    strategy: Literal["dfs", "johnson", "tarjan"], graph: Mapping[T, Sequence[T]]
-) -> Iterable[Tuple[T, ...]]:
+    strategy: Literal["dfs", "johnson", "tarjan"],
+    graph: Mapping[Module, Sequence[Module]],
+) -> Iterable[Tuple[Module, ...]]:
     if strategy == "dfs":
         return depth_first_search(graph)
     if strategy == "johnson":
-        return Johnson[T](graph).detect()
+        return Johnson[Module](graph).detect()
     if strategy == "tarjan":
         return (scc for scc in tarjan_scc(graph) if len(scc) > 1)
     raise NotImplementedError()
+
+
+T = TypeVar("T")
 
 
 class Johnson(Generic[T]):

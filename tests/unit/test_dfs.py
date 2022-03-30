@@ -4,7 +4,7 @@ from typing import Mapping, Sequence, Tuple
 
 import pytest
 
-from project.main import detect_cycles  # pylint: disable=import-error
+from project.dfs import depth_first_search  # pylint: disable=import-error
 
 
 @pytest.mark.parametrize(
@@ -83,4 +83,4 @@ def test_cycles_str(
     graph: Mapping[str, Sequence[str]],
     cycles: Sequence[Tuple[str, ...]],
 ) -> None:
-    assert list(detect_cycles("dfs", graph)) == cycles
+    assert list(depth_first_search(graph)) == cycles
