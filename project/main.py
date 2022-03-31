@@ -5,12 +5,15 @@ from __future__ import annotations
 import argparse
 import ast
 import importlib
+import itertools
 import logging
 import os
 import random
 import sys
+from collections import defaultdict
 from pathlib import Path
 from typing import (
+    DefaultDict,
     Dict,
     Generic,
     Iterable,
@@ -30,6 +33,7 @@ from graphviz import Digraph
 
 from project.dfs import depth_first_search
 from project.tarjan import strongly_connected_components as tarjan_scc
+from project.typing import Comparable
 
 logger = logging.getLogger(__name__)
 
@@ -493,6 +497,38 @@ class ImportEdge(NamedTuple):
     edge_color: str
 
 
+def pairwise(iterable: Iterable[T]) -> Iterable[Tuple[T, T]]:
+    # pairwise('ABCDEFG') --> AB BC CD DE EF FG
+    a, b = itertools.tee(iterable)
+    next(b, None)
+    return zip(a, b)
+
+
+TC = TypeVar("TC", bound=Comparable)
+
+
+def count_edges(cycles: Iterable[Tuple[TC, ...]]) -> Mapping[Tuple[TC, TC], int]:
+    edges: DefaultDict[Tuple[TC, TC], int] = defaultdict(int)
+
+    def sort(x: Tuple[TC, TC]) -> Tuple[TC, TC]:
+        return x if x[0] < x[1] else x[::-1]
+
+    for cycle in cycles:
+        for edge in pairwise(cycle):
+            edges[sort(edge)] += 1
+    return edges
+
+
+def normalize(value: float, lower: float, higher: float) -> float:
+    if not lower <= value < higher:
+        raise ValueError(f"{value} is not within bounds")
+    if higher < lower:
+        raise ValueError("bounds are reverted")
+    if higher == lower:
+        raise ValueError("must use different bounds")
+    return (value - lower) / (higher - lower)
+
+
 def _make_edges(
     args: argparse.Namespace,
     imports_by_module: Mapping[Module, Sequence[Module]],
@@ -502,6 +538,8 @@ def _make_edges(
         return _make_all_edges(imports_by_module, import_cycles)
 
     if args.graph == "only-cycles":
+        if args.strategy == "dfs":
+            return _make_dfs_import_edges(import_cycles)
         return _make_only_cycles_edges(import_cycles)
 
     raise NotImplementedError("Unknown graph option: %s" % args.graph)
@@ -543,6 +581,22 @@ def _has_cycle(
         if import_cycle[idx + 1] == imported_module:
             return True
     return False
+
+
+def _make_dfs_import_edges(
+    cycles: Sequence[Tuple[Module, ...]],
+) -> Sequence[ImportEdge]:
+    edges = count_edges(cycles)
+    lower = min(edges.values())
+    higher = max(edges.values()) + 1
+
+    out = []
+    for edge, multi in edges.items():
+        nmulti = int(255 * normalize(multi, lower, higher))
+        assert 0 <= nmulti < 256
+        color = "#%02x%02x%02x" % (nmulti, 0, 255 - nmulti)
+        out.append(ImportEdge(str(multi), edge[0], edge[1], color))
+    return out
 
 
 def _make_only_cycles_edges(
