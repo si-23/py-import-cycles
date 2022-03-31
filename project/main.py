@@ -496,7 +496,7 @@ class ImportEdge(NamedTuple):
 def _make_edges(
     args: argparse.Namespace,
     imports_by_module: Mapping[Module, Sequence[Module]],
-    import_cycles: Sequence[Tuple[int, Tuple[Module, ...]]],
+    import_cycles: Sequence[Tuple[Module, ...]],
 ) -> Sequence[ImportEdge]:
     if args.graph == "all":
         return _make_all_edges(imports_by_module, import_cycles)
@@ -509,7 +509,7 @@ def _make_edges(
 
 def _make_all_edges(
     imports_by_module: Mapping[Module, Sequence[Module]],
-    import_cycles: Sequence[Tuple[int, Tuple[Module, ...]]],
+    import_cycles: Sequence[Tuple[Module, ...]],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
     for module, imported_modules in imports_by_module.items():
@@ -532,9 +532,9 @@ def _make_all_edges(
 def _has_cycle(
     module: Module,
     imported_module: Module,
-    import_cycles: Sequence[Tuple[int, Tuple[Module, ...]]],
+    import_cycles: Sequence[Tuple[Module, ...]],
 ) -> bool:
-    for _nr, import_cycle in import_cycles:
+    for import_cycle in import_cycles:
         try:
             idx = import_cycle.index(module)
         except ValueError:
@@ -546,10 +546,10 @@ def _has_cycle(
 
 
 def _make_only_cycles_edges(
-    import_cycles: Sequence[Tuple[int, Tuple[Module, ...]]],
+    import_cycles: Sequence[Tuple[Module, ...]],
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
-    for nr, import_cycle in import_cycles:
+    for nr, import_cycle in enumerate(import_cycles, start=1):
         color = "#%02x%02x%02x" % (
             random.randint(50, 200),
             random.randint(50, 200),
@@ -686,7 +686,7 @@ def _setup_logging(args: argparse.Namespace, outputs_filepath: Path) -> None:
 
 def _show_or_store_cycles(
     args: argparse.Namespace,
-    import_cycles: Sequence[Tuple[int, Tuple[Module, ...]]],
+    import_cycles: Sequence[Tuple[Module, ...]],
 ) -> None:
     if not import_cycles:
         return
@@ -697,7 +697,7 @@ def _show_or_store_cycles(
         if not args.verbose:
             return
 
-        for nr, import_cycle in import_cycles:
+        for nr, import_cycle in enumerate(import_cycles, start=1):
             sys.stderr.write("  %d: %s\n" % (nr, [ic.name for ic in import_cycle]))
         return
 
@@ -733,7 +733,7 @@ def main(argv: Sequence[str]) -> int:
     return_code = bool(unsorted_cycles)
 
     logger.info("Sort import cycles")
-    import_cycles = list(enumerate(sorted(set(unsorted_cycles), key=len), start=1))
+    import_cycles = sorted(set(unsorted_cycles), key=len)
 
     _show_or_store_cycles(args, import_cycles)
 
