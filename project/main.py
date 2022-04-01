@@ -507,16 +507,31 @@ def pairwise(iterable: Iterable[T]) -> Iterable[Tuple[T, T]]:
 TC = TypeVar("TC", bound=Comparable)
 
 
-def count_edges(cycles: Iterable[Tuple[TC, ...]]) -> Mapping[Tuple[TC, TC], int]:
-    edges: DefaultDict[Tuple[TC, TC], int] = defaultdict(int)
+def dedup_edges(cycles: Iterable[Tuple[TC, ...]]) -> Sequence[Tuple[TC, TC]]:
+    edges: Set[Tuple[TC, TC]] = set()
 
     def sort(x: Tuple[TC, TC]) -> Tuple[TC, TC]:
         return x if x[0] < x[1] else x[::-1]
 
     for cycle in cycles:
         for edge in pairwise(cycle):
-            edges[sort(edge)] += 1
-    return edges
+            edges.add(sort(edge))
+    return list(edges)
+
+
+def count_degree(edges: Sequence[Tuple[T, T]]) -> Mapping[T, int]:
+    degrees: DefaultDict[T, int] = defaultdict(int)
+    for edge in edges:
+        degrees[edge[0]] += 1
+        degrees[edge[1]] += 1
+    return degrees
+
+
+def badness(edges: Sequence[Tuple[T, T]]) -> Mapping[Tuple[T, T], float]:
+    # Get some idea of the badness of an edge by computing
+    # the average of the degrees of its vertices.
+    degree = count_degree(edges)
+    return {edge: (degree[edge[0]] + degree[edge[1]]) / 2 for edge in edges}
 
 
 def normalize(value: float, lower: float, higher: float) -> float:
@@ -586,7 +601,7 @@ def _has_cycle(
 def _make_dfs_import_edges(
     cycles: Sequence[Tuple[Module, ...]],
 ) -> Sequence[ImportEdge]:
-    edges = count_edges(cycles)
+    edges = badness(dedup_edges(cycles))
     lower = min(edges.values())
     higher = max(edges.values()) + 1
 
