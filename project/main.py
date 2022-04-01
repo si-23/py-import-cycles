@@ -787,7 +787,12 @@ def main(argv: Sequence[str]) -> int:
     return_code = bool(unsorted_cycles)
 
     logger.info("Sort import cycles")
-    import_cycles = sorted(set(unsorted_cycles), key=len)
+    sorted_cycles = sorted(set(unsorted_cycles), key=len)
+
+    logger.info("Close cycles")
+    import_cycles: Sequence[Tuple[Module, ...]] = [
+        ((cycle[-1],) + cycle) for cycle in sorted_cycles
+    ]
 
     _show_or_store_cycles(args, import_cycles)
 
