@@ -507,16 +507,26 @@ def pairwise(iterable: Iterable[T]) -> Iterable[Tuple[T, T]]:
 TC = TypeVar("TC", bound=Comparable)
 
 
-def count_edges(cycles: Iterable[Tuple[TC, ...]]) -> Mapping[Tuple[TC, TC], int]:
-    edges: DefaultDict[Tuple[TC, TC], int] = defaultdict(int)
-
-    def sort(x: Tuple[TC, TC]) -> Tuple[TC, TC]:
-        return x if x[0] < x[1] else x[::-1]
-
+def dedup_edges(cycles: Iterable[Tuple[TC, ...]]) -> Sequence[Tuple[TC, TC]]:
+    edges: Set[Tuple[TC, TC]] = set()
     for cycle in cycles:
-        for edge in pairwise(cycle):
-            edges[sort(edge)] += 1
-    return edges
+        edges |= frozenset(pairwise(cycle))
+    return list(edges)
+
+
+def count_degree(edges: Sequence[Tuple[T, T]]) -> Mapping[T, int]:
+    degrees: DefaultDict[T, int] = defaultdict(int)
+    for edge in edges:
+        degrees[edge[0]] -= 1
+        degrees[edge[1]] += 1
+    return degrees
+
+
+def badness(edges: Sequence[Tuple[T, T]]) -> Mapping[Tuple[T, T], float]:
+    # Get some idea of the badness of an edge by computing
+    # the average of the degrees of its vertices.
+    degree = count_degree(edges)
+    return {edge: 0.5 * (degree[edge[0]] + degree[edge[1]]) for edge in edges}
 
 
 def normalize(value: float, lower: float, higher: float) -> float:
@@ -586,16 +596,19 @@ def _has_cycle(
 def _make_dfs_import_edges(
     cycles: Sequence[Tuple[Module, ...]],
 ) -> Sequence[ImportEdge]:
-    edges = count_edges(cycles)
-    lower = min(edges.values())
-    higher = max(edges.values()) + 1
+    edges = badness(dedup_edges(cycles))
+    edges_values = edges.values()
+    bound = max(abs(min(edges_values)), abs(max(edges_values)))
 
     out = []
-    for edge, multi in edges.items():
-        nmulti = int(255 * normalize(multi, lower, higher))
-        assert 0 <= nmulti < 256
-        color = "#%02x%02x%02x" % (nmulti, 0, 255 - nmulti)
-        out.append(ImportEdge(str(multi), edge[0], edge[1], color))
+    for edge, value in edges.items():
+        nn = int(255 * normalize(value, -bound, bound + 1))
+        assert 0 <= nn < 256
+        if value < 0:
+            color = "#%02x%02x%02x" % (0, 255 - nn, nn)
+        else:
+            color = "#%02x%02x%02x" % (nn, 0, 255 - nn)
+        out.append(ImportEdge(str(value), edge[0], edge[1], color))
     return out
 
 
