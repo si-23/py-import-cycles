@@ -67,6 +67,8 @@ logger = logging.getLogger(__name__)
 # more log levels: verbose: log nrealy every step
 #                  debug: only log steps which are useful for dev
 
+# TODO #9
+# Check shebang
 
 # Cases:
 # import path.to.mod
@@ -102,7 +104,7 @@ class PyModule(NamedTuple):
 Module = Union[Package, PyModule]
 
 
-def make_module_from_name(
+def _make_module_from_name(
     mapping: Mapping[str, str],
     project_path: Path,
     module_name: str,
@@ -130,12 +132,16 @@ def make_module_from_name(
     return None
 
 
-def make_module_from_path(
+def _make_module_from_path(
     mapping: Mapping[str, str],
     project_path: Path,
     module_path: Path,
 ) -> Optional[Module]:
+    if module_path.stem == "__init__":
+        module_path = Path(*module_path.parts[:-1])
+
     parts = module_path.relative_to(project_path).with_suffix("").parts
+
     for key, value in mapping.items():
         if key == parts[0] and value in parts[1:]:
             parts = parts[1:]
@@ -189,7 +195,7 @@ def _get_python_files_recursively(
         for fp in path.iterdir():
             yield from _get_python_files_recursively(project_path, fp, namespaces)
 
-    if path.suffix != ".py" or path.stem == "__init__":
+    if path.suffix != ".py":
         return
 
     if all(ns in path.parts for ns in namespaces):
@@ -273,7 +279,7 @@ class ImportedModulesExtractor:
                 + import_from_stmt.module.split(".")
             )
 
-        module = make_module_from_name(
+        module = _make_module_from_name(
             self._mapping,
             self._project_path,
             module_name,
@@ -304,7 +310,7 @@ class ImportedModulesExtractor:
             if self._is_builtin_or_stdlib(alias.name):
                 continue
 
-            module = make_module_from_name(
+            module = _make_module_from_name(
                 self._mapping,
                 self._project_path,
                 ".".join([from_name, alias.name]) if from_name else alias.name,
@@ -338,6 +344,7 @@ def _visit_python_files(
     files: Iterable[Path],
     recursively: bool,
 ) -> Mapping[Module, Sequence[Module]]:
+    # TODO init/packages -> extend?
     imports_by_module = {
         visited[0]: visited[1]
         for path in files
@@ -369,7 +376,7 @@ def _visit_python_file(
     project_path: Path,
     path: Path,
 ) -> Optional[Tuple[Module, Sequence[Module]]]:
-    module = make_module_from_path(mapping, project_path, path)
+    module = _make_module_from_path(mapping, project_path, path)
 
     if module is None:
         # Should not happen
