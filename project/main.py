@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 # Is args.map really needed?
 
 # TODO #4
-# what to do with Packages in _visit_python_file?
+# what to do with RegularPackages in _visit_python_file?
 
 # TODO #5
 # Handle star imports
@@ -91,7 +91,13 @@ logger = logging.getLogger(__name__)
 #   '----------------------------------------------------------------------'
 
 
-class Package(NamedTuple):
+class RegularPackage(NamedTuple):
+    path: Path
+    folder: Path
+    name: str
+
+
+class NamespacePackage(NamedTuple):
     path: Path
     name: str
 
@@ -101,13 +107,11 @@ class PyModule(NamedTuple):
     name: str
 
 
-Module = Union[Package, PyModule]
+Module = Union[RegularPackage, NamespacePackage, PyModule]
 
 
 def _make_module_from_name(
-    mapping: Mapping[str, str],
-    project_path: Path,
-    module_name: str,
+    mapping: Mapping[str, str], project_path: Path, module_name: str
 ) -> Optional[Module]:
     parts = module_name.split(".")
     for key, value in mapping.items():
@@ -118,7 +122,14 @@ def _make_module_from_name(
     module_path = project_path.joinpath(Path(*parts))
 
     if module_path.is_dir():
-        return Package(
+        if (init_module_path := module_path / "__init__.py").exists():
+            return RegularPackage(
+                path=init_module_path,
+                folder=module_path,
+                name=module_name,
+            )
+
+        return NamespacePackage(
             path=module_path,
             name=module_name,
         )
@@ -133,35 +144,32 @@ def _make_module_from_name(
 
 
 def _make_module_from_path(
-    mapping: Mapping[str, str],
-    project_path: Path,
-    module_path: Path,
-) -> Optional[Module]:
+    mapping: Mapping[str, str], project_path: Path, module_path: Path
+) -> Module:
+    def _make_module_name_from_path(
+        mapping: Mapping[str, str], project_path: Path, module_path: Path
+    ) -> str:
+        parts = module_path.relative_to(project_path).with_suffix("").parts
+
+        for key, value in mapping.items():
+            if key == parts[0] and value in parts[1:]:
+                parts = parts[1:]
+                break
+
+        return ".".join(parts)
+
     if module_path.stem == "__init__":
-        module_path = Path(*module_path.parts[:-1])
-
-    parts = module_path.relative_to(project_path).with_suffix("").parts
-
-    for key, value in mapping.items():
-        if key == parts[0] and value in parts[1:]:
-            parts = parts[1:]
-            break
-
-    module_name = ".".join(parts)
-
-    if module_path.is_dir():
-        return Package(
+        folder = Path(*module_path.parts[:-1])
+        return RegularPackage(
             path=module_path,
-            name=module_name,
+            folder=folder,
+            name=_make_module_name_from_path(mapping, project_path, folder),
         )
 
-    if module_path.is_file() and module_path.suffix == ".py":
-        return PyModule(
-            path=module_path,
-            name=module_name,
-        )
-
-    return None
+    return PyModule(
+        path=module_path,
+        name=_make_module_name_from_path(mapping, project_path, module_path),
+    )
 
 
 # .
@@ -287,7 +295,8 @@ class ImportStmtsParser:
         if isinstance(module, PyModule):
             yield module
 
-        elif isinstance(module, Package):
+        elif isinstance(module, (RegularPackage, NamespacePackage)):
+            # TODO correct handling of NamespacePackage here?
             yield from self._get_imported_modules_from_aliases(
                 import_from_stmt.names,
                 from_name=module.name,
@@ -340,12 +349,7 @@ def _visit_python_file(
 ) -> Optional[ImportsOfModule]:
     module = _make_module_from_path(mapping, project_path, path)
 
-    if module is None:
-        # Should not happen
-        logger.debug("No such Python module: %s", module)
-        return None
-
-    if isinstance(module, Package):
+    if isinstance(module, NamespacePackage):
         return None
 
     try:
@@ -407,8 +411,8 @@ T = TypeVar("T")
 class Johnson(Generic[T]):
     def __init__(self, graph: Mapping[T, Sequence[T]]) -> None:
         self._adjacency_list = graph
-        # Does not matter if it's a Package or PyModule
-        self._root = Package(Path(), "root")
+        # Does not matter if it's a RegularPackage or PyModule
+        self._root = RegularPackage(Path(), Path(), "root")
         self._blocked: Dict[T, bool] = {}
 
     def detect(self) -> Iterable[Tuple[T, ...]]:
