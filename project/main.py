@@ -234,7 +234,7 @@ class NodeVisitorImports(ast.NodeVisitor):
         self._import_stmts.append(node)
 
 
-class ImportedModulesExtractor:
+class ImportStmtsParser:
     def __init__(
         self,
         mapping: Mapping[str, str],
@@ -247,7 +247,7 @@ class ImportedModulesExtractor:
         self._base_module = base_module
         self._import_stmts = import_stmts
 
-    def extract(self) -> Iterable[Module]:
+    def get_imports(self) -> Iterable[Module]:
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
                 yield from self._get_imported_modules_from_aliases(import_stmt.names)
@@ -328,44 +328,16 @@ class ImportedModulesExtractor:
             return False
 
 
-def _visit_python_files(
-    mapping: Mapping[str, str],
-    project_path: Path,
-    files: Iterable[Path],
-    recursively: bool,
-) -> Mapping[Module, Sequence[Module]]:
-    # TODO init/packages -> extend?
-    imports_by_module = {
-        visited[0]: visited[1]
-        for path in files
-        if (visited := _visit_python_file(mapping, project_path, path)) is not None
-    }
-
-    if not recursively:
-        return imports_by_module
-
-    # Collect imported modules and their imports
-    for module in set(
-        imported_module
-        for imported_modules in imports_by_module.values()
-        for imported_module in imported_modules
-    ).difference(imports_by_module):
-        if module in imports_by_module:
-            continue
-
-        if (visited := _visit_python_file(mapping, project_path, module.path)) is None:
-            continue
-
-        imports_by_module[visited[0]] = visited[1]
-
-    return imports_by_module
+class ImportsOfModule(NamedTuple):
+    module: Module
+    imports: Sequence[Module]
 
 
 def _visit_python_file(
     mapping: Mapping[str, str],
     project_path: Path,
     path: Path,
-) -> Optional[Tuple[Module, Sequence[Module]]]:
+) -> Optional[ImportsOfModule]:
     module = _make_module_from_path(mapping, project_path, path)
 
     if module is None:
@@ -392,15 +364,15 @@ def _visit_python_file(
     visitor = NodeVisitorImports()
     visitor.visit(tree)
 
-    extractor = ImportedModulesExtractor(
+    parser = ImportStmtsParser(
         mapping,
         project_path,
         module,
         visitor.import_stmts,
     )
 
-    if imported_modules := list(extractor.extract()):
-        return module, imported_modules
+    if imports := list(parser.get_imports()):
+        return ImportsOfModule(module, imports)
 
     return None
 
@@ -696,11 +668,6 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="Visit Python file if all of these namespaces are part of this file path",
     )
     parser.add_argument(
-        "--recursively",
-        action="store_true",
-        help="Visit Python modules or packages if not yet collected from Python files.",
-    )
-    parser.add_argument(
         "--strategy",
         choices=["dfs", "johnson", "tarjan"],
         default="dfs",
@@ -789,7 +756,11 @@ def main(argv: Sequence[str]) -> int:
     python_files = _get_python_files(project_path, args.folders, args.namespaces)
 
     logger.info("Visit Python files, get imports by module")
-    imports_by_module = _visit_python_files(mapping, project_path, python_files, args.recursively)
+    imports_by_module = {
+        visited.module: visited.imports
+        for path in python_files
+        if (visited := _visit_python_file(mapping, project_path, path)) is not None
+    }
 
     logger.info("Detect import cycles with strategy %s", args.strategy)
     unsorted_cycles = detect_cycles(args.strategy, imports_by_module)
