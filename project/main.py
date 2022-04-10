@@ -432,9 +432,9 @@ class Johnson(Generic[T]):
 
 def _make_graph(
     edges: Sequence[ImportEdge],
-    outputs_filepath: Path,
+    outputs_filepaths: OutputsFilepaths,
 ) -> Digraph:
-    d = Digraph("unix", filename=outputs_filepath.with_suffix(".gv"))
+    d = Digraph("unix", filename=outputs_filepaths.graph)
 
     with d.subgraph() as ds:
         for edge in edges:
@@ -687,21 +687,27 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _get_outputs_filepath(args: argparse.Namespace) -> Path:
+class OutputsFilepaths(NamedTuple):
+    log: Path
+    graph: Path
+
+
+def _get_outputs_filepaths(args: argparse.Namespace) -> OutputsFilepaths:
     target_dir = Path(os.path.abspath(__file__)).parent.parent.joinpath("outputs")
     target_dir.mkdir(parents=True, exist_ok=True)
-    return target_dir.joinpath(
-        "%s-%s-%s-import-cycles.log"
-        % (
-            "-".join(Path(args.project_path).parts[1:]),
-            "-".join(sorted(args.folders)),
-            "-".join(sorted(args.namespaces)),
-        )
+    filename = "%s-%s-%s" % (
+        "-".join(Path(args.project_path).parts[1:]),
+        "-".join(sorted(args.folders)),
+        "-".join(sorted(args.namespaces)),
+    )
+    return OutputsFilepaths(
+        log=(target_dir / filename).with_suffix(".log"),
+        graph=(target_dir / filename).with_suffix(".gv"),
     )
 
 
-def _setup_logging(args: argparse.Namespace, outputs_filepath: Path) -> None:
-    log_filepath = outputs_filepath.with_suffix(".log")
+def _setup_logging(args: argparse.Namespace, outputs_filepaths: OutputsFilepaths) -> None:
+    log_filepath = outputs_filepaths.log
     if args.debug:
         sys.stderr.write("Write log to %s\n" % log_filepath)
         log_level = logging.DEBUG
@@ -745,9 +751,9 @@ def _show_or_store_cycles(
 def main(argv: Sequence[str]) -> int:
     args = _parse_arguments(argv)
 
-    outputs_filepath = _get_outputs_filepath(args)
+    outputs_filepaths = _get_outputs_filepaths(args)
 
-    _setup_logging(args, outputs_filepath)
+    _setup_logging(args, outputs_filepaths)
 
     project_path = Path(args.project_path)
     if not project_path.exists() or not project_path.is_dir():
@@ -789,7 +795,7 @@ def main(argv: Sequence[str]) -> int:
         return return_code
 
     logger.info("Make graph")
-    graph = _make_graph(edges, outputs_filepath)
+    graph = _make_graph(edges, outputs_filepaths)
     graph.view()
 
     return return_code
