@@ -220,8 +220,7 @@ ImportSTMT = Union[ast.Import, ast.ImportFrom]
 
 
 class NodeVisitorImports(ast.NodeVisitor):
-    def __init__(self, path: Path) -> None:
-        self.path = path
+    def __init__(self) -> None:
         self._import_stmts: List[ImportSTMT] = []
 
     @property
@@ -248,23 +247,15 @@ class ImportedModulesExtractor:
         self._base_module = base_module
         self._import_stmts = import_stmts
 
-        self._imported_modules: List[Module] = []
-
-    @property
-    def imported_modules(self) -> Sequence[Module]:
-        return self._imported_modules
-
-    def extract(self) -> Sequence[Module]:
+    def extract(self) -> Iterable[Module]:
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
-                self._add_imported_modules_from_aliases(import_stmt.names)
+                yield from self._get_imported_modules_from_aliases(import_stmt.names)
 
             elif isinstance(import_stmt, ast.ImportFrom):
-                self._add_imported_from_modules(import_stmt)
+                yield from self._get_imported_from_modules(import_stmt)
 
-        return self._imported_modules
-
-    def _add_imported_from_modules(self, import_from_stmt: ast.ImportFrom) -> None:
+    def _get_imported_from_modules(self, import_from_stmt: ast.ImportFrom) -> Iterable[Module]:
         if not import_from_stmt.module:
             return
 
@@ -294,18 +285,17 @@ class ImportedModulesExtractor:
             return
 
         if isinstance(module, PyModule):
-            self._imported_modules.append(module)
-            return
+            yield module
 
-        if isinstance(module, Package):
-            self._add_imported_modules_from_aliases(
+        elif isinstance(module, Package):
+            yield from self._get_imported_modules_from_aliases(
                 import_from_stmt.names,
                 from_name=module.name,
             )
 
-    def _add_imported_modules_from_aliases(
+    def _get_imported_modules_from_aliases(
         self, aliases: Sequence[ast.alias], from_name: str = ""
-    ) -> None:
+    ) -> Iterable[Module]:
         for alias in aliases:
             if self._is_builtin_or_stdlib(alias.name):
                 continue
@@ -324,7 +314,7 @@ class ImportedModulesExtractor:
                 )
                 continue
 
-            self._imported_modules.append(module)
+            yield module
 
     @staticmethod
     def _is_builtin_or_stdlib(module_name: str) -> bool:
@@ -399,7 +389,7 @@ def _visit_python_file(
         logger.debug("Cannot visit python file %s: %s", module.path, e)
         return None
 
-    visitor = NodeVisitorImports(module.path)
+    visitor = NodeVisitorImports()
     visitor.visit(tree)
 
     extractor = ImportedModulesExtractor(
@@ -408,9 +398,8 @@ def _visit_python_file(
         module,
         visitor.import_stmts,
     )
-    extractor.extract()
 
-    if imported_modules := extractor.imported_modules:
+    if imported_modules := list(extractor.extract()):
         return module, imported_modules
 
     return None
