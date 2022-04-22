@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 # Is args.map really needed?
 
 # TODO #4
-# what to do with Packages in _visit_python_file?
+# what to do with RegularPackages in _visit_python_file?
 
 # TODO #5
 # Handle star imports
@@ -91,7 +91,13 @@ logger = logging.getLogger(__name__)
 #   '----------------------------------------------------------------------'
 
 
-class Package(NamedTuple):
+class RegularPackage(NamedTuple):
+    path: Path
+    folder: Path
+    name: str
+
+
+class NamespacePackage(NamedTuple):
     path: Path
     name: str
 
@@ -101,13 +107,11 @@ class PyModule(NamedTuple):
     name: str
 
 
-Module = Union[Package, PyModule]
+Module = Union[RegularPackage, NamespacePackage, PyModule]
 
 
 def _make_module_from_name(
-    mapping: Mapping[str, str],
-    project_path: Path,
-    module_name: str,
+    mapping: Mapping[str, str], project_path: Path, module_name: str
 ) -> Optional[Module]:
     parts = module_name.split(".")
     for key, value in mapping.items():
@@ -118,7 +122,14 @@ def _make_module_from_name(
     module_path = project_path.joinpath(Path(*parts))
 
     if module_path.is_dir():
-        return Package(
+        if (init_module_path := module_path / "__init__.py").exists():
+            return RegularPackage(
+                path=init_module_path,
+                folder=module_path,
+                name=module_name,
+            )
+
+        return NamespacePackage(
             path=module_path,
             name=module_name,
         )
@@ -133,35 +144,32 @@ def _make_module_from_name(
 
 
 def _make_module_from_path(
-    mapping: Mapping[str, str],
-    project_path: Path,
-    module_path: Path,
-) -> Optional[Module]:
+    mapping: Mapping[str, str], project_path: Path, module_path: Path
+) -> Module:
+    def _make_module_name_from_path(
+        mapping: Mapping[str, str], project_path: Path, module_path: Path
+    ) -> str:
+        parts = module_path.relative_to(project_path).with_suffix("").parts
+
+        for key, value in mapping.items():
+            if key == parts[0] and value in parts[1:]:
+                parts = parts[1:]
+                break
+
+        return ".".join(parts)
+
     if module_path.stem == "__init__":
-        module_path = Path(*module_path.parts[:-1])
-
-    parts = module_path.relative_to(project_path).with_suffix("").parts
-
-    for key, value in mapping.items():
-        if key == parts[0] and value in parts[1:]:
-            parts = parts[1:]
-            break
-
-    module_name = ".".join(parts)
-
-    if module_path.is_dir():
-        return Package(
+        folder = Path(*module_path.parts[:-1])
+        return RegularPackage(
             path=module_path,
-            name=module_name,
+            folder=folder,
+            name=_make_module_name_from_path(mapping, project_path, folder),
         )
 
-    if module_path.is_file() and module_path.suffix == ".py":
-        return PyModule(
-            path=module_path,
-            name=module_name,
-        )
-
-    return None
+    return PyModule(
+        path=module_path,
+        name=_make_module_name_from_path(mapping, project_path, module_path),
+    )
 
 
 # .
@@ -234,7 +242,7 @@ class NodeVisitorImports(ast.NodeVisitor):
         self._import_stmts.append(node)
 
 
-class ImportedModulesExtractor:
+class ImportStmtsParser:
     def __init__(
         self,
         mapping: Mapping[str, str],
@@ -247,7 +255,7 @@ class ImportedModulesExtractor:
         self._base_module = base_module
         self._import_stmts = import_stmts
 
-    def extract(self) -> Iterable[Module]:
+    def get_imports(self) -> Iterable[Module]:
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
                 yield from self._get_imported_modules_from_aliases(import_stmt.names)
@@ -287,7 +295,8 @@ class ImportedModulesExtractor:
         if isinstance(module, PyModule):
             yield module
 
-        elif isinstance(module, Package):
+        elif isinstance(module, (RegularPackage, NamespacePackage)):
+            # TODO correct handling of NamespacePackage here?
             yield from self._get_imported_modules_from_aliases(
                 import_from_stmt.names,
                 from_name=module.name,
@@ -328,52 +337,19 @@ class ImportedModulesExtractor:
             return False
 
 
-def _visit_python_files(
-    mapping: Mapping[str, str],
-    project_path: Path,
-    files: Iterable[Path],
-    recursively: bool,
-) -> Mapping[Module, Sequence[Module]]:
-    # TODO init/packages -> extend?
-    imports_by_module = {
-        visited[0]: visited[1]
-        for path in files
-        if (visited := _visit_python_file(mapping, project_path, path)) is not None
-    }
-
-    if not recursively:
-        return imports_by_module
-
-    # Collect imported modules and their imports
-    for module in set(
-        imported_module
-        for imported_modules in imports_by_module.values()
-        for imported_module in imported_modules
-    ).difference(imports_by_module):
-        if module in imports_by_module:
-            continue
-
-        if (visited := _visit_python_file(mapping, project_path, module.path)) is None:
-            continue
-
-        imports_by_module[visited[0]] = visited[1]
-
-    return imports_by_module
+class ImportsOfModule(NamedTuple):
+    module: Module
+    imports: Sequence[Module]
 
 
 def _visit_python_file(
     mapping: Mapping[str, str],
     project_path: Path,
     path: Path,
-) -> Optional[Tuple[Module, Sequence[Module]]]:
+) -> Optional[ImportsOfModule]:
     module = _make_module_from_path(mapping, project_path, path)
 
-    if module is None:
-        # Should not happen
-        logger.debug("No such Python module: %s", module)
-        return None
-
-    if isinstance(module, Package):
+    if isinstance(module, NamespacePackage):
         return None
 
     try:
@@ -392,15 +368,15 @@ def _visit_python_file(
     visitor = NodeVisitorImports()
     visitor.visit(tree)
 
-    extractor = ImportedModulesExtractor(
+    parser = ImportStmtsParser(
         mapping,
         project_path,
         module,
         visitor.import_stmts,
     )
 
-    if imported_modules := list(extractor.extract()):
-        return module, imported_modules
+    if imports := list(parser.get_imports()):
+        return ImportsOfModule(module, imports)
 
     return None
 
@@ -435,8 +411,8 @@ T = TypeVar("T")
 class Johnson(Generic[T]):
     def __init__(self, graph: Mapping[T, Sequence[T]]) -> None:
         self._adjacency_list = graph
-        # Does not matter if it's a Package or PyModule
-        self._root = Package(Path(), "root")
+        # Does not matter if it's a RegularPackage or PyModule
+        self._root = RegularPackage(Path(), Path(), "root")
         self._blocked: Dict[T, bool] = {}
 
     def detect(self) -> Iterable[Tuple[T, ...]]:
@@ -456,9 +432,9 @@ class Johnson(Generic[T]):
 
 def _make_graph(
     edges: Sequence[ImportEdge],
-    outputs_filepath: Path,
+    outputs_filepaths: OutputsFilepaths,
 ) -> Digraph:
-    d = Digraph("unix", filename=outputs_filepath.with_suffix(".gv"))
+    d = Digraph("unix", filename=outputs_filepaths.graph)
 
     with d.subgraph() as ds:
         for edge in edges:
@@ -696,11 +672,6 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="Visit Python file if all of these namespaces are part of this file path",
     )
     parser.add_argument(
-        "--recursively",
-        action="store_true",
-        help="Visit Python modules or packages if not yet collected from Python files.",
-    )
-    parser.add_argument(
         "--strategy",
         choices=["dfs", "johnson", "tarjan"],
         default="dfs",
@@ -716,21 +687,27 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _get_outputs_filepath(args: argparse.Namespace) -> Path:
+class OutputsFilepaths(NamedTuple):
+    log: Path
+    graph: Path
+
+
+def _get_outputs_filepaths(args: argparse.Namespace) -> OutputsFilepaths:
     target_dir = Path(os.path.abspath(__file__)).parent.parent.joinpath("outputs")
     target_dir.mkdir(parents=True, exist_ok=True)
-    return target_dir.joinpath(
-        "%s-%s-%s-import-cycles.log"
-        % (
-            "-".join(Path(args.project_path).parts[1:]),
-            "-".join(sorted(args.folders)),
-            "-".join(sorted(args.namespaces)),
-        )
+    filename = "%s-%s-%s" % (
+        "-".join(Path(args.project_path).parts[1:]),
+        "-".join(sorted(args.folders)),
+        "-".join(sorted(args.namespaces)),
+    )
+    return OutputsFilepaths(
+        log=(target_dir / filename).with_suffix(".log"),
+        graph=(target_dir / filename).with_suffix(".gv"),
     )
 
 
-def _setup_logging(args: argparse.Namespace, outputs_filepath: Path) -> None:
-    log_filepath = outputs_filepath.with_suffix(".log")
+def _setup_logging(args: argparse.Namespace, outputs_filepaths: OutputsFilepaths) -> None:
+    log_filepath = outputs_filepaths.log
     if args.debug:
         sys.stderr.write("Write log to %s\n" % log_filepath)
         log_level = logging.DEBUG
@@ -774,9 +751,9 @@ def _show_or_store_cycles(
 def main(argv: Sequence[str]) -> int:
     args = _parse_arguments(argv)
 
-    outputs_filepath = _get_outputs_filepath(args)
+    outputs_filepaths = _get_outputs_filepaths(args)
 
-    _setup_logging(args, outputs_filepath)
+    _setup_logging(args, outputs_filepaths)
 
     project_path = Path(args.project_path)
     if not project_path.exists() or not project_path.is_dir():
@@ -789,14 +766,18 @@ def main(argv: Sequence[str]) -> int:
     python_files = _get_python_files(project_path, args.folders, args.namespaces)
 
     logger.info("Visit Python files, get imports by module")
-    imports_by_module = _visit_python_files(mapping, project_path, python_files, args.recursively)
+    imports_by_module = {
+        visited.module: visited.imports
+        for path in python_files
+        if (visited := _visit_python_file(mapping, project_path, path)) is not None
+    }
 
     logger.info("Detect import cycles with strategy %s", args.strategy)
     unsorted_cycles = detect_cycles(args.strategy, imports_by_module)
     return_code = bool(unsorted_cycles)
 
     logger.info("Sort import cycles")
-    sorted_cycles = sorted(set(unsorted_cycles), key=len)
+    sorted_cycles = sorted(set(unsorted_cycles), key=lambda t: (len(t), t[0].name))
 
     logger.info("Close cycles")
     import_cycles: Sequence[Tuple[Module, ...]] = [
@@ -814,7 +795,7 @@ def main(argv: Sequence[str]) -> int:
         return return_code
 
     logger.info("Make graph")
-    graph = _make_graph(edges, outputs_filepath)
+    graph = _make_graph(edges, outputs_filepaths)
     graph.view()
 
     return return_code
