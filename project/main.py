@@ -14,8 +14,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import (
     DefaultDict,
-    Dict,
-    Generic,
     Iterable,
     List,
     Literal,
@@ -393,30 +391,14 @@ def _visit_python_file(
 
 
 def detect_cycles(
-    strategy: Literal["dfs", "johnson", "tarjan"],
+    strategy: Literal["dfs", "tarjan"],
     graph: Mapping[Module, Sequence[Module]],
 ) -> Iterable[Tuple[Module, ...]]:
     if strategy == "dfs":
         return depth_first_search(graph)
-    if strategy == "johnson":
-        return Johnson[Module](graph).detect()
     if strategy == "tarjan":
         return (scc for scc in tarjan_scc(graph) if len(scc) > 1)
     raise NotImplementedError()
-
-
-T = TypeVar("T")
-
-
-class Johnson(Generic[T]):
-    def __init__(self, graph: Mapping[T, Sequence[T]]) -> None:
-        self._adjacency_list = graph
-        # Does not matter if it's a RegularPackage or PyModule
-        self._root = RegularPackage(Path(), Path(), "root")
-        self._blocked: Dict[T, bool] = {}
-
-    def detect(self) -> Iterable[Tuple[T, ...]]:
-        pass
 
 
 # .
@@ -469,14 +451,15 @@ class ImportEdge(NamedTuple):
     edge_color: str
 
 
+T = TypeVar("T")
+TC = TypeVar("TC", bound=Comparable)
+
+
 def pairwise(iterable: Iterable[T]) -> Iterable[Tuple[T, T]]:
     # pairwise('ABCDEFG') --> AB BC CD DE EF FG
     a, b = itertools.tee(iterable)
     next(b, None)
     return zip(a, b)
-
-
-TC = TypeVar("TC", bound=Comparable)
 
 
 def dedup_edges(cycles: Iterable[Tuple[TC, ...]]) -> Sequence[Tuple[TC, TC]]:
@@ -673,7 +656,7 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--strategy",
-        choices=["dfs", "johnson", "tarjan"],
+        choices=["dfs", "tarjan"],
         default="dfs",
         help="path-based strong component algorithm",
     )
