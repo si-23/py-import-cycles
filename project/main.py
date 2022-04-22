@@ -181,26 +181,9 @@ def _make_module_from_path(
 #   '----------------------------------------------------------------------'
 
 
-def _get_python_files(project_path: Path, folders: Sequence[str]) -> Iterable[Path]:
-    for fp in project_path.iterdir():
-        if not fp.is_dir():
-            continue
-
-        if fp.name not in folders:
-            continue
-
-        yield from _get_python_files_recursively(project_path, fp)
-
-
-def _get_python_files_recursively(project_path: Path, path: Path) -> Iterable[Path]:
-    if path.is_dir():
-        for fp in path.iterdir():
-            yield from _get_python_files_recursively(project_path, fp)
-
-    if path.suffix != ".py":
-        return
-
-    yield path.resolve()
+def iter_python_files(project_path: Path, folders: Sequence[str]) -> Iterable[Path]:
+    for f in folders:
+        yield from (p.resolve() for p in (project_path / f).glob("**/*.py"))
 
 
 # .
@@ -731,7 +714,7 @@ def main(argv: Sequence[str]) -> int:
     mapping = {} if args.map is None else dict([entry.split(":") for entry in args.map])
 
     logger.info("Get Python files")
-    python_files = _get_python_files(project_path, args.folders)
+    python_files = iter_python_files(project_path, args.folders)
 
     logger.info("Visit Python files, get imports by module")
     imports_by_module = {
