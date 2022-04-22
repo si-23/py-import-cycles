@@ -181,9 +181,7 @@ def _make_module_from_path(
 #   '----------------------------------------------------------------------'
 
 
-def _get_python_files(
-    project_path: Path, folders: Sequence[str], namespaces: Sequence[str]
-) -> Iterable[Path]:
+def _get_python_files(project_path: Path, folders: Sequence[str]) -> Iterable[Path]:
     for fp in project_path.iterdir():
         if not fp.is_dir():
             continue
@@ -191,24 +189,18 @@ def _get_python_files(
         if fp.name not in folders:
             continue
 
-        yield from _get_python_files_recursively(project_path, fp, namespaces)
+        yield from _get_python_files_recursively(project_path, fp)
 
 
-def _get_python_files_recursively(
-    project_path: Path, path: Path, namespaces: Sequence[str]
-) -> Iterable[Path]:
+def _get_python_files_recursively(project_path: Path, path: Path) -> Iterable[Path]:
     if path.is_dir():
         for fp in path.iterdir():
-            yield from _get_python_files_recursively(project_path, fp, namespaces)
+            yield from _get_python_files_recursively(project_path, fp)
 
     if path.suffix != ".py":
         return
 
-    if all(ns in path.parts for ns in namespaces):
-        yield path.resolve()
-        return
-
-    logger.debug("Ignore path %r", path.relative_to(project_path))
+    yield path.resolve()
 
 
 # .
@@ -649,12 +641,6 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="collect Python files from top-level folders",
     )
     parser.add_argument(
-        "--namespaces",
-        nargs="+",
-        required=True,
-        help="Visit Python file if all of these namespaces are part of this file path",
-    )
-    parser.add_argument(
         "--strategy",
         choices=["dfs", "tarjan"],
         default="dfs",
@@ -678,10 +664,9 @@ class OutputsFilepaths(NamedTuple):
 def _get_outputs_filepaths(args: argparse.Namespace) -> OutputsFilepaths:
     target_dir = Path(os.path.abspath(__file__)).parent.parent.joinpath("outputs")
     target_dir.mkdir(parents=True, exist_ok=True)
-    filename = "%s-%s-%s" % (
+    filename = "%s-%s" % (
         "-".join(Path(args.project_path).parts[1:]),
         "-".join(sorted(args.folders)),
-        "-".join(sorted(args.namespaces)),
     )
     return OutputsFilepaths(
         log=(target_dir / filename).with_suffix(".log"),
@@ -746,7 +731,7 @@ def main(argv: Sequence[str]) -> int:
     mapping = {} if args.map is None else dict([entry.split(":") for entry in args.map])
 
     logger.info("Get Python files")
-    python_files = _get_python_files(project_path, args.folders, args.namespaces)
+    python_files = _get_python_files(project_path, args.folders)
 
     logger.info("Visit Python files, get imports by module")
     imports_by_module = {
