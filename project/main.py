@@ -14,8 +14,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import (
     DefaultDict,
-    Dict,
-    Generic,
     Iterable,
     List,
     Literal,
@@ -183,34 +181,9 @@ def _make_module_from_path(
 #   '----------------------------------------------------------------------'
 
 
-def _get_python_files(
-    project_path: Path, folders: Sequence[str], namespaces: Sequence[str]
-) -> Iterable[Path]:
-    for fp in project_path.iterdir():
-        if not fp.is_dir():
-            continue
-
-        if fp.name not in folders:
-            continue
-
-        yield from _get_python_files_recursively(project_path, fp, namespaces)
-
-
-def _get_python_files_recursively(
-    project_path: Path, path: Path, namespaces: Sequence[str]
-) -> Iterable[Path]:
-    if path.is_dir():
-        for fp in path.iterdir():
-            yield from _get_python_files_recursively(project_path, fp, namespaces)
-
-    if path.suffix != ".py":
-        return
-
-    if all(ns in path.parts for ns in namespaces):
-        yield path.resolve()
-        return
-
-    logger.debug("Ignore path %r", path.relative_to(project_path))
+def iter_python_files(project_path: Path, folders: Sequence[str]) -> Iterable[Path]:
+    for f in folders:
+        yield from (p.resolve() for p in (project_path / f).glob("**/*.py"))
 
 
 # .
@@ -393,30 +366,14 @@ def _visit_python_file(
 
 
 def detect_cycles(
-    strategy: Literal["dfs", "johnson", "tarjan"],
+    strategy: Literal["dfs", "tarjan"],
     graph: Mapping[Module, Sequence[Module]],
 ) -> Iterable[Tuple[Module, ...]]:
     if strategy == "dfs":
         return depth_first_search(graph)
-    if strategy == "johnson":
-        return Johnson[Module](graph).detect()
     if strategy == "tarjan":
         return (scc for scc in tarjan_scc(graph) if len(scc) > 1)
     raise NotImplementedError()
-
-
-T = TypeVar("T")
-
-
-class Johnson(Generic[T]):
-    def __init__(self, graph: Mapping[T, Sequence[T]]) -> None:
-        self._adjacency_list = graph
-        # Does not matter if it's a RegularPackage or PyModule
-        self._root = RegularPackage(Path(), Path(), "root")
-        self._blocked: Dict[T, bool] = {}
-
-    def detect(self) -> Iterable[Tuple[T, ...]]:
-        pass
 
 
 # .
@@ -469,14 +426,15 @@ class ImportEdge(NamedTuple):
     edge_color: str
 
 
+T = TypeVar("T")
+TC = TypeVar("TC", bound=Comparable)
+
+
 def pairwise(iterable: Iterable[T]) -> Iterable[Tuple[T, T]]:
     # pairwise('ABCDEFG') --> AB BC CD DE EF FG
     a, b = itertools.tee(iterable)
     next(b, None)
     return zip(a, b)
-
-
-TC = TypeVar("TC", bound=Comparable)
 
 
 def dedup_edges(cycles: Iterable[Tuple[TC, ...]]) -> Sequence[Tuple[TC, TC]]:
@@ -666,14 +624,8 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="collect Python files from top-level folders",
     )
     parser.add_argument(
-        "--namespaces",
-        nargs="+",
-        required=True,
-        help="Visit Python file if all of these namespaces are part of this file path",
-    )
-    parser.add_argument(
         "--strategy",
-        choices=["dfs", "johnson", "tarjan"],
+        choices=["dfs", "tarjan"],
         default="dfs",
         help="path-based strong component algorithm",
     )
@@ -695,10 +647,9 @@ class OutputsFilepaths(NamedTuple):
 def _get_outputs_filepaths(args: argparse.Namespace) -> OutputsFilepaths:
     target_dir = Path(os.path.abspath(__file__)).parent.parent.joinpath("outputs")
     target_dir.mkdir(parents=True, exist_ok=True)
-    filename = "%s-%s-%s" % (
+    filename = "%s-%s" % (
         "-".join(Path(args.project_path).parts[1:]),
         "-".join(sorted(args.folders)),
-        "-".join(sorted(args.namespaces)),
     )
     return OutputsFilepaths(
         log=(target_dir / filename).with_suffix(".log"),
@@ -763,7 +714,7 @@ def main(argv: Sequence[str]) -> int:
     mapping = {} if args.map is None else dict([entry.split(":") for entry in args.map])
 
     logger.info("Get Python files")
-    python_files = _get_python_files(project_path, args.folders, args.namespaces)
+    python_files = iter_python_files(project_path, args.folders)
 
     logger.info("Visit Python files, get imports by module")
     imports_by_module = {
