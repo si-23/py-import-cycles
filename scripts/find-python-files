@@ -2,4 +2,4 @@
 
 REPO_PATH=$(dirname "$(dirname "$(realpath "$0")")")
 
-find "$REPO_PATH/tests" "$REPO_PATH/project" -name "*.py" 2>/dev/null
+find "$REPO_PATH/tests" "$REPO_PATH/py_import_cycles" -name "*.py" 2>/dev/null

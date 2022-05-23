@@ -1,4 +1,4 @@
-from project.tarjan import strongly_connected_components as scc
+from py_import_cycles.tarjan import strongly_connected_components as scc
 
 
 def test_empty() -> None:

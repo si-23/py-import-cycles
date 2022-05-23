@@ -29,9 +29,9 @@ from typing import (
 
 from graphviz import Digraph
 
-from project.dfs import depth_first_search
-from project.tarjan import strongly_connected_components as tarjan_scc
-from project.typing import Comparable
+from py_import_cycles.dfs import depth_first_search
+from py_import_cycles.tarjan import strongly_connected_components as tarjan_scc
+from py_import_cycles.typing import Comparable
 
 logger = logging.getLogger(__name__)
 

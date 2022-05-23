@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from project.main import iter_python_files
+from py_import_cycles.main import iter_python_files
 
 
 @pytest.fixture(name="root")
