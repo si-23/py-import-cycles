@@ -578,7 +578,7 @@ def _make_only_cycles_edges(
 #   '----------------------------------------------------------------------'
 
 
-def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
+def _parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawTextHelpFormatter,
@@ -636,7 +636,7 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="Write cycles to file instead of printing on stderr",
     )
 
-    return parser.parse_args(argv)
+    return parser.parse_args()
 
 
 class OutputsFilepaths(NamedTuple):
@@ -699,8 +699,8 @@ def _show_or_store_cycles(
 # .
 
 
-def main(argv: Sequence[str]) -> int:
-    args = _parse_arguments(argv)
+def main() -> int:
+    args = _parse_arguments()
 
     outputs_filepaths = _get_outputs_filepaths(args)
 
@@ -753,4 +753,4 @@ def main(argv: Sequence[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())
