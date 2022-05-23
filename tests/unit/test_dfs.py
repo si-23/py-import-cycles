@@ -4,7 +4,7 @@ from typing import Mapping, Sequence, Tuple
 
 import pytest
 
-from project.dfs import depth_first_search  # pylint: disable=import-error
+from py_import_cycles.dfs import depth_first_search  # pylint: disable=import-error
 
 
 @pytest.mark.parametrize(
