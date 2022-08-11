@@ -482,7 +482,7 @@ def _make_edges(
             return _make_dfs_import_edges(import_cycles)
         return _make_only_cycles_edges(import_cycles)
 
-    raise NotImplementedError("Unknown graph option: %s" % args.graph)
+    raise NotImplementedError(f"Unknown graph option: {args.graph}")
 
 
 def _make_all_edges(
@@ -535,9 +535,9 @@ def _make_dfs_import_edges(
         nn = int(255 * normalize(value, -bound, bound + 1))
         assert 0 <= nn < 256
         if value < 0:
-            color = "#%02x%02x%02x" % (0, 255 - nn, nn)
+            color = "#%02x%02x%02x" % (0, 255 - nn, nn)  # pylint: disable=consider-using-f-string
         else:
-            color = "#%02x%02x%02x" % (nn, 0, 255 - nn)
+            color = "#%02x%02x%02x" % (nn, 0, 255 - nn)  # pylint: disable=consider-using-f-string
         out.append(ImportEdge(str(value), edge[0], edge[1], color))
     return out
 
@@ -547,7 +547,7 @@ def _make_only_cycles_edges(
 ) -> Sequence[ImportEdge]:
     edges: Set[ImportEdge] = set()
     for nr, import_cycle in enumerate(import_cycles, start=1):
-        color = "#%02x%02x%02x" % (
+        color = "#%02x%02x%02x" % (  # pylint: disable=consider-using-f-string
             random.randint(50, 200),
             random.randint(50, 200),
             random.randint(50, 200),
@@ -557,7 +557,7 @@ def _make_only_cycles_edges(
         for next_module in import_cycle[1:]:
             edges.add(
                 ImportEdge(
-                    "%s (%s)" % (str(nr), len(import_cycle) - 1),
+                    f"{str(nr)} ({len(import_cycle) - 1})",
                     start_module,
                     next_module,
                     color,
@@ -647,10 +647,7 @@ class OutputsFilepaths(NamedTuple):
 def _get_outputs_filepaths(args: argparse.Namespace) -> OutputsFilepaths:
     target_dir = Path(os.path.abspath(__file__)).parent.parent.joinpath("outputs")
     target_dir.mkdir(parents=True, exist_ok=True)
-    filename = "%s-%s" % (
-        "-".join(Path(args.project_path).parts[1:]),
-        "-".join(sorted(args.folders)),
-    )
+    filename = f"{'-'.join(Path(args.project_path).parts[1:])}-{'-'.join(sorted(args.folders))}"
     return OutputsFilepaths(
         log=(target_dir / filename).with_suffix(".log"),
         graph=(target_dir / filename).with_suffix(".gv"),
@@ -660,7 +657,7 @@ def _get_outputs_filepaths(args: argparse.Namespace) -> OutputsFilepaths:
 def _setup_logging(args: argparse.Namespace, outputs_filepaths: OutputsFilepaths) -> None:
     log_filepath = outputs_filepaths.log
     if args.debug:
-        sys.stderr.write("Write log to %s\n" % log_filepath)
+        sys.stderr.write(f"Write log to {log_filepath}\n")
         log_level = logging.DEBUG
     else:
         log_level = logging.NOTSET
@@ -682,17 +679,17 @@ def _show_or_store_cycles(
     if not import_cycles:
         return
 
-    sys.stderr.write("Found %d import cycles\n" % len(import_cycles))
+    sys.stderr.write(f"Found {len(import_cycles)} import cycles\n")
 
     if not args.store_cycles:
         if not args.verbose:
             return
 
         for nr, import_cycle in enumerate(import_cycles, start=1):
-            sys.stderr.write("  %d: %s\n" % (nr, [ic.name for ic in import_cycle]))
+            sys.stderr.write(f"  {nr}: {[ic.name for ic in import_cycle]}\n")
         return
 
-    with Path(args.store_cycles).open("w") as f:
+    with Path(args.store_cycles).open("w", encoding="utf-8") as f:
         f.write("\n".join([str(ic) for ic in import_cycles]))
 
 
@@ -708,7 +705,7 @@ def main() -> int:
 
     project_path = Path(args.project_path)
     if not project_path.exists() or not project_path.is_dir():
-        sys.stderr.write("No such directory: %s\n" % project_path)
+        sys.stderr.write(f"No such directory: {project_path}\n")
         return 1
 
     mapping = {} if args.map is None else dict([entry.split(":") for entry in args.map])

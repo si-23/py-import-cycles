@@ -9,7 +9,6 @@ disable=
     # Why?
     fixme,
     too-few-public-methods,
-    no-self-use,
     invalid-name,
     too-many-instance-attributes,
     too-many-return-statements,
