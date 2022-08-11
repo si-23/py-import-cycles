@@ -2,7 +2,7 @@
 
 from typing import Iterable, List, Mapping, Sequence, Set, Tuple, TypeVar
 
-from py_import_cycles.typing import Comparable
+from py_import_cycles.type_defs import Comparable
 
 T = TypeVar("T", bound=Comparable)
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ast
-import importlib
+import importlib.util
 import itertools
 import logging
 import os
@@ -31,7 +31,7 @@ from graphviz import Digraph
 
 from py_import_cycles.dfs import depth_first_search
 from py_import_cycles.tarjan import strongly_connected_components as tarjan_scc
-from py_import_cycles.typing import Comparable
+from py_import_cycles.type_defs import Comparable
 
 logger = logging.getLogger(__name__)
 
