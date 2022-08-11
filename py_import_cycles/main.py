@@ -7,7 +7,6 @@ import ast
 import importlib.util
 import itertools
 import logging
-import os
 import random
 import sys
 from collections import defaultdict
@@ -645,7 +644,7 @@ class OutputsFilepaths(NamedTuple):
 
 
 def _get_outputs_filepaths(args: argparse.Namespace) -> OutputsFilepaths:
-    target_dir = Path(os.path.abspath(__file__)).parent.parent.joinpath("outputs")
+    target_dir = Path.home() / Path(".local", "py_import_cycles", "outputs")
     target_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{'-'.join(Path(args.project_path).parts[1:])}-{'-'.join(sorted(args.folders))}"
     return OutputsFilepaths(
