@@ -2,7 +2,7 @@ from py_import_cycles.tarjan import strongly_connected_components as scc
 
 
 def test_empty() -> None:
-    assert scc({}) == []
+    assert not scc({})
 
 
 def test_tree() -> None:
