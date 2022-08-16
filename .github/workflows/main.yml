@@ -24,3 +24,5 @@ jobs:
           ./scripts/run-shellcheck
       - name: Test
         run: pipenv run pytest tests
+      - name: Projects
+        run: ./scripts/run-projects
