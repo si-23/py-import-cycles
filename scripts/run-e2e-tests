@@ -1,0 +1,20 @@
+#!/bin/bash
+
+REPO_PATH=$(dirname "$(dirname "$(realpath "$0")")")
+
+echo "===== Cleanup pycache ====="
+find "${REPO_PATH}/e2e_test_inputs" -name __pycache__ -exec rm -rf {} \+
+
+cd "$REPO_PATH" || exit 1
+
+for project in ./e2e_test_inputs/*; do
+    echo "===== Test $project ====="
+    pipenv run python3 "$project/main.py" 1>/dev/null || { echo "Test $project failed (execution of main)." >&2; exit 1; }
+
+    last_line=$(PYTHONPATH="." ./run-main --graph no --project-path "$REPO_PATH/$project" 2>&1 | tail -n1)
+
+    if ! echo "$last_line" | grep -q "Found $(cat "$REPO_PATH/$project"/found_cycles) import cycles"; then
+        echo "Test $project failed (number of cycles)." >&2
+        exit 1
+    fi
+done
