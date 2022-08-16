@@ -236,12 +236,23 @@ class ImportStmtsParser:
     def get_imports(self) -> Iterable[Module]:
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
-                yield from self._get_imported_modules_from_aliases(import_stmt.names)
+                yield from self._get_modules_of_import_stmt(import_stmt)
 
             elif isinstance(import_stmt, ast.ImportFrom):
-                yield from self._get_imported_from_modules(import_stmt)
+                yield from self._get_modules_of_import_from_stmt(import_stmt)
 
-    def _get_imported_from_modules(self, import_from_stmt: ast.ImportFrom) -> Iterable[Module]:
+    # -----ast.Import-----
+
+    def _get_modules_of_import_stmt(self, import_stmt: ast.Import) -> Iterable[Module]:
+        for alias in import_stmt.names:
+            if imported_module := self._get_module(alias.name):
+                yield imported_module
+
+    # -----ast.ImportFrom-----
+
+    def _get_modules_of_import_from_stmt(
+        self, import_from_stmt: ast.ImportFrom
+    ) -> Iterable[Module]:
         if not import_from_stmt.module:
             return
 
@@ -275,33 +286,26 @@ class ImportStmtsParser:
 
         elif isinstance(module, (RegularPackage, NamespacePackage)):
             # TODO correct handling of NamespacePackage here?
-            yield from self._get_imported_modules_from_aliases(
-                import_from_stmt.names,
-                from_name=module.name,
-            )
+            for alias in import_from_stmt.names:
+                if imported_module := self._get_module(alias.name, from_name=module.name):
+                    yield imported_module
 
-    def _get_imported_modules_from_aliases(
-        self, aliases: Sequence[ast.alias], from_name: str = ""
-    ) -> Iterable[Module]:
-        for alias in aliases:
-            if self._is_builtin_or_stdlib(alias.name):
-                continue
+    # -----helper-----
 
-            module = _make_module_from_name(
-                self._mapping,
-                self._project_path,
-                ".".join([from_name, alias.name]) if from_name else alias.name,
-            )
+    def _get_module(self, name: str, from_name: str = "") -> Optional[Module]:
+        if self._is_builtin_or_stdlib(name):
+            return None
 
-            if module is None:
-                logger.debug(
-                    "Unhandled import in %s: %s",
-                    self._base_module.name,
-                    ast.dump(alias),
-                )
-                continue
+        module = _make_module_from_name(
+            self._mapping,
+            self._project_path,
+            ".".join([from_name, name]) if from_name else name,
+        )
 
-            yield module
+        if module is None:
+            return None
+
+        return module
 
     @staticmethod
     def _is_builtin_or_stdlib(module_name: str) -> bool:
