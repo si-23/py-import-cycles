@@ -124,7 +124,7 @@ def _make_module_from_name(
             return RegularPackage(
                 path=init_module_path,
                 folder=module_path,
-                name=module_name,
+                name=".".join([module_name, "__init__"]),
             )
 
         return NamespacePackage(
@@ -161,7 +161,7 @@ def _make_module_from_path(
         return RegularPackage(
             path=module_path,
             folder=folder,
-            name=_make_module_name_from_path(mapping, project_path, folder),
+            name=".".join([_make_module_name_from_path(mapping, project_path, folder), "__init__"]),
         )
 
     return PyModule(
@@ -253,56 +253,66 @@ class ImportStmtsParser:
     def _get_modules_of_import_from_stmt(
         self, import_from_stmt: ast.ImportFrom
     ) -> Iterable[Module]:
-        if not import_from_stmt.module:
+        if not (module_name_prefix := self._get_name_prefix(import_from_stmt)):
             return
 
-        if self._is_builtin_or_stdlib(import_from_stmt.module):
+        if not (imported_module := self._get_module(module_name_prefix)):
             return
 
+        yield imported_module
+
+        if isinstance(imported_module, PyModule):
+            return
+
+        for alias in import_from_stmt.names:
+            # Add packages/modules to above prefix:
+            # 1 -> ../a/b/c{.py,/}
+            # 2 -> ../BASE/c{.py,/}
+            # 3 -> ../BASE/a/b/c{.py,/}
+            # 4 -> ../BASE_PARENT/a/b/c{.py,/}
+            if this_imported_module := self._get_module(".".join([module_name_prefix, alias.name])):
+                yield this_imported_module
+
+    def _get_name_prefix(self, import_from_stmt: ast.ImportFrom) -> str:
+        # Handle the cases:
+        # 1 from a.b import c (module == "a.b", level == 0)
+        #   -> Python module/package: ../a/b{.py,/}
+        # 2 from . import c (module == None, level == 1)
+        #   -> Python module/package: ../BASE{.py,/}
+        # 3 from .a.b import c (module == "a.b", level == 1)
+        #   -> Python module/package: ../BASE/a/b{.py,/}
+        # 4 from ..a.b import c (module == "a.b", level == 2)
+        #   -> Python module/package: ../BASE_PARENT/a/b{.py,/}
         if import_from_stmt.level == 0:
-            module_name = import_from_stmt.module
-        else:
-            module_name = ".".join(
-                self._base_module.name.split(".")[: -import_from_stmt.level]
-                + import_from_stmt.module.split(".")
-            )
+            return import_from_stmt.module if import_from_stmt.module else ""
 
-        module = _make_module_from_name(
-            self._mapping,
-            self._project_path,
-            module_name,
-        )
+        module_name_parts = self._base_module.name.split(".")[: -import_from_stmt.level]
+        if import_from_stmt.module:
+            module_name_parts += import_from_stmt.module.split(".")
 
-        if module is None:
-            logger.debug(
-                "Unhandled import in %s: %s",
-                self._base_module.name,
-                ast.dump(import_from_stmt),
-            )
-            return
-
-        if isinstance(module, PyModule):
-            yield module
-
-        elif isinstance(module, (RegularPackage, NamespacePackage)):
-            # TODO correct handling of NamespacePackage here?
-            for alias in import_from_stmt.names:
-                if imported_module := self._get_module(alias.name, from_name=module.name):
-                    yield imported_module
+        return ".".join(module_name_parts)
 
     # -----helper-----
 
-    def _get_module(self, name: str, from_name: str = "") -> Optional[Module]:
+    def _get_module(self, name: str) -> Optional[Module]:
         if self._is_builtin_or_stdlib(name):
             return None
 
         module = _make_module_from_name(
             self._mapping,
             self._project_path,
-            ".".join([from_name, name]) if from_name else name,
+            name,
         )
 
-        if module is None:
+        if (
+            module is None
+            or module == self._base_module
+            or (
+                isinstance(module, RegularPackage)
+                and module.name.split(".")[:-1] == self._base_module.name.split(".")[:-1]
+            )
+        ):
+            # Last if-part: do not add reg pkg, ie. __init__.py, of base module
             return None
 
         return module
