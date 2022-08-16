@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 # Handle relative imports properly
 
 # TODO #7
-# Exclude specific folders like tests...
+# Exclude specific packages like tests...
 
 # TODO #8
 # more log levels: verbose: log nrealy every step
@@ -180,9 +180,14 @@ def _make_module_from_path(
 #   '----------------------------------------------------------------------'
 
 
-def iter_python_files(project_path: Path, folders: Sequence[str]) -> Iterable[Path]:
-    for f in folders:
-        yield from (p.resolve() for p in (project_path / f).glob("**/*.py"))
+def _iter_python_files(project_path: Path, packages: Sequence[str]) -> Iterable[Path]:
+    if packages:
+        for pkg in packages:
+            yield from (p.resolve() for p in (project_path / pkg).glob("**/*.py"))
+        return
+
+    for p in project_path.glob("**/*.py"):
+        yield p.resolve()
 
 
 # .
@@ -614,13 +619,15 @@ def _parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--project-path",
         required=True,
-        help="path to project",
+        help=(
+            "path to project. If no packages are given collect all Python"
+            " files from this directory."
+        ),
     )
     parser.add_argument(
-        "--folders",
+        "--packages",
         nargs="+",
-        required=True,
-        help="collect Python files from top-level folders",
+        help="collect Python files from top-level packages",
     )
     parser.add_argument(
         "--strategy",
@@ -643,10 +650,16 @@ class OutputsFilepaths(NamedTuple):
     graph: Path
 
 
-def _get_outputs_filepaths(args: argparse.Namespace) -> OutputsFilepaths:
+def _get_outputs_filepaths(project_path: Path, packages: Sequence[str]) -> OutputsFilepaths:
     target_dir = Path.home() / Path(".local", "py_import_cycles", "outputs")
     target_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{'-'.join(Path(args.project_path).parts[1:])}-{'-'.join(sorted(args.folders))}"
+
+    filename_parts = list(Path(project_path).parts[1:])
+    if packages:
+        filename_parts.extend(sorted(packages))
+
+    filename = "-".join(filename_parts)
+
     return OutputsFilepaths(
         log=(target_dir / filename).with_suffix(".log"),
         graph=(target_dir / filename).with_suffix(".gv"),
@@ -698,19 +711,19 @@ def _show_or_store_cycles(
 def main() -> int:
     args = _parse_arguments()
 
-    outputs_filepaths = _get_outputs_filepaths(args)
-
-    _setup_logging(args, outputs_filepaths)
-
     project_path = Path(args.project_path)
+    packages = args.packages if args.packages else []
+
     if not project_path.exists() or not project_path.is_dir():
         sys.stderr.write(f"No such directory: {project_path}\n")
         return 1
 
+    outputs_filepaths = _get_outputs_filepaths(project_path, packages)
+    _setup_logging(args, outputs_filepaths)
     mapping = {} if args.map is None else dict([entry.split(":") for entry in args.map])
 
     logger.info("Get Python files")
-    python_files = iter_python_files(project_path, args.folders)
+    python_files = _iter_python_files(project_path, packages)
 
     logger.info("Visit Python files, get imports by module")
     imports_by_module = {
