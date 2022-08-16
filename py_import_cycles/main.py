@@ -89,6 +89,14 @@ logger = logging.getLogger(__name__)
 #   '----------------------------------------------------------------------'
 
 
+def _make_module_name(*parts: str) -> str:
+    return ".".join(parts)
+
+
+def _make_module_parts(name: str) -> Sequence[str]:
+    return name.split(".")
+
+
 class RegularPackage(NamedTuple):
     path: Path
     folder: Path
@@ -111,7 +119,7 @@ Module = Union[RegularPackage, NamespacePackage, PyModule]
 def _make_module_from_name(
     mapping: Mapping[str, str], project_path: Path, module_name: str
 ) -> Optional[Module]:
-    parts = module_name.split(".")
+    parts = list(_make_module_parts(module_name))
     for key, value in mapping.items():
         if value in parts:
             parts = [key] + parts
@@ -124,7 +132,7 @@ def _make_module_from_name(
             return RegularPackage(
                 path=init_module_path,
                 folder=module_path,
-                name=".".join([module_name, "__init__"]),
+                name=_make_module_name(module_name, "__init__"),
             )
 
         return NamespacePackage(
@@ -154,14 +162,17 @@ def _make_module_from_path(
                 parts = parts[1:]
                 break
 
-        return ".".join(parts)
+        return _make_module_name(*parts)
 
     if module_path.stem == "__init__":
         folder = Path(*module_path.parts[:-1])
         return RegularPackage(
             path=module_path,
             folder=folder,
-            name=".".join([_make_module_name_from_path(mapping, project_path, folder), "__init__"]),
+            name=_make_module_name(
+                _make_module_name_from_path(mapping, project_path, folder),
+                "__init__",
+            ),
         )
 
     return PyModule(
@@ -270,7 +281,9 @@ class ImportStmtsParser:
             # 2 -> ../BASE/c{.py,/}
             # 3 -> ../BASE/a/b/c{.py,/}
             # 4 -> ../BASE_PARENT/a/b/c{.py,/}
-            if this_imported_module := self._get_module(".".join([module_name_prefix, alias.name])):
+            if this_imported_module := self._get_module(
+                _make_module_name(module_name_prefix, alias.name)
+            ):
                 yield this_imported_module
 
     def _get_name_prefix(self, import_from_stmt: ast.ImportFrom) -> str:
@@ -286,11 +299,13 @@ class ImportStmtsParser:
         if import_from_stmt.level == 0:
             return import_from_stmt.module if import_from_stmt.module else ""
 
-        module_name_parts = self._base_module.name.split(".")[: -import_from_stmt.level]
+        module_name_parts = list(_make_module_parts(self._base_module.name))[
+            : -import_from_stmt.level
+        ]
         if import_from_stmt.module:
-            module_name_parts += import_from_stmt.module.split(".")
+            module_name_parts += list(_make_module_parts(import_from_stmt.module))
 
-        return ".".join(module_name_parts)
+        return _make_module_name(*module_name_parts)
 
     # -----helper-----
 
@@ -309,7 +324,8 @@ class ImportStmtsParser:
             or module == self._base_module
             or (
                 isinstance(module, RegularPackage)
-                and module.name.split(".")[:-1] == self._base_module.name.split(".")[:-1]
+                and _make_module_parts(module.name)[:-1]
+                == _make_module_parts(self._base_module.name)[:-1]
             )
         ):
             # Last if-part: do not add reg pkg, ie. __init__.py, of base module
