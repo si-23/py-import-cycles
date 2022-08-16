@@ -637,12 +637,6 @@ def _parse_arguments() -> argparse.Namespace:
         help="path-based strong component algorithm",
     )
 
-    parser.add_argument(
-        "--store-cycles",
-        type=str,
-        help="Write cycles to file instead of printing on stderr",
-    )
-
     return parser.parse_args()
 
 
@@ -688,25 +682,19 @@ def _setup_logging(args: argparse.Namespace, outputs_filepaths: OutputsFilepaths
     logger.addHandler(handler)
 
 
-def _show_or_store_cycles(
-    args: argparse.Namespace,
-    import_cycles: Sequence[Tuple[Module, ...]],
-) -> None:
-    if not import_cycles:
-        return
-
+def _log_or_show_cycles(import_cycles: Sequence[Tuple[Module, ...]], verbose: bool) -> None:
     sys.stderr.write(f"Found {len(import_cycles)} import cycles\n")
 
-    if not args.store_cycles:
-        if not args.verbose:
-            return
+    if logger.level == logging.DEBUG:
+        # Avoid execution of pprint.pformat call if not debug
+        logger.debug(
+            "Import cycles: %s",
+            pprint.pformat(dict(enumerate(import_cycles, start=1))),
+        )
 
+    if verbose:
         for nr, import_cycle in enumerate(import_cycles, start=1):
             sys.stderr.write(f"  {nr}: {[ic.name for ic in import_cycle]}\n")
-        return
-
-    with Path(args.store_cycles).open("w", encoding="utf-8") as f:
-        f.write("\n".join([str(ic) for ic in import_cycles]))
 
 
 # .
@@ -738,7 +726,7 @@ def main() -> int:
     }
 
     if logger.level == logging.DEBUG:
-        # Avoid execution of dict comprehension if not debug
+        # Avoid execution of pprint.pformat call if not debug
         logger.debug(
             "Imports by module: %s",
             pprint.pformat(
@@ -758,7 +746,7 @@ def main() -> int:
         ((cycle[-1],) + cycle) for cycle in sorted_cycles
     ]
 
-    _show_or_store_cycles(args, import_cycles)
+    _log_or_show_cycles(import_cycles, args.verbose)
 
     if args.graph == "no":
         return return_code
