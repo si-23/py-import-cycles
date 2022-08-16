@@ -352,11 +352,12 @@ def _visit_python_file(
         module,
         visitor.import_stmts,
     )
+    imports = list(parser.get_imports())
 
-    if imports := list(parser.get_imports()):
-        return ImportsOfModule(module, imports)
-
-    return None
+    return ImportsOfModule(
+        module,
+        [import_ for idx, import_ in enumerate(imports) if import_ not in imports[:idx]],
+    )
 
 
 # .
