@@ -1,0 +1,24 @@
+#!/bin/bash
+
+REPO_PATH=$(dirname "$(dirname "$(realpath "$0")")")
+
+cd "$REPO_PATH" || exit 1
+
+echo "===== Cleanup pycache ====="
+pycaches=$(find "$REPO_PATH/tests/projects" -name __pycache__)
+if [ -n "$pycaches" ]; then
+    # shellcheck disable=SC2086
+    rm -r $pycaches
+fi
+
+for project in ./tests/projects/*; do
+    echo "===== Test $project ====="
+    pipenv run python3 "$project/main.py" 1>/dev/null || { echo "Test $project failed (execution of main)." >&2; exit 1; }
+
+    last_line=$(PYTHONPATH="." ./run-main --graph no --project-path "$REPO_PATH/$project" 2>&1 | tail -n1)
+
+    if ! echo "$last_line" | grep -q "Found $(cat "$REPO_PATH/$project"/found_cycles) import cycles"; then
+        echo "Test $project failed (number of cycles)." >&2
+        exit 1
+    fi
+done

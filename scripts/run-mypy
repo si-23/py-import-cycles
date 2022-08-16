@@ -2,7 +2,7 @@
 
 REPO_PATH=$(dirname "$(dirname "$(realpath "$0")")")
 
-python_files=$("${REPO_PATH}"/scripts/find-python-files)
+python_files=$("${REPO_PATH}"/scripts/find-python-files | grep -v "$REPO_PATH/tests/projects")
 if [ -z "$python_files" ]; then
     exit 0
 fi
