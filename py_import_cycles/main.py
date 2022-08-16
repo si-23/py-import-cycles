@@ -10,7 +10,7 @@ import logging
 import pprint
 import random
 import sys
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from pathlib import Path
 from typing import (
     DefaultDict,
@@ -181,7 +181,7 @@ def _make_module_from_path(
 #   '----------------------------------------------------------------------'
 
 
-def _iter_python_files(project_path: Path, packages: Sequence[str]) -> Iterable[Path]:
+def iter_python_files(project_path: Path, packages: Sequence[str]) -> Iterable[Path]:
     if packages:
         for pkg in packages:
             yield from (p.resolve() for p in (project_path / pkg).glob("**/*.py"))
@@ -352,11 +352,10 @@ def _visit_python_file(
         module,
         visitor.import_stmts,
     )
-    imports = list(parser.get_imports())
 
     return ImportsOfModule(
         module,
-        [import_ for idx, import_ in enumerate(imports) if import_ not in imports[:idx]],
+        list(OrderedDict.fromkeys(parser.get_imports())),
     )
 
 
@@ -729,7 +728,7 @@ def main() -> int:
     _setup_logging(args, outputs_filepaths)
 
     logger.info("Get Python files")
-    python_files = _iter_python_files(project_path, packages)
+    python_files = iter_python_files(project_path, packages)
 
     logger.info("Visit Python files, get imports by module")
     imports_by_module = {

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from py_import_cycles.main import _iter_python_files
+from py_import_cycles.main import iter_python_files
 
 
 @pytest.fixture(name="root")
@@ -21,7 +21,7 @@ def test_no_files(root: Path) -> None:
     projdir = root / "projdir"
     projdir.mkdir()
 
-    assert frozenset(_iter_python_files(root, [projdir.name])) == frozenset()
+    assert frozenset(iter_python_files(root, [projdir.name])) == frozenset()
 
 
 def test_single_file(root: Path) -> None:
@@ -30,7 +30,7 @@ def test_single_file(root: Path) -> None:
     proj = root / "projdir" / "proj.py"
     setup_py_file(proj)
 
-    assert frozenset(_iter_python_files(root, [proj.parent.name])) == {proj}
+    assert frozenset(iter_python_files(root, [proj.parent.name])) == {proj}
 
 
 def test_multiple_files(root: Path) -> None:
@@ -43,7 +43,7 @@ def test_multiple_files(root: Path) -> None:
     for p in proj:
         setup_py_file(p)
 
-    assert frozenset(_iter_python_files(root, [p.parent.name for p in proj])) == proj
+    assert frozenset(iter_python_files(root, [p.parent.name for p in proj])) == proj
 
 
 def test_multiple_file_with_excludes(root: Path) -> None:
@@ -52,7 +52,7 @@ def test_multiple_file_with_excludes(root: Path) -> None:
     for p in proj | excluded:
         setup_py_file(p)
 
-    assert frozenset(_iter_python_files(root, [p.parent.name for p in proj])) == proj
+    assert frozenset(iter_python_files(root, [p.parent.name for p in proj])) == proj
 
 
 def test_ignore_files_without_py_extention(root: Path) -> None:
@@ -63,7 +63,7 @@ def test_ignore_files_without_py_extention(root: Path) -> None:
     for p in proj | nopy:
         setup_py_file(p)
 
-    assert frozenset(_iter_python_files(root, [projdir.name])) == proj
+    assert frozenset(iter_python_files(root, [projdir.name])) == proj
 
 
 def test_ignore_extra_names_in_second_arg(root: Path) -> None:
@@ -72,7 +72,7 @@ def test_ignore_extra_names_in_second_arg(root: Path) -> None:
     for p in proj:
         setup_py_file(p)
 
-    assert frozenset(_iter_python_files(root, [projdir.name, "extra", "args"])) == proj
+    assert frozenset(iter_python_files(root, [projdir.name, "extra", "args"])) == proj
 
 
 def test_recurse_dirs(root: Path) -> None:
@@ -88,4 +88,4 @@ def test_recurse_dirs(root: Path) -> None:
     for p in proj:
         setup_py_file(p)
 
-    assert frozenset(_iter_python_files(root, ["p1", "p2"])) == proj
+    assert frozenset(iter_python_files(root, ["p1", "p2"])) == proj
