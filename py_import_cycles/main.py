@@ -267,13 +267,8 @@ class ImportStmtsParser:
         if not (module_name_prefix := self._get_name_prefix(import_from_stmt)):
             return
 
-        if not (imported_module := self._get_module(module_name_prefix)):
-            return
-
-        yield imported_module
-
-        if isinstance(imported_module, PyModule):
-            return
+        if imported_module := self._get_module(module_name_prefix):
+            yield imported_module
 
         for alias in import_from_stmt.names:
             # Add packages/modules to above prefix:
