@@ -7,6 +7,7 @@ import ast
 import importlib.util
 import itertools
 import logging
+import pprint
 import random
 import sys
 from collections import defaultdict
@@ -668,6 +669,9 @@ def _get_outputs_filepaths(project_path: Path, packages: Sequence[str]) -> Outpu
 
 def _setup_logging(args: argparse.Namespace, outputs_filepaths: OutputsFilepaths) -> None:
     log_filepath = outputs_filepaths.log
+
+    log_filepath.unlink(missing_ok=True)
+
     if args.debug:
         sys.stderr.write(f"Write log to {log_filepath}\n")
         log_level = logging.DEBUG
@@ -713,14 +717,15 @@ def main() -> int:
 
     project_path = Path(args.project_path)
     packages = args.packages if args.packages else []
+    mapping = {} if args.map is None else dict([entry.split(":") for entry in args.map])
 
     if not project_path.exists() or not project_path.is_dir():
         sys.stderr.write(f"No such directory: {project_path}\n")
         return 1
 
     outputs_filepaths = _get_outputs_filepaths(project_path, packages)
+
     _setup_logging(args, outputs_filepaths)
-    mapping = {} if args.map is None else dict([entry.split(":") for entry in args.map])
 
     logger.info("Get Python files")
     python_files = _iter_python_files(project_path, packages)
@@ -731,6 +736,15 @@ def main() -> int:
         for path in python_files
         if (visited := _visit_python_file(mapping, project_path, path)) is not None
     }
+
+    if logger.level == logging.DEBUG:
+        # Avoid execution of dict comprehension if not debug
+        logger.debug(
+            "Imports by module: %s",
+            pprint.pformat(
+                {ibm.name: [m.name for m in ms] for ibm, ms in imports_by_module.items()}
+            ),
+        )
 
     logger.info("Detect import cycles with strategy %s", args.strategy)
     unsorted_cycles = detect_cycles(args.strategy, imports_by_module)
