@@ -24,3 +24,5 @@ jobs:
           ./scripts/run-shellcheck
       - name: Test
         run: pipenv run pytest tests
+      - name: End2End tests
+        run: ./scripts/run-e2e-tests

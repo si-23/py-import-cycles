@@ -89,6 +89,14 @@ logger = logging.getLogger(__name__)
 #   '----------------------------------------------------------------------'
 
 
+def _make_module_name(*parts: str) -> str:
+    return ".".join(parts)
+
+
+def _make_module_parts(name: str) -> Sequence[str]:
+    return name.split(".")
+
+
 class RegularPackage(NamedTuple):
     path: Path
     folder: Path
@@ -111,7 +119,7 @@ Module = Union[RegularPackage, NamespacePackage, PyModule]
 def _make_module_from_name(
     mapping: Mapping[str, str], project_path: Path, module_name: str
 ) -> Optional[Module]:
-    parts = module_name.split(".")
+    parts = list(_make_module_parts(module_name))
     for key, value in mapping.items():
         if value in parts:
             parts = [key] + parts
@@ -124,7 +132,7 @@ def _make_module_from_name(
             return RegularPackage(
                 path=init_module_path,
                 folder=module_path,
-                name=module_name,
+                name=_make_module_name(module_name, "__init__"),
             )
 
         return NamespacePackage(
@@ -154,14 +162,17 @@ def _make_module_from_path(
                 parts = parts[1:]
                 break
 
-        return ".".join(parts)
+        return _make_module_name(*parts)
 
     if module_path.stem == "__init__":
         folder = Path(*module_path.parts[:-1])
         return RegularPackage(
             path=module_path,
             folder=folder,
-            name=_make_module_name_from_path(mapping, project_path, folder),
+            name=_make_module_name(
+                _make_module_name_from_path(mapping, project_path, folder),
+                "__init__",
+            ),
         )
 
     return PyModule(
@@ -236,72 +247,86 @@ class ImportStmtsParser:
     def get_imports(self) -> Iterable[Module]:
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
-                yield from self._get_imported_modules_from_aliases(import_stmt.names)
+                yield from self._get_modules_of_import_stmt(import_stmt)
 
             elif isinstance(import_stmt, ast.ImportFrom):
-                yield from self._get_imported_from_modules(import_stmt)
+                yield from self._get_modules_of_import_from_stmt(import_stmt)
 
-    def _get_imported_from_modules(self, import_from_stmt: ast.ImportFrom) -> Iterable[Module]:
-        if not import_from_stmt.module:
+    # -----ast.Import-----
+
+    def _get_modules_of_import_stmt(self, import_stmt: ast.Import) -> Iterable[Module]:
+        for alias in import_stmt.names:
+            if imported_module := self._get_module(alias.name):
+                yield imported_module
+
+    # -----ast.ImportFrom-----
+
+    def _get_modules_of_import_from_stmt(
+        self, import_from_stmt: ast.ImportFrom
+    ) -> Iterable[Module]:
+        if not (module_name_prefix := self._get_name_prefix(import_from_stmt)):
             return
 
-        if self._is_builtin_or_stdlib(import_from_stmt.module):
-            return
+        if imported_module := self._get_module(module_name_prefix):
+            yield imported_module
 
+        for alias in import_from_stmt.names:
+            # Add packages/modules to above prefix:
+            # 1 -> ../a/b/c{.py,/}
+            # 2 -> ../BASE/c{.py,/}
+            # 3 -> ../BASE/a/b/c{.py,/}
+            # 4 -> ../BASE_PARENT/a/b/c{.py,/}
+            if this_imported_module := self._get_module(
+                _make_module_name(module_name_prefix, alias.name)
+            ):
+                yield this_imported_module
+
+    def _get_name_prefix(self, import_from_stmt: ast.ImportFrom) -> str:
+        # Handle the cases:
+        # 1 from a.b import c (module == "a.b", level == 0)
+        #   -> Python module/package: ../a/b{.py,/}
+        # 2 from . import c (module == None, level == 1)
+        #   -> Python module/package: ../BASE{.py,/}
+        # 3 from .a.b import c (module == "a.b", level == 1)
+        #   -> Python module/package: ../BASE/a/b{.py,/}
+        # 4 from ..a.b import c (module == "a.b", level == 2)
+        #   -> Python module/package: ../BASE_PARENT/a/b{.py,/}
         if import_from_stmt.level == 0:
-            module_name = import_from_stmt.module
-        else:
-            module_name = ".".join(
-                self._base_module.name.split(".")[: -import_from_stmt.level]
-                + import_from_stmt.module.split(".")
-            )
+            return import_from_stmt.module if import_from_stmt.module else ""
+
+        module_name_parts = list(_make_module_parts(self._base_module.name))[
+            : -import_from_stmt.level
+        ]
+        if import_from_stmt.module:
+            module_name_parts += list(_make_module_parts(import_from_stmt.module))
+
+        return _make_module_name(*module_name_parts)
+
+    # -----helper-----
+
+    def _get_module(self, name: str) -> Optional[Module]:
+        if self._is_builtin_or_stdlib(name):
+            return None
 
         module = _make_module_from_name(
             self._mapping,
             self._project_path,
-            module_name,
+            name,
         )
 
-        if module is None:
-            logger.debug(
-                "Unhandled import in %s: %s",
-                self._base_module.name,
-                ast.dump(import_from_stmt),
+        if (
+            module is None
+            or module == self._base_module
+            or (
+                isinstance(module, RegularPackage)
+                and _make_module_parts(module.name)[:-1]
+                == _make_module_parts(self._base_module.name)[:-1]
             )
-            return
+        ):
+            # Last if-part: do not add reg pkg, ie. __init__.py, of base module
+            return None
 
-        if isinstance(module, PyModule):
-            yield module
-
-        elif isinstance(module, (RegularPackage, NamespacePackage)):
-            # TODO correct handling of NamespacePackage here?
-            yield from self._get_imported_modules_from_aliases(
-                import_from_stmt.names,
-                from_name=module.name,
-            )
-
-    def _get_imported_modules_from_aliases(
-        self, aliases: Sequence[ast.alias], from_name: str = ""
-    ) -> Iterable[Module]:
-        for alias in aliases:
-            if self._is_builtin_or_stdlib(alias.name):
-                continue
-
-            module = _make_module_from_name(
-                self._mapping,
-                self._project_path,
-                ".".join([from_name, alias.name]) if from_name else alias.name,
-            )
-
-            if module is None:
-                logger.debug(
-                    "Unhandled import in %s: %s",
-                    self._base_module.name,
-                    ast.dump(alias),
-                )
-                continue
-
-            yield module
+        return module
 
     @staticmethod
     def _is_builtin_or_stdlib(module_name: str) -> bool:
@@ -637,12 +662,6 @@ def _parse_arguments() -> argparse.Namespace:
         help="path-based strong component algorithm",
     )
 
-    parser.add_argument(
-        "--store-cycles",
-        type=str,
-        help="Write cycles to file instead of printing on stderr",
-    )
-
     return parser.parse_args()
 
 
@@ -688,25 +707,19 @@ def _setup_logging(args: argparse.Namespace, outputs_filepaths: OutputsFilepaths
     logger.addHandler(handler)
 
 
-def _show_or_store_cycles(
-    args: argparse.Namespace,
-    import_cycles: Sequence[Tuple[Module, ...]],
-) -> None:
-    if not import_cycles:
-        return
-
+def _log_or_show_cycles(import_cycles: Sequence[Tuple[Module, ...]], verbose: bool) -> None:
     sys.stderr.write(f"Found {len(import_cycles)} import cycles\n")
 
-    if not args.store_cycles:
-        if not args.verbose:
-            return
+    if logger.level == logging.DEBUG:
+        # Avoid execution of pprint.pformat call if not debug
+        logger.debug(
+            "Import cycles: %s",
+            pprint.pformat(dict(enumerate(import_cycles, start=1))),
+        )
 
+    if verbose:
         for nr, import_cycle in enumerate(import_cycles, start=1):
             sys.stderr.write(f"  {nr}: {[ic.name for ic in import_cycle]}\n")
-        return
-
-    with Path(args.store_cycles).open("w", encoding="utf-8") as f:
-        f.write("\n".join([str(ic) for ic in import_cycles]))
 
 
 # .
@@ -738,7 +751,7 @@ def main() -> int:
     }
 
     if logger.level == logging.DEBUG:
-        # Avoid execution of dict comprehension if not debug
+        # Avoid execution of pprint.pformat call if not debug
         logger.debug(
             "Imports by module: %s",
             pprint.pformat(
@@ -758,7 +771,7 @@ def main() -> int:
         ((cycle[-1],) + cycle) for cycle in sorted_cycles
     ]
 
-    _show_or_store_cycles(args, import_cycles)
+    _log_or_show_cycles(import_cycles, args.verbose)
 
     if args.graph == "no":
         return return_code
