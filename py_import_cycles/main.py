@@ -99,7 +99,6 @@ def _make_module_parts(name: str) -> Sequence[str]:
 
 class RegularPackage(NamedTuple):
     path: Path
-    folder: Path
     name: str
 
 
@@ -131,7 +130,6 @@ def _make_module_from_name(
         if (init_module_path := module_path / "__init__.py").exists():
             return RegularPackage(
                 path=init_module_path,
-                folder=module_path,
                 name=_make_module_name(module_name, "__init__"),
             )
 
@@ -168,7 +166,6 @@ def _make_module_from_path(
         folder = Path(*module_path.parts[:-1])
         return RegularPackage(
             path=module_path,
-            folder=folder,
             name=_make_module_name(
                 _make_module_name_from_path(mapping, project_path, folder),
                 "__init__",
