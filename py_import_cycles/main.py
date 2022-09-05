@@ -11,15 +11,16 @@ import pprint
 import random
 import sys
 from collections import defaultdict, OrderedDict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import (
     DefaultDict,
+    Final,
     Iterable,
     List,
     Literal,
     Mapping,
     NamedTuple,
-    Optional,
     Sequence,
     Set,
     Tuple,
@@ -89,96 +90,134 @@ logger = logging.getLogger(__name__)
 #   '----------------------------------------------------------------------'
 
 
-def _make_module_name(*parts: str) -> str:
-    return ".".join(parts)
+class ModuleName:
+    """This class is inspired by pathlib.Path"""
 
+    def __init__(self, *parts: str | ModuleName) -> None:
+        self._parts: Final[tuple[str, ...]] = tuple(
+            entry
+            for part in parts
+            for entry in (part.parts if isinstance(part, ModuleName) else part.split("."))
+        )
 
-def _make_module_parts(name: str) -> Sequence[str]:
-    return name.split(".")
+    def __str__(self) -> str:
+        return ".".join(self._parts)
+
+    def __hash__(self) -> int:
+        return hash(self._parts)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ModuleName):
+            return NotImplemented
+        return self._parts == other._parts
+
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, ModuleName):
+            return NotImplemented
+        return self._parts < other._parts
+
+    def __gt__(self, other: object) -> bool:
+        if not isinstance(other, ModuleName):
+            return NotImplemented
+        return self._parts > other._parts
+
+    @property
+    def parts(self) -> Sequence[str]:
+        return self._parts
+
+    @property
+    def parent(self) -> ModuleName:
+        return ModuleName(*self._parts[:-1])
+
+    @property
+    def parents(self) -> Sequence[ModuleName]:
+        return [ModuleName(*self._parts[:idx]) for idx in range(1, len(self._parts))][::-1]
+
+    def joinname(self, *names: str | ModuleName) -> ModuleName:
+        return ModuleName(*self._parts, *names)
 
 
 class RegularPackage(NamedTuple):
     path: Path
-    folder: Path
-    name: str
+    name: ModuleName
 
 
 class NamespacePackage(NamedTuple):
     path: Path
-    name: str
+    name: ModuleName
 
 
 class PyModule(NamedTuple):
     path: Path
-    name: str
+    name: ModuleName
 
 
 Module = Union[RegularPackage, NamespacePackage, PyModule]
 
 
-def _make_module_from_name(
-    mapping: Mapping[str, str], project_path: Path, module_name: str
-) -> Optional[Module]:
-    parts = list(_make_module_parts(module_name))
-    for key, value in mapping.items():
-        if value in parts:
-            parts = [key] + parts
-            break
+@dataclass(frozen=True)
+class ModuleFactory:
+    _mapping: Mapping[str, str]
+    _project_path: Path
 
-    module_path = project_path.joinpath(Path(*parts))
+    def make_module_from_name(self, module_name: ModuleName) -> Module | None:
+        def _get_sanitized_module_name() -> ModuleName:
+            for key, value in self._mapping.items():
+                if value in module_name.parts:
+                    return ModuleName(key).joinname(module_name)
+            return module_name
 
-    if module_path.is_dir():
-        if (init_module_path := module_path / "__init__.py").exists():
-            return RegularPackage(
-                path=init_module_path,
-                folder=module_path,
-                name=_make_module_name(module_name, "__init__"),
+        module_path = self._project_path.joinpath(Path(*_get_sanitized_module_name().parts))
+
+        if module_path.is_dir():
+            if (init_module_path := module_path / "__init__.py").exists():
+                return RegularPackage(
+                    path=init_module_path,
+                    name=module_name.joinname("__init__"),
+                )
+
+            return NamespacePackage(
+                path=module_path,
+                name=module_name,
             )
 
-        return NamespacePackage(
-            path=module_path,
-            name=module_name,
-        )
+        if (py_module_path := module_path.with_suffix(".py")).exists():
+            return PyModule(
+                path=py_module_path,
+                name=module_name,
+            )
 
-    if (py_module_path := module_path.with_suffix(".py")).exists():
-        return PyModule(
-            path=py_module_path,
-            name=module_name,
-        )
+        return None
 
-    return None
+    def make_module_from_path(self, module_path: Path) -> Module | None:
+        def _get_sanitized_module_name() -> ModuleName:
+            parts = module_path.relative_to(self._project_path).with_suffix("").parts
+            for key, value in self._mapping.items():
+                if key == parts[0] and value in parts[1:]:
+                    return ModuleName(*parts[1:])
+            return ModuleName(*parts)
 
+        module_name = _get_sanitized_module_name()
 
-def _make_module_from_path(
-    mapping: Mapping[str, str], project_path: Path, module_path: Path
-) -> Module:
-    def _make_module_name_from_path(
-        mapping: Mapping[str, str], project_path: Path, module_path: Path
-    ) -> str:
-        parts = module_path.relative_to(project_path).with_suffix("").parts
+        if module_path.is_dir():
+            return NamespacePackage(
+                path=module_path,
+                name=module_name,
+            )
 
-        for key, value in mapping.items():
-            if key == parts[0] and value in parts[1:]:
-                parts = parts[1:]
-                break
+        if module_path.is_file() and module_path.suffix == ".py":
+            if module_path.stem == "__init__":
+                return RegularPackage(
+                    path=module_path,
+                    name=module_name,
+                )
 
-        return _make_module_name(*parts)
+            return PyModule(
+                path=module_path,
+                name=module_name,
+            )
 
-    if module_path.stem == "__init__":
-        folder = Path(*module_path.parts[:-1])
-        return RegularPackage(
-            path=module_path,
-            folder=folder,
-            name=_make_module_name(
-                _make_module_name_from_path(mapping, project_path, folder),
-                "__init__",
-            ),
-        )
-
-    return PyModule(
-        path=module_path,
-        name=_make_module_name_from_path(mapping, project_path, module_path),
-    )
+        return None
 
 
 # .
@@ -234,13 +273,11 @@ class NodeVisitorImports(ast.NodeVisitor):
 class ImportStmtsParser:
     def __init__(
         self,
-        mapping: Mapping[str, str],
-        project_path: Path,
+        module_factory: ModuleFactory,
         base_module: Module,
         import_stmts: Sequence[ImportSTMT],
     ) -> None:
-        self._mapping = mapping
-        self._project_path = project_path
+        self._module_factory = module_factory
         self._base_module = base_module
         self._import_stmts = import_stmts
 
@@ -256,7 +293,7 @@ class ImportStmtsParser:
 
     def _get_modules_of_import_stmt(self, import_stmt: ast.Import) -> Iterable[Module]:
         for alias in import_stmt.names:
-            if imported_module := self._get_module(alias.name):
+            if imported_module := self._get_module(ModuleName(alias.name)):
                 yield imported_module
 
     # -----ast.ImportFrom-----
@@ -276,12 +313,10 @@ class ImportStmtsParser:
             # 2 -> ../BASE/c{.py,/}
             # 3 -> ../BASE/a/b/c{.py,/}
             # 4 -> ../BASE_PARENT/a/b/c{.py,/}
-            if this_imported_module := self._get_module(
-                _make_module_name(module_name_prefix, alias.name)
-            ):
+            if this_imported_module := self._get_module(module_name_prefix.joinname(alias.name)):
                 yield this_imported_module
 
-    def _get_name_prefix(self, import_from_stmt: ast.ImportFrom) -> str:
+    def _get_name_prefix(self, import_from_stmt: ast.ImportFrom) -> ModuleName:
         # Handle the cases:
         # 1 from a.b import c (module == "a.b", level == 0)
         #   -> Python module/package: ../a/b{.py,/}
@@ -292,35 +327,25 @@ class ImportStmtsParser:
         # 4 from ..a.b import c (module == "a.b", level == 2)
         #   -> Python module/package: ../BASE_PARENT/a/b{.py,/}
         if import_from_stmt.level == 0:
-            return import_from_stmt.module if import_from_stmt.module else ""
+            return ModuleName(import_from_stmt.module) if import_from_stmt.module else ModuleName()
 
-        module_name_parts = list(_make_module_parts(self._base_module.name))[
-            : -import_from_stmt.level
-        ]
-        if import_from_stmt.module:
-            module_name_parts += list(_make_module_parts(import_from_stmt.module))
-
-        return _make_module_name(*module_name_parts)
+        parent = self._base_module.name.parents[import_from_stmt.level - 1]
+        return parent.joinname(import_from_stmt.module) if import_from_stmt.module else parent
 
     # -----helper-----
 
-    def _get_module(self, name: str) -> Optional[Module]:
-        if self._is_builtin_or_stdlib(name):
+    def _get_module(self, module_name: ModuleName) -> None | Module:
+        if self._is_builtin_or_stdlib(module_name):
             return None
 
-        module = _make_module_from_name(
-            self._mapping,
-            self._project_path,
-            name,
-        )
+        module = self._module_factory.make_module_from_name(module_name)
 
         if (
             module is None
             or module == self._base_module
             or (
                 isinstance(module, RegularPackage)
-                and _make_module_parts(module.name)[:-1]
-                == _make_module_parts(self._base_module.name)[:-1]
+                and module.name.parent == self._base_module.name.parent
             )
         ):
             # Last if-part: do not add reg pkg, ie. __init__.py, of base module
@@ -329,13 +354,13 @@ class ImportStmtsParser:
         return module
 
     @staticmethod
-    def _is_builtin_or_stdlib(module_name: str) -> bool:
-        if module_name in sys.builtin_module_names or module_name in sys.modules:
+    def _is_builtin_or_stdlib(module_name: ModuleName) -> bool:
+        if str(module_name) in sys.builtin_module_names or str(module_name) in sys.modules:
             # Avail in 3.10: or name in sys.stdlib_module_names
             return True
 
         try:
-            return importlib.util.find_spec(module_name) is not None  # type: ignore[attr-defined]
+            return importlib.util.find_spec(str(module_name)) is not None
         except ModuleNotFoundError:
             return False
 
@@ -345,14 +370,10 @@ class ImportsOfModule(NamedTuple):
     imports: Sequence[Module]
 
 
-def _visit_python_file(
-    mapping: Mapping[str, str],
-    project_path: Path,
-    path: Path,
-) -> Optional[ImportsOfModule]:
-    module = _make_module_from_path(mapping, project_path, path)
+def _visit_python_file(module_factory: ModuleFactory, path: Path) -> None | ImportsOfModule:
+    module = module_factory.make_module_from_path(path)
 
-    if isinstance(module, NamespacePackage):
+    if module is None or isinstance(module, NamespacePackage):
         return None
 
     try:
@@ -372,8 +393,7 @@ def _visit_python_file(
     visitor.visit(tree)
 
     parser = ImportStmtsParser(
-        mapping,
-        project_path,
+        module_factory,
         module,
         visitor.import_stmts,
     )
@@ -714,12 +734,17 @@ def _log_or_show_cycles(import_cycles: Sequence[Tuple[Module, ...]], verbose: bo
         # Avoid execution of pprint.pformat call if not debug
         logger.debug(
             "Import cycles: %s",
-            pprint.pformat(dict(enumerate(import_cycles, start=1))),
+            pprint.pformat(
+                {
+                    nr: [str(p.name) for p in import_cycle]
+                    for nr, import_cycle in enumerate(import_cycles, start=1)
+                }
+            ),
         )
 
     if verbose:
         for nr, import_cycle in enumerate(import_cycles, start=1):
-            sys.stderr.write(f"  {nr}: {[ic.name for ic in import_cycle]}\n")
+            sys.stderr.write(f"  {nr}: {[str(ic.name) for ic in import_cycle]}\n")
 
 
 # .
@@ -744,10 +769,11 @@ def main() -> int:
     python_files = iter_python_files(project_path, packages)
 
     logger.info("Visit Python files, get imports by module")
+    module_factory = ModuleFactory(mapping, project_path)
     imports_by_module = {
         visited.module: visited.imports
         for path in python_files
-        if (visited := _visit_python_file(mapping, project_path, path)) is not None
+        if (visited := _visit_python_file(module_factory, path)) is not None
     }
 
     if logger.level == logging.DEBUG:
@@ -755,7 +781,7 @@ def main() -> int:
         logger.debug(
             "Imports by module: %s",
             pprint.pformat(
-                {ibm.name: [m.name for m in ms] for ibm, ms in imports_by_module.items()}
+                {str(ibm.name): [str(m.name) for m in ms] for ibm, ms in imports_by_module.items()}
             ),
         )
 
