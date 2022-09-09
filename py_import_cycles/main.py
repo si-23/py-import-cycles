@@ -446,21 +446,21 @@ def _make_graph(
     with d.subgraph() as ds:
         for edge in edges:
             ds.node(
-                edge.from_module.name,
+                str(edge.from_module.name),
                 shape=_get_shape(edge.from_module),
             )
 
             ds.node(
-                edge.to_module.name,
+                str(edge.to_module.name),
                 shape=_get_shape(edge.to_module),
             )
 
             ds.attr("edge", color=edge.edge_color)
 
             if edge.title:
-                ds.edge(edge.from_module.name, edge.to_module.name, edge.title)
+                ds.edge(str(edge.from_module.name), str(edge.to_module.name), edge.title)
             else:
-                ds.edge(edge.from_module.name, edge.to_module.name)
+                ds.edge(str(edge.from_module.name), str(edge.to_module.name))
 
     return d.unflatten(stagger=50)
 
