@@ -329,7 +329,11 @@ class ImportStmtsParser:
         if import_from_stmt.level == 0:
             return ModuleName(import_from_stmt.module) if import_from_stmt.module else ModuleName()
 
-        parent = self._base_module.name.parents[import_from_stmt.level - 1]
+        try:
+            parent = self._base_module.name.parents[import_from_stmt.level - 1]
+        except IndexError:
+            parent = ModuleName()
+
         return parent.joinname(import_from_stmt.module) if import_from_stmt.module else parent
 
     # -----helper-----
