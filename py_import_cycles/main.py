@@ -12,6 +12,7 @@ import random
 import sys
 from collections import defaultdict, OrderedDict
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import (
     DefaultDict,
@@ -270,6 +271,18 @@ class NodeVisitorImports(ast.NodeVisitor):
         self._import_stmts.append(node)
 
 
+@lru_cache
+def _is_builtin_or_stdlib(module_name: ModuleName) -> bool:
+    if str(module_name) in sys.builtin_module_names or str(module_name) in sys.modules:
+        # Avail in 3.10: or name in sys.stdlib_module_names
+        return True
+
+    try:
+        return importlib.util.find_spec(str(module_name)) is not None
+    except ModuleNotFoundError:
+        return False
+
+
 class ImportStmtsParser:
     def __init__(
         self,
@@ -291,6 +304,8 @@ class ImportStmtsParser:
 
     def get_imports(self) -> Iterable[Module]:
         for module_name in self.get_module_names():
+            if _is_builtin_or_stdlib(module_name):
+                continue
             if imported_module := self._get_module(module_name):
                 yield imported_module
 
@@ -341,9 +356,6 @@ class ImportStmtsParser:
     # -----helper-----
 
     def _get_module(self, module_name: ModuleName) -> None | Module:
-        if self._is_builtin_or_stdlib(module_name):
-            return None
-
         module = self._module_factory.make_module_from_name(module_name)
 
         if (
@@ -358,17 +370,6 @@ class ImportStmtsParser:
             return None
 
         return module
-
-    @staticmethod
-    def _is_builtin_or_stdlib(module_name: ModuleName) -> bool:
-        if str(module_name) in sys.builtin_module_names or str(module_name) in sys.modules:
-            # Avail in 3.10: or name in sys.stdlib_module_names
-            return True
-
-        try:
-            return importlib.util.find_spec(str(module_name)) is not None
-        except ModuleNotFoundError:
-            return False
 
 
 class ImportsOfModule(NamedTuple):
