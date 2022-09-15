@@ -161,7 +161,7 @@ class ModuleFactory:
     _mapping: Mapping[str, str]
     _project_path: Path
 
-    def make_module_from_name(self, module_name: ModuleName) -> Module | None:
+    def make_module_from_name(self, module_name: ModuleName) -> Module:
         def _get_sanitized_module_name() -> ModuleName:
             for key, value in self._mapping.items():
                 if value in module_name.parts:
@@ -188,7 +188,7 @@ class ModuleFactory:
                 name=module_name,
             )
 
-        return None
+        raise ValueError(module_name)
 
     def make_module_from_path(self, module_path: Path) -> Module | None:
         def _get_sanitized_module_name() -> ModuleName:
@@ -306,8 +306,12 @@ class ImportStmtsParser:
         for module_name in self.get_module_names():
             if _is_builtin_or_stdlib(module_name):
                 continue
-            if imported_module := self._get_module(module_name):
-                yield imported_module
+            try:
+                module = self._module_factory.make_module_from_name(module_name)
+                self._validate_module(module)
+            except ValueError:
+                continue
+            yield module
 
     # -----ast.Import-----
 
@@ -355,21 +359,13 @@ class ImportStmtsParser:
 
     # -----helper-----
 
-    def _get_module(self, module_name: ModuleName) -> None | Module:
-        module = self._module_factory.make_module_from_name(module_name)
-
-        if (
-            module is None
-            or module == self._base_module
-            or (
-                isinstance(module, RegularPackage)
-                and module.name.parent == self._base_module.name.parent
-            )
+    def _validate_module(self, module: Module) -> None:
+        if module == self._base_module or (
+            isinstance(module, RegularPackage)
+            and module.name.parent == self._base_module.name.parent
         ):
             # Last if-part: do not add reg pkg, ie. __init__.py, of base module
-            return None
-
-        return module
+            raise ValueError(module)
 
 
 class ImportsOfModule(NamedTuple):
