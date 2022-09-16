@@ -293,13 +293,15 @@ class ImportStmtsParser:
 
     def get_imports(self) -> Iterable[Module]:
         for module_name in self.get_module_names():
-            if module_name.parts[0] in STDLIB_OR_BUILTIN:
+            if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
                 continue
+
             try:
                 module = self._module_factory.make_module_from_name(module_name)
                 self._validate_module(module)
             except ValueError:
                 continue
+
             yield module
 
     # -----ast.Import-----
