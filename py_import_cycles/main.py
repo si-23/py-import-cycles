@@ -283,16 +283,8 @@ class ImportStmtsParser:
         self._base_module = base_module
         self._import_stmts = import_stmts
 
-    def get_module_names(self) -> Iterable[ModuleName]:
-        for import_stmt in self._import_stmts:
-            if isinstance(import_stmt, ast.Import):
-                yield from self._get_modules_of_import_stmt(import_stmt)
-
-            elif isinstance(import_stmt, ast.ImportFrom):
-                yield from self._get_modules_of_import_from_stmt(import_stmt)
-
     def get_imports(self) -> Iterable[Module]:
-        for module_name in self.get_module_names():
+        for module_name in self._get_module_names():
             if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
                 continue
 
@@ -304,15 +296,23 @@ class ImportStmtsParser:
 
             yield module
 
+    def _get_module_names(self) -> Iterable[ModuleName]:
+        for import_stmt in self._import_stmts:
+            if isinstance(import_stmt, ast.Import):
+                yield from self._get_module_names_of_import_stmt(import_stmt)
+
+            elif isinstance(import_stmt, ast.ImportFrom):
+                yield from self._get_module_names_of_import_from_stmt(import_stmt)
+
     # -----ast.Import-----
 
-    def _get_modules_of_import_stmt(self, import_stmt: ast.Import) -> Iterable[ModuleName]:
+    def _get_module_names_of_import_stmt(self, import_stmt: ast.Import) -> Iterable[ModuleName]:
         for alias in import_stmt.names:
             yield ModuleName(alias.name)
 
     # -----ast.ImportFrom-----
 
-    def _get_modules_of_import_from_stmt(
+    def _get_module_names_of_import_from_stmt(
         self, import_from_stmt: ast.ImportFrom
     ) -> Iterable[ModuleName]:
         if not (module_name_prefix := self._get_name_prefix(import_from_stmt)):
