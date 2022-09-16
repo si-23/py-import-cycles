@@ -315,10 +315,7 @@ class ImportStmtsParser:
     def _get_module_names_of_import_from_stmt(
         self, import_from_stmt: ast.ImportFrom
     ) -> Iterable[ModuleName]:
-        if not (module_name_prefix := self._get_name_prefix(import_from_stmt)):
-            return
-
-        yield module_name_prefix
+        yield (module_name_prefix := self._get_name_prefix(import_from_stmt))
 
         for alias in import_from_stmt.names:
             # Add packages/modules to above prefix:
