@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import importlib.util
 import itertools
 import logging
 import pprint
@@ -160,7 +159,7 @@ class ModuleFactory:
     _mapping: Mapping[str, str]
     _project_path: Path
 
-    def make_module_from_name(self, module_name: ModuleName) -> Module | None:
+    def make_module_from_name(self, module_name: ModuleName) -> Module:
         def _get_sanitized_module_name() -> ModuleName:
             for key, value in self._mapping.items():
                 if value in module_name.parts:
@@ -187,7 +186,7 @@ class ModuleFactory:
                 name=module_name,
             )
 
-        return None
+        raise ValueError(module_name)
 
     def make_module_from_path(self, module_path: Path) -> Module | None:
         def _get_sanitized_module_name() -> ModuleName:
@@ -270,6 +269,9 @@ class NodeVisitorImports(ast.NodeVisitor):
         self._import_stmts.append(node)
 
 
+STDLIB_OR_BUILTIN = sys.stdlib_module_names.union(sys.builtin_module_names)
+
+
 class ImportStmtsParser:
     def __init__(
         self,
@@ -281,7 +283,7 @@ class ImportStmtsParser:
         self._base_module = base_module
         self._import_stmts = import_stmts
 
-    def get_imports(self) -> Iterable[Module]:
+    def get_module_names(self) -> Iterable[ModuleName]:
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
                 yield from self._get_modules_of_import_stmt(import_stmt)
@@ -289,23 +291,32 @@ class ImportStmtsParser:
             elif isinstance(import_stmt, ast.ImportFrom):
                 yield from self._get_modules_of_import_from_stmt(import_stmt)
 
+    def get_imports(self) -> Iterable[Module]:
+        for module_name in self.get_module_names():
+            if module_name.parts[0] in STDLIB_OR_BUILTIN:
+                continue
+            try:
+                module = self._module_factory.make_module_from_name(module_name)
+                self._validate_module(module)
+            except ValueError:
+                continue
+            yield module
+
     # -----ast.Import-----
 
-    def _get_modules_of_import_stmt(self, import_stmt: ast.Import) -> Iterable[Module]:
+    def _get_modules_of_import_stmt(self, import_stmt: ast.Import) -> Iterable[ModuleName]:
         for alias in import_stmt.names:
-            if imported_module := self._get_module(ModuleName(alias.name)):
-                yield imported_module
+            yield ModuleName(alias.name)
 
     # -----ast.ImportFrom-----
 
     def _get_modules_of_import_from_stmt(
         self, import_from_stmt: ast.ImportFrom
-    ) -> Iterable[Module]:
+    ) -> Iterable[ModuleName]:
         if not (module_name_prefix := self._get_name_prefix(import_from_stmt)):
             return
 
-        if imported_module := self._get_module(module_name_prefix):
-            yield imported_module
+        yield module_name_prefix
 
         for alias in import_from_stmt.names:
             # Add packages/modules to above prefix:
@@ -313,8 +324,7 @@ class ImportStmtsParser:
             # 2 -> ../BASE/c{.py,/}
             # 3 -> ../BASE/a/b/c{.py,/}
             # 4 -> ../BASE_PARENT/a/b/c{.py,/}
-            if this_imported_module := self._get_module(module_name_prefix.joinname(alias.name)):
-                yield this_imported_module
+            yield module_name_prefix.joinname(alias.name)
 
     def _get_name_prefix(self, import_from_stmt: ast.ImportFrom) -> ModuleName:
         # Handle the cases:
@@ -338,35 +348,13 @@ class ImportStmtsParser:
 
     # -----helper-----
 
-    def _get_module(self, module_name: ModuleName) -> None | Module:
-        if self._is_builtin_or_stdlib(module_name):
-            return None
-
-        module = self._module_factory.make_module_from_name(module_name)
-
-        if (
-            module is None
-            or module == self._base_module
-            or (
-                isinstance(module, RegularPackage)
-                and module.name.parent == self._base_module.name.parent
-            )
+    def _validate_module(self, module: Module) -> None:
+        if module == self._base_module or (
+            isinstance(module, RegularPackage)
+            and module.name.parent == self._base_module.name.parent
         ):
             # Last if-part: do not add reg pkg, ie. __init__.py, of base module
-            return None
-
-        return module
-
-    @staticmethod
-    def _is_builtin_or_stdlib(module_name: ModuleName) -> bool:
-        if str(module_name) in sys.builtin_module_names or str(module_name) in sys.modules:
-            # Avail in 3.10: or name in sys.stdlib_module_names
-            return True
-
-        try:
-            return importlib.util.find_spec(str(module_name)) is not None
-        except ModuleNotFoundError:
-            return False
+            raise ValueError(module)
 
 
 class ImportsOfModule(NamedTuple):
