@@ -188,7 +188,7 @@ class ModuleFactory:
 
         raise ValueError(module_name)
 
-    def make_module_from_path(self, module_path: Path) -> Module | None:
+    def make_module_from_path(self, module_path: Path) -> Module:
         def _get_sanitized_module_name() -> ModuleName:
             parts = module_path.relative_to(self._project_path).with_suffix("").parts
             for key, value in self._mapping.items():
@@ -216,7 +216,7 @@ class ModuleFactory:
                 name=module_name,
             )
 
-        return None
+        raise ValueError(module_path)
 
 
 # .
@@ -315,7 +315,10 @@ class ImportStmtsParser:
     def _get_module_names_of_import_from_stmt(
         self, import_from_stmt: ast.ImportFrom
     ) -> Iterable[ModuleName]:
-        yield (module_name_prefix := self._get_name_prefix(import_from_stmt))
+        try:
+            yield (anchor := self._get_anchor(import_from_stmt))
+        except ValueError:
+            return
 
         for alias in import_from_stmt.names:
             # Add packages/modules to above prefix:
@@ -323,9 +326,9 @@ class ImportStmtsParser:
             # 2 -> ../BASE/c{.py,/}
             # 3 -> ../BASE/a/b/c{.py,/}
             # 4 -> ../BASE_PARENT/a/b/c{.py,/}
-            yield module_name_prefix.joinname(alias.name)
+            yield anchor.joinname(alias.name)
 
-    def _get_name_prefix(self, import_from_stmt: ast.ImportFrom) -> ModuleName:
+    def _get_anchor(self, import_from_stmt: ast.ImportFrom) -> ModuleName:
         # Handle the cases:
         # 1 from a.b import c (module == "a.b", level == 0)
         #   -> Python module/package: ../a/b{.py,/}
@@ -336,7 +339,9 @@ class ImportStmtsParser:
         # 4 from ..a.b import c (module == "a.b", level == 2)
         #   -> Python module/package: ../BASE_PARENT/a/b{.py,/}
         if import_from_stmt.level == 0:
-            return ModuleName(import_from_stmt.module) if import_from_stmt.module else ModuleName()
+            if import_from_stmt.module:
+                return ModuleName(import_from_stmt.module)
+            raise ValueError(import_from_stmt.module)
 
         try:
             parent = self._base_module.name.parents[import_from_stmt.level - 1]
@@ -362,9 +367,12 @@ class ImportsOfModule(NamedTuple):
 
 
 def _visit_python_file(module_factory: ModuleFactory, path: Path) -> None | ImportsOfModule:
-    module = module_factory.make_module_from_path(path)
+    try:
+        module = module_factory.make_module_from_path(path)
+    except ValueError:
+        return None
 
-    if module is None or isinstance(module, NamespacePackage):
+    if isinstance(module, NamespacePackage):
         return None
 
     try:
