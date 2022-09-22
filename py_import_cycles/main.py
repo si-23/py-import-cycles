@@ -166,7 +166,16 @@ class ModuleFactory:
                     return ModuleName(key).joinname(module_name)
             return module_name
 
-        module_path = self._project_path.joinpath(Path(*_get_sanitized_module_name().parts))
+        if module_name.parts[-1] == "*":
+            # Note:
+            # from a.b import *
+            # - If a.b is a pkg everything from a.b.__init__.py is loaded
+            # - If a.b is a mod everything from a.b.py is loaded
+            # -> Getting the "right" filepath is already handled below
+            module_name = _get_sanitized_module_name().parent
+            module_path = self._project_path.joinpath(Path(*module_name.parts))
+        else:
+            module_path = self._project_path.joinpath(Path(*_get_sanitized_module_name().parts))
 
         if module_path.is_dir():
             if (init_module_path := module_path / "__init__.py").exists():
