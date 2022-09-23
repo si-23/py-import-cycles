@@ -36,47 +36,24 @@ from py_import_cycles.type_defs import Comparable
 logger = logging.getLogger(__name__)
 
 # TODO #1
-# handle __init__.py?
-
-# TODO #2
-# Handle:
-#   import pkg -> execute __init__.py
-#   import pkg.mod -> __init__.py already executed
-# or
-#   import pkg.mod -> execute __init__.py
-#   import pkg -> __init__.py already executed
-
-# TODO #3
 # Is args.map really needed?
 
-# TODO #4
+# TODO #2
 # what to do with RegularPackages in _visit_python_file?
 
-# TODO #5
-# Handle star imports
+# TODO #3
+# improve logging:
+#   verbose: log every step
+#   debug: only log steps which are useful for dev
 
-# TODO #6
-# Handle relative imports properly
-
-# TODO #7
-# Exclude specific packages like tests...
-
-# TODO #8
-# more log levels: verbose: log nrealy every step
-#                  debug: only log steps which are useful for dev
-
-# TODO #9
+# TODO #4
 # Check shebang
 
-# Cases:
-# import path.to.mod
-# import path.to.mod as my_mod
+# TODO #5
+# __all__ var
 
-# from path.to.mod import sub_mod
-# from path.to.mod import sub_mod as my_sub_mod
-
-# from path.to.mod import func/class
-# from path.to.mod import func/class as my_func/class
+# TODO #6
+# other imports like via importlib, imp
 
 
 #   .--modules-------------------------------------------------------------.
