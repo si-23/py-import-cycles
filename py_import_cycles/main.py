@@ -36,47 +36,24 @@ from py_import_cycles.type_defs import Comparable
 logger = logging.getLogger(__name__)
 
 # TODO #1
-# handle __init__.py?
-
-# TODO #2
-# Handle:
-#   import pkg -> execute __init__.py
-#   import pkg.mod -> __init__.py already executed
-# or
-#   import pkg.mod -> execute __init__.py
-#   import pkg -> __init__.py already executed
-
-# TODO #3
 # Is args.map really needed?
 
-# TODO #4
+# TODO #2
 # what to do with RegularPackages in _visit_python_file?
 
-# TODO #5
-# Handle star imports
+# TODO #3
+# improve logging:
+#   verbose: log every step
+#   debug: only log steps which are useful for dev
 
-# TODO #6
-# Handle relative imports properly
-
-# TODO #7
-# Exclude specific packages like tests...
-
-# TODO #8
-# more log levels: verbose: log nrealy every step
-#                  debug: only log steps which are useful for dev
-
-# TODO #9
+# TODO #4
 # Check shebang
 
-# Cases:
-# import path.to.mod
-# import path.to.mod as my_mod
+# TODO #5
+# __all__ var
 
-# from path.to.mod import sub_mod
-# from path.to.mod import sub_mod as my_sub_mod
-
-# from path.to.mod import func/class
-# from path.to.mod import func/class as my_func/class
+# TODO #6
+# other imports like via importlib, imp
 
 
 #   .--modules-------------------------------------------------------------.
@@ -166,7 +143,16 @@ class ModuleFactory:
                     return ModuleName(key).joinname(module_name)
             return module_name
 
-        module_path = self._project_path.joinpath(Path(*_get_sanitized_module_name().parts))
+        if module_name.parts[-1] == "*":
+            # Note:
+            # from a.b import *
+            # - If a.b is a pkg everything from a.b.__init__.py is loaded
+            # - If a.b is a mod everything from a.b.py is loaded
+            # -> Getting the "right" filepath is already handled below
+            module_name = _get_sanitized_module_name().parent
+            module_path = self._project_path.joinpath(Path(*module_name.parts))
+        else:
+            module_path = self._project_path.joinpath(Path(*_get_sanitized_module_name().parts))
 
         if module_path.is_dir():
             if (init_module_path := module_path / "__init__.py").exists():
@@ -188,7 +174,7 @@ class ModuleFactory:
 
         raise ValueError(module_name)
 
-    def make_module_from_path(self, module_path: Path) -> Module | None:
+    def make_module_from_path(self, module_path: Path) -> Module:
         def _get_sanitized_module_name() -> ModuleName:
             parts = module_path.relative_to(self._project_path).with_suffix("").parts
             for key, value in self._mapping.items():
@@ -216,7 +202,7 @@ class ModuleFactory:
                 name=module_name,
             )
 
-        return None
+        raise ValueError(module_path)
 
 
 # .
@@ -315,7 +301,10 @@ class ImportStmtsParser:
     def _get_module_names_of_import_from_stmt(
         self, import_from_stmt: ast.ImportFrom
     ) -> Iterable[ModuleName]:
-        yield (module_name_prefix := self._get_name_prefix(import_from_stmt))
+        try:
+            yield (anchor := self._get_anchor(import_from_stmt))
+        except ValueError:
+            return
 
         for alias in import_from_stmt.names:
             # Add packages/modules to above prefix:
@@ -323,9 +312,9 @@ class ImportStmtsParser:
             # 2 -> ../BASE/c{.py,/}
             # 3 -> ../BASE/a/b/c{.py,/}
             # 4 -> ../BASE_PARENT/a/b/c{.py,/}
-            yield module_name_prefix.joinname(alias.name)
+            yield anchor.joinname(alias.name)
 
-    def _get_name_prefix(self, import_from_stmt: ast.ImportFrom) -> ModuleName:
+    def _get_anchor(self, import_from_stmt: ast.ImportFrom) -> ModuleName:
         # Handle the cases:
         # 1 from a.b import c (module == "a.b", level == 0)
         #   -> Python module/package: ../a/b{.py,/}
@@ -336,7 +325,9 @@ class ImportStmtsParser:
         # 4 from ..a.b import c (module == "a.b", level == 2)
         #   -> Python module/package: ../BASE_PARENT/a/b{.py,/}
         if import_from_stmt.level == 0:
-            return ModuleName(import_from_stmt.module) if import_from_stmt.module else ModuleName()
+            if import_from_stmt.module:
+                return ModuleName(import_from_stmt.module)
+            raise ValueError(import_from_stmt.module)
 
         try:
             parent = self._base_module.name.parents[import_from_stmt.level - 1]
@@ -362,9 +353,12 @@ class ImportsOfModule(NamedTuple):
 
 
 def _visit_python_file(module_factory: ModuleFactory, path: Path) -> None | ImportsOfModule:
-    module = module_factory.make_module_from_path(path)
+    try:
+        module = module_factory.make_module_from_path(path)
+    except ValueError:
+        return None
 
-    if module is None or isinstance(module, NamespacePackage):
+    if isinstance(module, NamespacePackage):
         return None
 
     try:
