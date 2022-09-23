@@ -134,7 +134,7 @@ class ModuleFactory:
     _project_path: Path
 
     def make_module_from_name(self, module_name: ModuleName) -> Module:
-        def _get_sanitized_module_name() -> ModuleName:
+        def _get_sanitized_module_name(module_name: ModuleName) -> ModuleName:
             for key, value in self._mapping.items():
                 if value in module_name.parts:
                     return ModuleName(key).joinname(module_name)
@@ -146,10 +146,11 @@ class ModuleFactory:
             # - If a.b is a pkg everything from a.b.__init__.py is loaded
             # - If a.b is a mod everything from a.b.py is loaded
             # -> Getting the "right" filepath is already handled below
-            module_name = _get_sanitized_module_name().parent
-            module_path = self._project_path.joinpath(Path(*module_name.parts))
-        else:
-            module_path = self._project_path.joinpath(Path(*_get_sanitized_module_name().parts))
+            module_name = module_name.parent
+
+        module_path = self._project_path.joinpath(
+            Path(*_get_sanitized_module_name(module_name).parts)
+        )
 
         if module_path.is_dir():
             if (init_module_path := module_path / "__init__.py").exists():
@@ -172,14 +173,14 @@ class ModuleFactory:
         raise ValueError(module_name)
 
     def make_module_from_path(self, module_path: Path) -> Module:
-        def _get_sanitized_module_name() -> ModuleName:
+        def _get_sanitized_module_name(module_path: Path) -> ModuleName:
             parts = module_path.relative_to(self._project_path).with_suffix("").parts
             for key, value in self._mapping.items():
                 if key == parts[0] and value in parts[1:]:
                     return ModuleName(*parts[1:])
             return ModuleName(*parts)
 
-        module_name = _get_sanitized_module_name()
+        module_name = _get_sanitized_module_name(module_path)
 
         if module_path.is_dir():
             return NamespacePackage(
