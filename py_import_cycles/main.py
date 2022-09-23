@@ -16,13 +16,10 @@ from typing import (
     DefaultDict,
     Final,
     Iterable,
-    List,
     Literal,
     Mapping,
     NamedTuple,
     Sequence,
-    Set,
-    Tuple,
     TypeVar,
     Union,
 )
@@ -242,7 +239,7 @@ ImportSTMT = Union[ast.Import, ast.ImportFrom]
 
 class NodeVisitorImports(ast.NodeVisitor):
     def __init__(self) -> None:
-        self._import_stmts: List[ImportSTMT] = []
+        self._import_stmts: list[ImportSTMT] = []
 
     @property
     def import_stmts(self) -> Sequence[ImportSTMT]:
@@ -403,7 +400,7 @@ def _visit_python_file(module_factory: ModuleFactory, path: Path) -> None | Impo
 def detect_cycles(
     strategy: Literal["dfs", "tarjan"],
     graph: Mapping[Module, Sequence[Module]],
-) -> Iterable[Tuple[Module, ...]]:
+) -> Iterable[tuple[Module, ...]]:
     if strategy == "dfs":
         return depth_first_search(graph)
     if strategy == "tarjan":
@@ -465,21 +462,21 @@ T = TypeVar("T")
 TC = TypeVar("TC", bound=Comparable)
 
 
-def pairwise(iterable: Iterable[T]) -> Iterable[Tuple[T, T]]:
+def pairwise(iterable: Iterable[T]) -> Iterable[tuple[T, T]]:
     # pairwise('ABCDEFG') --> AB BC CD DE EF FG
     a, b = itertools.tee(iterable)
     next(b, None)
     return zip(a, b)
 
 
-def dedup_edges(cycles: Iterable[Tuple[TC, ...]]) -> Sequence[Tuple[TC, TC]]:
-    edges: Set[Tuple[TC, TC]] = set()
+def dedup_edges(cycles: Iterable[tuple[TC, ...]]) -> Sequence[tuple[TC, TC]]:
+    edges: set[tuple[TC, TC]] = set()
     for cycle in cycles:
         edges |= frozenset(pairwise(cycle))
     return list(edges)
 
 
-def count_degree(edges: Sequence[Tuple[T, T]]) -> Mapping[T, int]:
+def count_degree(edges: Sequence[tuple[T, T]]) -> Mapping[T, int]:
     degrees: DefaultDict[T, int] = defaultdict(int)
     for edge in edges:
         degrees[edge[0]] -= 1
@@ -487,7 +484,7 @@ def count_degree(edges: Sequence[Tuple[T, T]]) -> Mapping[T, int]:
     return degrees
 
 
-def badness(edges: Sequence[Tuple[T, T]]) -> Mapping[Tuple[T, T], float]:
+def badness(edges: Sequence[tuple[T, T]]) -> Mapping[tuple[T, T], float]:
     # Get some idea of the badness of an edge by computing
     # the average of the degrees of its vertices.
     degree = count_degree(edges)
@@ -507,7 +504,7 @@ def normalize(value: float, lower: float, higher: float) -> float:
 def _make_edges(
     args: argparse.Namespace,
     imports_by_module: Mapping[Module, Sequence[Module]],
-    import_cycles: Sequence[Tuple[Module, ...]],
+    import_cycles: Sequence[tuple[Module, ...]],
 ) -> Sequence[ImportEdge]:
     if args.graph == "all":
         return _make_all_edges(imports_by_module, import_cycles)
@@ -522,9 +519,9 @@ def _make_edges(
 
 def _make_all_edges(
     imports_by_module: Mapping[Module, Sequence[Module]],
-    import_cycles: Sequence[Tuple[Module, ...]],
+    import_cycles: Sequence[tuple[Module, ...]],
 ) -> Sequence[ImportEdge]:
-    edges: Set[ImportEdge] = set()
+    edges: set[ImportEdge] = set()
     for module, imported_modules in imports_by_module.items():
         for imported_module in imported_modules:
             edges.add(
@@ -545,7 +542,7 @@ def _make_all_edges(
 def _has_cycle(
     module: Module,
     imported_module: Module,
-    import_cycles: Sequence[Tuple[Module, ...]],
+    import_cycles: Sequence[tuple[Module, ...]],
 ) -> bool:
     for import_cycle in import_cycles:
         try:
@@ -559,7 +556,7 @@ def _has_cycle(
 
 
 def _make_dfs_import_edges(
-    cycles: Sequence[Tuple[Module, ...]],
+    cycles: Sequence[tuple[Module, ...]],
 ) -> Sequence[ImportEdge]:
     edges = badness(dedup_edges(cycles))
     edges_values = edges.values()
@@ -570,19 +567,23 @@ def _make_dfs_import_edges(
         nn = int(255 * normalize(value, -bound, bound + 1))
         assert 0 <= nn < 256
         if value < 0:
-            color = "#%02x%02x%02x" % (0, 255 - nn, nn)  # pylint: disable=consider-using-f-string
+            color = "#{:02x}{:02x}{:02x}".format(  # pylint: disable=consider-using-f-string
+                0, 255 - nn, nn
+            )
         else:
-            color = "#%02x%02x%02x" % (nn, 0, 255 - nn)  # pylint: disable=consider-using-f-string
+            color = "#{:02x}{:02x}{:02x}".format(  # pylint: disable=consider-using-f-string
+                nn, 0, 255 - nn
+            )
         out.append(ImportEdge(str(value), edge[0], edge[1], color))
     return out
 
 
 def _make_only_cycles_edges(
-    import_cycles: Sequence[Tuple[Module, ...]],
+    import_cycles: Sequence[tuple[Module, ...]],
 ) -> Sequence[ImportEdge]:
-    edges: Set[ImportEdge] = set()
+    edges: set[ImportEdge] = set()
     for nr, import_cycle in enumerate(import_cycles, start=1):
-        color = "#%02x%02x%02x" % (  # pylint: disable=consider-using-f-string
+        color = "#{:02x}{:02x}{:02x}".format(  # pylint: disable=consider-using-f-string
             random.randint(50, 200),
             random.randint(50, 200),
             random.randint(50, 200),
@@ -712,7 +713,7 @@ def _setup_logging(args: argparse.Namespace, outputs_filepaths: OutputsFilepaths
     logger.addHandler(handler)
 
 
-def _log_or_show_cycles(import_cycles: Sequence[Tuple[Module, ...]], verbose: bool) -> None:
+def _log_or_show_cycles(import_cycles: Sequence[tuple[Module, ...]], verbose: bool) -> None:
     sys.stderr.write(f"Found {len(import_cycles)} import cycles\n")
 
     if logger.level == logging.DEBUG:
@@ -778,7 +779,7 @@ def main() -> int:
     sorted_cycles = sorted(set(unsorted_cycles), key=lambda t: (len(t), t[0].name))
 
     logger.info("Close cycles")
-    import_cycles: Sequence[Tuple[Module, ...]] = [
+    import_cycles: Sequence[tuple[Module, ...]] = [
         ((cycle[-1],) + cycle) for cycle in sorted_cycles
     ]
 
