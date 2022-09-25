@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from py_import_cycles.tarjan import strongly_connected_components as scc
 
 

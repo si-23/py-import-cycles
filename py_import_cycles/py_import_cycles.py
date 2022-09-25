@@ -26,9 +26,10 @@ from typing import (
 
 from graphviz import Digraph
 
-from py_import_cycles.dfs import depth_first_search
-from py_import_cycles.tarjan import strongly_connected_components as tarjan_scc
-from py_import_cycles.type_defs import Comparable
+from .cli import parse_arguments
+from .dfs import depth_first_search
+from .tarjan import strongly_connected_components as tarjan_scc
+from .type_defs import Comparable
 
 logger = logging.getLogger(__name__)
 
@@ -615,63 +616,6 @@ def _make_only_cycles_edges(
 #   '----------------------------------------------------------------------'
 
 
-def _parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawTextHelpFormatter,
-        allow_abbrev=False,
-    )
-    parser.add_argument(
-        "-d",
-        "--debug",
-        action="store_true",
-        help="show additional information for debug purposes",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="show cycles if some are found",
-    )
-    parser.add_argument(
-        "--graph",
-        choices=["all", "only-cycles", "no"],
-        default="only-cycles",
-        help="how the graph is drawn; default: only-cycles",
-    )
-    parser.add_argument(
-        "--map",
-        nargs="+",
-        help=(
-            "hack with symlinks: Sanitize module paths or import statments,"
-            " ie. PREFIX:SHORT, eg.:"
-            " from path.to.SHORT.module -> PREFIX/path/to/SHORT/module.py"
-            " PREFIX/path/to/SHORT/module.py -> path.to.SHORT.module"
-        ),
-    )
-    parser.add_argument(
-        "--project-path",
-        required=True,
-        help=(
-            "path to project. If no packages are given collect all Python"
-            " files from this directory."
-        ),
-    )
-    parser.add_argument(
-        "--packages",
-        nargs="+",
-        help="collect Python files from top-level packages",
-    )
-    parser.add_argument(
-        "--strategy",
-        choices=["dfs", "tarjan"],
-        default="dfs",
-        help="path-based strong component algorithm",
-    )
-
-    return parser.parse_args()
-
-
 class OutputsFilepaths(NamedTuple):
     log: Path
     graph: Path
@@ -738,7 +682,7 @@ def _log_or_show_cycles(import_cycles: Sequence[tuple[Module, ...]], verbose: bo
 
 
 def main() -> int:
-    args = _parse_arguments()
+    args = parse_arguments()
 
     project_path = Path(args.project_path)
     packages = args.packages if args.packages else []
@@ -799,7 +743,3 @@ def main() -> int:
     graph.view()
 
     return return_code
-
-
-if __name__ == "__main__":
-    sys.exit(main())

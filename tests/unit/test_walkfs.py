@@ -1,8 +1,10 @@
+#!/usr/bin/env python3
+
 from pathlib import Path
 
 import pytest
 
-from py_import_cycles.main import iter_python_files
+from py_import_cycles.py_import_cycles import iter_python_files
 
 
 @pytest.fixture(name="root")

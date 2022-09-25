@@ -1,11 +1,26 @@
 #!/usr/bin/env python3
 
-import pathlib
+from pathlib import Path
 
 from setuptools import setup
 
+
+def read(version_filepath: Path) -> str:
+    with version_filepath.open("r") as fp:
+        return fp.read()
+
+
+def get_version(version_filepath: Path) -> str:
+    for line in read(version_filepath).splitlines():
+        if line.startswith("__version__"):
+            delim = '"' if '"' in line else "'"
+            return line.split(delim)[1]
+
+    raise RuntimeError("Unable to find version string.")
+
+
 # The directory containing this file
-HERE = pathlib.Path(__file__).parent
+HERE = Path(__file__).parent
 
 # The text of the README file
 README = (HERE / "README.md").read_text()
@@ -13,7 +28,7 @@ README = (HERE / "README.md").read_text()
 # This call to setup() does all the work
 setup(
     name="py-import-cycles",
-    version="0.1.6",
+    version=get_version(HERE / "py_import_cycles/__init__.py"),
     description="Detect import cycles in Python projects",
     long_description=README,
     long_description_content_type="text/markdown",
