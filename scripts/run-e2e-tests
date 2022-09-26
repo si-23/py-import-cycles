@@ -18,11 +18,20 @@ for project in ./e2e_test_inputs/*; do
         pipenv run python3 "$project/main.py" 1>/dev/null || { echo "Test $project failed (execution of main)." >&2; exit 1; }
     fi
 
-    last_line=$(PYTHONPATH="." ./run-main --graph no --project-path "$REPO_PATH/$project" 2>&1 | tail -n1)
-
     echo "Test cycles..."
+
+    last_line=$(PYTHONPATH="." ./run-main --graph no --project-path "$REPO_PATH/$project" 2>&1 | tail -n1)
     if ! echo "$last_line" | grep -q "Found $(cat "$REPO_PATH/$project"/found_cycles) import cycles"; then
         echo "Test $project failed (number of cycles)." >&2
         exit 1
     fi
 done
+
+echo "===== Self test ====="
+echo "Test cycles..."
+
+self_last_line=$(PYTHONPATH="." ./run-main --graph no --project-path "$REPO_PATH/py_import_cycles" 2>&1 | tail -n1)
+if ! echo "$self_last_line" | grep -q "Found 0 import cycles"; then
+    echo "Self test failed: $self_last_line." >&2
+    exit 1
+fi
