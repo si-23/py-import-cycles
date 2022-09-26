@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from py_import_cycles.py_import_cycles import iter_python_files
+from py_import_cycles.files import iter_python_files  # pylint: disable=import-error
 
 
 @pytest.fixture(name="root")

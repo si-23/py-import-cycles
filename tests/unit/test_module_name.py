@@ -4,7 +4,7 @@ from typing import Sequence
 
 import pytest
 
-from py_import_cycles.py_import_cycles import ModuleName  # pylint: disable=import-error
+from py_import_cycles.modules import ModuleName  # pylint: disable=import-error
 
 
 @pytest.mark.parametrize(

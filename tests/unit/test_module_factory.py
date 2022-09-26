@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from py_import_cycles.py_import_cycles import (  # pylint: disable=import-error
+from py_import_cycles.modules import (  # pylint: disable=import-error
     ModuleFactory,
     ModuleName,
     NamespacePackage,
