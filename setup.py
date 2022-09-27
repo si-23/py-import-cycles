@@ -46,7 +46,7 @@ setup(
     install_requires=["graphviz"],
     entry_points={
         "console_scripts": [
-            "py_import_cycles=py_import_cycles.main:main",
+            "py_import_cycles=py_import_cycles.__main__:main",
         ]
     },
 )
