@@ -90,7 +90,7 @@ def main() -> int:
 
     outputs_filepaths = get_outputs_filepaths(project_path, args.packages)
 
-    setup_logging(outputs_filepaths, args.debug)
+    setup_logging(outputs_filepaths.log, args.debug)
 
     logger.info("Get Python files")
     python_files = iter_python_files(project_path, args.packages)
@@ -130,7 +130,7 @@ def main() -> int:
 
     if args.graph:
         logger.info("Make graph")
-        make_graph(outputs_filepaths, args.strategy, import_cycles)
+        make_graph(outputs_filepaths.graph, args.strategy, import_cycles)
 
     return return_code
 
