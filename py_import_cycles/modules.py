@@ -74,8 +74,8 @@ Module = RegularPackage | NamespacePackage | PyModule
 
 @dataclass(frozen=True)
 class ModuleFactory:
-    _mapping: Mapping[str, str]
     _project_path: Path
+    _mapping: Mapping[str, str]
 
     def make_module_from_name(self, module_name: ModuleName) -> Module:
         def _get_sanitized_module_name(module_name: ModuleName) -> ModuleName:

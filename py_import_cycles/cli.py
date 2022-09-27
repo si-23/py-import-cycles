@@ -55,6 +55,7 @@ def _parse_arguments() -> argparse.Namespace:
             " from path.to.SHORT.module -> PREFIX/path/to/SHORT/module.py"
             " PREFIX/path/to/SHORT/module.py -> path.to.SHORT.module"
         ),
+        default=[],
     )
     parser.add_argument(
         "--project-path",
@@ -68,6 +69,7 @@ def _parse_arguments() -> argparse.Namespace:
         "--packages",
         nargs="+",
         help="collect Python files from top-level packages",
+        default=[],
     )
     parser.add_argument(
         "--strategy",
@@ -83,22 +85,19 @@ def main() -> int:
     args = _parse_arguments()
 
     project_path = Path(args.project_path)
-    packages = args.packages if args.packages else []
-    mapping = {} if args.map is None else dict([entry.split(":") for entry in args.map])
-
     if not project_path.exists() or not project_path.is_dir():
         sys.stderr.write(f"No such directory: {project_path}\n")
         return 1
 
-    outputs_filepaths = get_outputs_filepaths(project_path, packages)
+    outputs_filepaths = get_outputs_filepaths(project_path, args.packages)
 
-    setup_logging(args.debug, outputs_filepaths)
+    setup_logging(outputs_filepaths, args.debug)
 
     logger.info("Get Python files")
-    python_files = iter_python_files(project_path, packages)
+    python_files = iter_python_files(project_path, args.packages)
 
     logger.info("Visit Python files, get imports by module")
-    module_factory = ModuleFactory(mapping, project_path)
+    module_factory = ModuleFactory(project_path, dict([entry.split(":") for entry in args.map]))
     imports_by_module = {
         visited.module: visited.imports
         for path in python_files
@@ -125,6 +124,8 @@ def main() -> int:
     import_cycles: Sequence[tuple[Module, ...]] = [
         ((cycle[-1],) + cycle) for cycle in sorted_cycles
     ]
+
+    sys.stderr.write(f"Found {len(import_cycles)} import cycles\n")
 
     _log_or_show_cycles(import_cycles, args.verbose)
 
@@ -154,8 +155,6 @@ def main() -> int:
 
 
 def _log_or_show_cycles(import_cycles: Sequence[tuple[Module, ...]], verbose: bool) -> None:
-    sys.stderr.write(f"Found {len(import_cycles)} import cycles\n")
-
     if logger.level == logging.DEBUG:
         # Avoid execution of pprint.pformat call if not debug
         logger.debug(

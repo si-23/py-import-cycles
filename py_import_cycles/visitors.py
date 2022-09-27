@@ -9,6 +9,7 @@ from typing import Iterator, NamedTuple, Sequence
 from .log import logger
 from .modules import Module, ModuleFactory, ModuleName, NamespacePackage, RegularPackage
 
+STDLIB_OR_BUILTIN = sys.stdlib_module_names.union(sys.builtin_module_names)
 ImportSTMT = ast.Import | ast.ImportFrom
 
 
@@ -25,9 +26,6 @@ class NodeVisitorImports(ast.NodeVisitor):
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         self._import_stmts.append(node)
-
-
-STDLIB_OR_BUILTIN = sys.stdlib_module_names.union(sys.builtin_module_names)
 
 
 class ImportStmtsParser:
