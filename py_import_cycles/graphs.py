@@ -2,12 +2,14 @@
 
 import itertools
 import random
+import sys
 from collections import defaultdict
+from pathlib import Path
 from typing import DefaultDict, Iterable, Iterator, Literal, Mapping, NamedTuple, Sequence, TypeVar
 
 from graphviz import Digraph
 
-from .files import OutputsFilepaths
+from .log import logger
 from .modules import Module, PyModule
 from .type_defs import Comparable
 
@@ -24,14 +26,17 @@ TC = TypeVar("TC", bound=Comparable)
 
 
 def make_graph(
-    outputs_filepaths: OutputsFilepaths,
+    filepath: Path,
     opt_strategy: Literal["dfs", "tarjan"],
     import_cycles: Sequence[tuple[Module, ...]],
 ) -> None:
+    sys.stderr.write(f"Write graph data to {filepath}\n")
+
     if not (edges := _make_edges(opt_strategy, import_cycles)):
+        logger.debug("No such edges for graph")
         return
 
-    d = Digraph("unix", filename=outputs_filepaths.graph)
+    d = Digraph("unix", filename=filepath)
 
     with d.subgraph() as ds:
         for edge in edges:
