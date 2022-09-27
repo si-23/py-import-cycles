@@ -23,13 +23,13 @@ def get_outputs_filepaths(project_path: Path, packages: Sequence[str]) -> Output
     target_dir = Path.home() / Path(".local", "py_import_cycles", "outputs")
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    filename_parts = list(Path(project_path).parts[1:])
+    filename_parts = list(project_path.parts[1:])
     if packages:
         filename_parts.extend(sorted(packages))
 
-    filename = "-".join(filename_parts)
+    filename = Path("-".join(filename_parts).replace(".", "-"))
 
     return OutputsFilepaths(
-        log=(target_dir / filename).with_suffix(".log"),
-        graph=(target_dir / filename).with_suffix(".gv"),
+        log=target_dir / filename.with_suffix(".log"),
+        graph=target_dir / filename.with_suffix(".gv"),
     )
