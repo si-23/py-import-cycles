@@ -1,4 +1,8 @@
-from py_import_cycles.tarjan import strongly_connected_components as scc
+#!/usr/bin/env python3
+
+from py_import_cycles.tarjan import (
+    strongly_connected_components as scc,  # pylint: disable=import-error
+)
 
 
 def test_empty() -> None:

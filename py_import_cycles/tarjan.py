@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from typing import Hashable, List, Mapping, MutableMapping, Sequence, Tuple, TypeVar
 
 T = TypeVar("T", bound=Hashable)

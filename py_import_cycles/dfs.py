@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 
-from typing import Iterable, List, Mapping, Sequence, Set, Tuple, TypeVar
+from typing import Iterator, List, Mapping, Sequence, Set, TypeVar
 
-from py_import_cycles.type_defs import Comparable
+from .type_defs import Comparable
 
 T = TypeVar("T", bound=Comparable)
 
 
-def depth_first_search(graph: Mapping[T, Sequence[T]]) -> Iterable[Tuple[T, ...]]:
+def depth_first_search(graph: Mapping[T, Sequence[T]]) -> Iterator[tuple[T, ...]]:
     visited: Set[T] = set()
 
-    def _dfs_util(vertex_u: T, path: List[T]) -> Iterable[Tuple[T, ...]]:
+    def _dfs_util(vertex_u: T, path: List[T]) -> Iterator[tuple[T, ...]]:
         if vertex_u in visited:
             return
 
