@@ -10,7 +10,7 @@ from typing import Sequence
 from . import __version__
 from .cycles import detect_cycles
 from .files import get_outputs_filepaths, iter_python_files
-from .graphs import make_edges, make_graph
+from .graphs import make_graph
 from .log import logger, setup_logging
 from .modules import Module, ModuleFactory
 from .visitors import visit_python_file
@@ -42,9 +42,8 @@ def _parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--graph",
-        choices=["all", "only-cycles", "no"],
-        default="only-cycles",
-        help="how the graph is drawn; default: only-cycles",
+        action="store_true",
+        help="create graphical representation",
     )
     parser.add_argument(
         "--map",
@@ -104,7 +103,7 @@ def main() -> int:
         if (visited := visit_python_file(module_factory, path)) is not None
     }
 
-    if logger.level == logging.DEBUG:
+    if _debug():
         # Avoid execution of pprint.pformat call if not debug
         logger.debug(
             "Imports by module: %s",
@@ -127,19 +126,11 @@ def main() -> int:
 
     sys.stderr.write(f"Found {len(import_cycles)} import cycles\n")
 
-    _log_or_show_cycles(import_cycles, args.verbose)
+    _log_or_show_cycles(args.verbose, import_cycles)
 
-    if args.graph == "no":
-        return return_code
-
-    # pylint: disable=superfluous-parens
-    if not (edges := make_edges(args.graph, args.strategy, imports_by_module, import_cycles)):
-        logger.debug("No edges for graphing")
-        return return_code
-
-    logger.info("Make graph")
-    graph = make_graph(edges, outputs_filepaths)
-    graph.view()
+    if args.graph:
+        logger.info("Make graph")
+        make_graph(outputs_filepaths, args.strategy, import_cycles)
 
     return return_code
 
@@ -154,8 +145,15 @@ def main() -> int:
 #   '----------------------------------------------------------------------'
 
 
-def _log_or_show_cycles(import_cycles: Sequence[tuple[Module, ...]], verbose: bool) -> None:
-    if logger.level == logging.DEBUG:
+def _log_or_show_cycles(
+    verbose: bool,
+    import_cycles: Sequence[tuple[Module, ...]],
+) -> None:
+    if verbose:
+        for nr, import_cycle in enumerate(import_cycles, start=1):
+            sys.stderr.write(f"  {nr}: {[str(ic.name) for ic in import_cycle]}\n")
+
+    if _debug():
         # Avoid execution of pprint.pformat call if not debug
         logger.debug(
             "Import cycles: %s",
@@ -167,6 +165,6 @@ def _log_or_show_cycles(import_cycles: Sequence[tuple[Module, ...]], verbose: bo
             ),
         )
 
-    if verbose:
-        for nr, import_cycle in enumerate(import_cycles, start=1):
-            sys.stderr.write(f"  {nr}: {[str(ic.name) for ic in import_cycle]}\n")
+
+def _debug() -> bool:
+    return logger.level == logging.DEBUG

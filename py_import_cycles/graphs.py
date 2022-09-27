@@ -24,9 +24,13 @@ TC = TypeVar("TC", bound=Comparable)
 
 
 def make_graph(
-    edges: Sequence[ImportEdge],
     outputs_filepaths: OutputsFilepaths,
-) -> Digraph:
+    opt_strategy: Literal["dfs", "tarjan"],
+    import_cycles: Sequence[tuple[Module, ...]],
+) -> None:
+    if not (edges := _make_edges(opt_strategy, import_cycles)):
+        return
+
     d = Digraph("unix", filename=outputs_filepaths.graph)
 
     with d.subgraph() as ds:
@@ -48,7 +52,8 @@ def make_graph(
             else:
                 ds.edge(str(edge.from_module.name), str(edge.to_module.name))
 
-    return d.unflatten(stagger=50)
+    d.unflatten(stagger=50)
+    d.view()
 
 
 def _get_shape(module: Module) -> str:
@@ -94,59 +99,13 @@ def normalize(value: float, lower: float, higher: float) -> float:
     return (value - lower) / (higher - lower)
 
 
-def make_edges(
-    opt_graph: Literal["all", "only-cycles"],
+def _make_edges(
     opt_strategy: Literal["dfs", "tarjan"],
-    imports_by_module: Mapping[Module, Sequence[Module]],
     import_cycles: Sequence[tuple[Module, ...]],
 ) -> Sequence[ImportEdge]:
-    if opt_graph == "all":
-        return _make_all_edges(imports_by_module, import_cycles)
-
-    if opt_graph == "only-cycles":
-        if opt_strategy == "dfs":
-            return _make_dfs_import_edges(import_cycles)
-        return _make_only_cycles_edges(import_cycles)
-
-    raise NotImplementedError(f"Unknown graph option: {opt_graph}")
-
-
-def _make_all_edges(
-    imports_by_module: Mapping[Module, Sequence[Module]],
-    import_cycles: Sequence[tuple[Module, ...]],
-) -> Sequence[ImportEdge]:
-    edges: set[ImportEdge] = set()
-    for module, imported_modules in imports_by_module.items():
-        for imported_module in imported_modules:
-            edges.add(
-                ImportEdge(
-                    "",
-                    module,
-                    imported_module,
-                    (
-                        "red"
-                        if _has_cycle(module, imported_module, import_cycles) is None
-                        else "black"
-                    ),
-                )
-            )
-    return sorted(edges)
-
-
-def _has_cycle(
-    module: Module,
-    imported_module: Module,
-    import_cycles: Sequence[tuple[Module, ...]],
-) -> bool:
-    for import_cycle in import_cycles:
-        try:
-            idx = import_cycle.index(module)
-        except ValueError:
-            continue
-
-        if import_cycle[idx + 1] == imported_module:
-            return True
-    return False
+    if opt_strategy == "dfs":
+        return _make_dfs_import_edges(import_cycles)
+    return _make_only_cycles_edges(import_cycles)
 
 
 def _make_dfs_import_edges(
