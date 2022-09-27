@@ -10,7 +10,7 @@ from typing import Sequence
 from . import __version__
 from .cycles import detect_cycles
 from .files import get_outputs_filepaths, iter_python_files
-from .graphs import make_edges, make_graph
+from .graphs import make_graph
 from .log import logger, setup_logging
 from .modules import Module, ModuleFactory
 from .visitors import visit_python_file
@@ -42,9 +42,8 @@ def _parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--graph",
-        choices=["all", "only-cycles", "no"],
-        default="only-cycles",
-        help="how the graph is drawn; default: only-cycles",
+        action="store_true",
+        help="create graphical representation",
     )
     parser.add_argument(
         "--map",
@@ -129,17 +128,9 @@ def main() -> int:
 
     _log_or_show_cycles(import_cycles, args.verbose)
 
-    if args.graph == "no":
-        return return_code
-
-    # pylint: disable=superfluous-parens
-    if not (edges := make_edges(args.graph, args.strategy, imports_by_module, import_cycles)):
-        logger.debug("No edges for graphing")
-        return return_code
-
-    logger.info("Make graph")
-    graph = make_graph(edges, outputs_filepaths)
-    graph.view()
+    if args.graph:
+        logger.info("Make graph")
+        make_graph(outputs_filepaths, args.strategy, import_cycles)
 
     return return_code
 
