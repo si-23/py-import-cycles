@@ -103,7 +103,7 @@ def main() -> int:
         if (visited := visit_python_file(module_factory, path)) is not None
     }
 
-    if logger.level == logging.DEBUG:
+    if _debug():
         # Avoid execution of pprint.pformat call if not debug
         logger.debug(
             "Imports by module: %s",
@@ -126,7 +126,7 @@ def main() -> int:
 
     sys.stderr.write(f"Found {len(import_cycles)} import cycles\n")
 
-    _log_or_show_cycles(import_cycles, args.verbose)
+    _log_or_show_cycles(args.verbose, import_cycles)
 
     if args.graph:
         logger.info("Make graph")
@@ -145,8 +145,15 @@ def main() -> int:
 #   '----------------------------------------------------------------------'
 
 
-def _log_or_show_cycles(import_cycles: Sequence[tuple[Module, ...]], verbose: bool) -> None:
-    if logger.level == logging.DEBUG:
+def _log_or_show_cycles(
+    verbose: bool,
+    import_cycles: Sequence[tuple[Module, ...]],
+) -> None:
+    if verbose:
+        for nr, import_cycle in enumerate(import_cycles, start=1):
+            sys.stderr.write(f"  {nr}: {[str(ic.name) for ic in import_cycle]}\n")
+
+    if _debug():
         # Avoid execution of pprint.pformat call if not debug
         logger.debug(
             "Import cycles: %s",
@@ -158,6 +165,6 @@ def _log_or_show_cycles(import_cycles: Sequence[tuple[Module, ...]], verbose: bo
             ),
         )
 
-    if verbose:
-        for nr, import_cycle in enumerate(import_cycles, start=1):
-            sys.stderr.write(f"  {nr}: {[str(ic.name) for ic in import_cycle]}\n")
+
+def _debug() -> bool:
+    return logger.level == logging.DEBUG
