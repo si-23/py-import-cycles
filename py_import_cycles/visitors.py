@@ -2,7 +2,6 @@
 
 import ast
 import sys
-from collections import OrderedDict
 from pathlib import Path
 from typing import Iterator, NamedTuple, Sequence
 
@@ -155,5 +154,5 @@ def visit_python_file(module_factory: ModuleFactory, path: Path) -> None | Impor
 
     return ImportsOfModule(
         module,
-        list(OrderedDict.fromkeys(parser.get_imports())),
+        sorted(parser.get_imports(), key=lambda m: tuple(m.name.parts), reverse=True),
     )
