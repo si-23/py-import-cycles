@@ -113,11 +113,11 @@ def main() -> int:
         )
 
     logger.info("Detect import cycles with strategy %s", args.strategy)
-    unsorted_cycles = detect_cycles(args.strategy, imports_by_module)
+    unsorted_cycles = set(detect_cycles(args.strategy, imports_by_module))
     return_code = bool(unsorted_cycles)
 
     logger.info("Sort import cycles")
-    sorted_cycles = sorted(set(unsorted_cycles), key=lambda t: (len(t), t[0].name))
+    sorted_cycles = sorted(unsorted_cycles, key=lambda t: (len(t), t[0].name))
 
     logger.info("Close cycles")
     import_cycles: Sequence[tuple[Module, ...]] = [
