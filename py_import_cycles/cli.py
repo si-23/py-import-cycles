@@ -65,6 +65,12 @@ def _parse_arguments() -> argparse.Namespace:
         default="dfs",
         help="path-based strong component algorithm",
     )
+    parser.add_argument(
+        "--threshold",
+        type=int,
+        default=0,
+        help="Tolerate a certain number of cycles, ie. an upper threshold.",
+    )
 
     return parser.parse_args()
 
@@ -106,7 +112,6 @@ def main() -> int:
 
     logger.info("Detect import cycles with strategy %s", args.strategy)
     unsorted_cycles = set(detect_cycles(args.strategy, imports_by_module))
-    return_code = bool(unsorted_cycles)
 
     logger.info("Sort import cycles")
     sorted_cycles = sorted(unsorted_cycles, key=lambda t: (len(t), t[0].name))
@@ -124,7 +129,7 @@ def main() -> int:
         logger.info("Make graph")
         make_graph(outputs_filepaths.graph, args.strategy, import_cycles)
 
-    return return_code
+    return len(unsorted_cycles) > args.threshold
 
 
 #   .--helper--------------------------------------------------------------.
