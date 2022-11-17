@@ -46,17 +46,6 @@ def _parse_arguments() -> argparse.Namespace:
         help="create graphical representation",
     )
     parser.add_argument(
-        "--map",
-        nargs="+",
-        help=(
-            "hack with symlinks: Sanitize module paths or import statments,"
-            " ie. PREFIX:SHORT, eg.:"
-            " from path.to.SHORT.module -> PREFIX/path/to/SHORT/module.py"
-            " PREFIX/path/to/SHORT/module.py -> path.to.SHORT.module"
-        ),
-        default=[],
-    )
-    parser.add_argument(
         "--project-path",
         required=True,
         help=(
@@ -88,15 +77,18 @@ def main() -> int:
         sys.stderr.write(f"No such directory: {project_path}\n")
         return 1
 
-    outputs_filepaths = get_outputs_filepaths(project_path, args.packages)
+    packages = [Path(p) for p in args.packages]
+
+    outputs_filepaths = get_outputs_filepaths(project_path, packages)
 
     setup_logging(outputs_filepaths.log, args.debug)
 
     logger.info("Get Python files")
-    python_files = iter_python_files(project_path, args.packages)
+    python_files = iter_python_files(project_path, packages)
 
     logger.info("Visit Python files, get imports by module")
-    module_factory = ModuleFactory(project_path, dict([entry.split(":") for entry in args.map]))
+    module_factory = ModuleFactory(project_path, packages)
+
     imports_by_module = {
         visited.module: visited.imports
         for path in python_files

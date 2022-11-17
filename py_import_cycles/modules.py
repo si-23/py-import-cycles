@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, Mapping, NamedTuple, Sequence
+from typing import Final, NamedTuple, Sequence
 
 
 class ModuleName:
@@ -72,17 +71,33 @@ class PyModule(NamedTuple):
 Module = RegularPackage | NamespacePackage | PyModule
 
 
-@dataclass(frozen=True)
 class ModuleFactory:
-    _project_path: Path
-    _mapping: Mapping[str, str]
+    def __init__(self, project_path: Path, packages: list[Path]) -> None:
+        self._project_path = project_path
+        self._pkgs_names = self._find_package_names(project_path, packages)
+
+    @staticmethod
+    def _find_package_names(project_path: Path, packages: list[Path]) -> dict[str, Path]:
+        pkgs_names: dict[str, Path] = {}
+        for pkg in packages:
+            if (project_path / pkg / "__init__.py").exists():
+                pkgs_names.setdefault(pkg.name, pkg)
+                continue
+
+            for parent in pkg.parents[::-1]:
+                if (project_path / parent / "__init__.py").exists():
+                    pkgs_names.setdefault(parent.name, pkg)
+                    break
+
+        return pkgs_names
 
     def make_module_from_name(self, module_name: ModuleName) -> Module:
-        def _get_sanitized_module_name(module_name: ModuleName) -> ModuleName:
-            for key, value in self._mapping.items():
-                if value in module_name.parts:
-                    return ModuleName(key).joinname(module_name)
-            return module_name
+        def _get_sanitized_rel_module_path(module_name: ModuleName) -> Path:
+            if module_name and module_name.parts[0] in self._pkgs_names:
+                return Path(*self._pkgs_names[module_name.parts[0]].parts) / Path(
+                    *module_name.parts[1:]
+                )
+            return Path(*module_name.parts)
 
         if module_name.parts[-1] == "*":
             # Note:
@@ -92,9 +107,7 @@ class ModuleFactory:
             # -> Getting the "right" filepath is already handled below
             module_name = module_name.parent
 
-        module_path = self._project_path.joinpath(
-            Path(*_get_sanitized_module_name(module_name).parts)
-        )
+        module_path = self._project_path.joinpath(_get_sanitized_rel_module_path(module_name))
 
         if module_path.is_dir():
             if (init_module_path := module_path / "__init__.py").exists():
@@ -118,11 +131,12 @@ class ModuleFactory:
 
     def make_module_from_path(self, module_path: Path) -> Module:
         def _get_sanitized_module_name(module_path: Path) -> ModuleName:
-            parts = module_path.relative_to(self._project_path).with_suffix("").parts
-            for key, value in self._mapping.items():
-                if key == parts[0] and value in parts[1:]:
-                    return ModuleName(*parts[1:])
-            return ModuleName(*parts)
+            module_path = module_path.with_suffix("")
+            for name, path in self._pkgs_names.items():
+                abs_module_path = self._project_path.joinpath(path)
+                if module_path.is_relative_to(abs_module_path):
+                    return ModuleName(name, *module_path.relative_to(abs_module_path).parts)
+            return ModuleName(*module_path.relative_to(self._project_path).parts)
 
         module_name = _get_sanitized_module_name(module_path)
 
