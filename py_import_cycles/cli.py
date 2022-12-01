@@ -71,6 +71,12 @@ def _parse_arguments() -> argparse.Namespace:
         default=0,
         help="Tolerate a certain number of cycles, ie. an upper threshold.",
     )
+    parser.add_argument(
+        "--skip-type-checking-guard",
+        action="store_true",
+        default=False,
+        help="Don't count imports in 'if typing.TYPE_CHECKING:' guards.",
+    )
 
     return parser.parse_args()
 
@@ -98,7 +104,8 @@ def main() -> int:
     imports_by_module = {
         visited.module: visited.imports
         for path in python_files
-        if (visited := visit_python_file(module_factory, path)) is not None
+        if (visited := visit_python_file(module_factory, path, args.skip_type_checking_guard))
+        is not None
     }
 
     if _debug():

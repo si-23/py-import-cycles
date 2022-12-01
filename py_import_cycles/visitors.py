@@ -13,12 +13,26 @@ ImportSTMT = ast.Import | ast.ImportFrom
 
 
 class NodeVisitorImports(ast.NodeVisitor):
-    def __init__(self) -> None:
+    def __init__(self, skip_type_checking: bool = False) -> None:
         self._import_stmts: list[ImportSTMT] = []
+        self._skip_type_checking = skip_type_checking
 
     @property
     def import_stmts(self) -> Sequence[ImportSTMT]:
         return self._import_stmts
+
+    def visit_If(self, node: ast.If) -> None:
+        # Returning here will lead to the 'visit_Import' and 'visit_ImportFrom' methods not being
+        # called for the child-entries of this node.
+        if self._skip_type_checking:
+            if isinstance(node.test, ast.Name):
+                # Simplistic name matching. Should be sufficient.
+                if node.test.id == "TYPE_CHECKING":
+                    return
+            elif isinstance(node.test, ast.Attribute):
+                if node.test.attr == "TYPE_CHECKING":
+                    return
+        super().generic_visit(node)
 
     def visit_Import(self, node: ast.Import) -> None:
         self._import_stmts.append(node)
@@ -121,7 +135,9 @@ class ImportsOfModule(NamedTuple):
     imports: Sequence[Module]
 
 
-def visit_python_file(module_factory: ModuleFactory, path: Path) -> None | ImportsOfModule:
+def visit_python_file(
+    module_factory: ModuleFactory, path: Path, skip_type_checking: bool = False
+) -> None | ImportsOfModule:
     try:
         module = module_factory.make_module_from_path(path)
     except ValueError:
@@ -143,7 +159,7 @@ def visit_python_file(module_factory: ModuleFactory, path: Path) -> None | Impor
         logger.debug("Cannot visit python file %s: %s", module.path, e)
         return None
 
-    visitor = NodeVisitorImports()
+    visitor = NodeVisitorImports(skip_type_checking=skip_type_checking)
     visitor.visit(tree)
 
     parser = ImportStmtsParser(
