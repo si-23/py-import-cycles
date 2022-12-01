@@ -36,6 +36,21 @@ from py_import_cycles import visitors
             3,
             False,
         ),
+        (
+            "if 1:\n  import foo\n  import bar",
+            2,
+            False,
+        ),
+        (
+            "if 0:\n  import foo\n  import bar",
+            0,
+            False,
+        ),
+        (
+            "if 0:\n  import foo\n  import bar",
+            0,
+            True,
+        ),
     ],
 )
 def test_visit_python_file(content: str, count: int, skip: bool) -> None:

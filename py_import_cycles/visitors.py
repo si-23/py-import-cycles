@@ -32,6 +32,10 @@ class NodeVisitorImports(ast.NodeVisitor):
             elif isinstance(node.test, ast.Attribute):
                 if node.test.attr == "TYPE_CHECKING":
                     return
+        if isinstance(node.test, ast.Constant):
+            # Skip disabled imports (with if 0, if False, etc.)
+            if not node.test.value:
+                return
         super().generic_visit(node)
 
     def visit_Import(self, node: ast.Import) -> None:
