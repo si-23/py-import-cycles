@@ -102,7 +102,8 @@ def main() -> int:
 
     if _debug():
         logger.debug(
-            "Imports by module:\n%s", "\n".join(_make_readable_imports_by_module(imports_by_module))
+            "Imports by module:\n%s",
+            "\n".join(_make_readable_imports_by_module_for_log(imports_by_module)),
         )
 
     logger.info("Detect import cycles with strategy %s", args.strategy)
@@ -135,20 +136,18 @@ def main() -> int:
 #   '----------------------------------------------------------------------'
 
 
-def _make_readable_imports_by_module(
+def _make_readable_imports_by_module_for_log(
     imports_by_module: Mapping[Module, Sequence[Module]]
 ) -> list[str]:
     lines = []
     for ibm, ms in imports_by_module.items():
         if not ms:
             continue
-        lines.append(f"  {ibm.name} imports:")
-        for m in ms:
-            lines.append(f"    {m.name}")
+        lines.append(f"  {ibm.name} imports: {', '.join(str(m.name) for m in ms)}")
     return lines
 
 
-def _make_readable_cycles(sorted_cycles: Sequence[tuple[Module, ...]]) -> list[str]:
+def _make_readable_cycles_for_console(sorted_cycles: Sequence[tuple[Module, ...]]) -> list[str]:
     lines = []
     for nr, ic in enumerate(sorted_cycles, start=1):
         if not ic:
@@ -159,16 +158,25 @@ def _make_readable_cycles(sorted_cycles: Sequence[tuple[Module, ...]]) -> list[s
     return lines
 
 
+def _make_readable_cycles_for_log(sorted_cycles: Sequence[tuple[Module, ...]]) -> list[str]:
+    lines = []
+    for nr, ic in enumerate(sorted_cycles, start=1):
+        if not ic:
+            continue
+        lines.append(f"  Cycle {nr}: {' > '.join(str(m.name) for m in ic)}")
+    return lines
+
+
 def _log_or_show_cycles(
     verbose: bool,
     sorted_cycles: Sequence[tuple[Module, ...]],
 ) -> None:
     if verbose:
-        for line in _make_readable_cycles(sorted_cycles):
+        for line in _make_readable_cycles_for_console(sorted_cycles):
             sys.stderr.write(f"{line}\n")
 
     if _debug():
-        logger.debug("Import cycles:\n%s", "\n".join(_make_readable_cycles(sorted_cycles)))
+        logger.debug("Import cycles:\n%s", "\n".join(_make_readable_cycles_for_log(sorted_cycles)))
 
 
 def _debug() -> bool:
