@@ -117,7 +117,9 @@ def _make_dfs_import_edges(
     cycles: Sequence[tuple[Module, ...]],
 ) -> Sequence[ImportEdge]:
     edges = badness(dedup_edges(cycles))
-    edges_values = edges.values()
+    if not (edges_values := edges.values()):
+        return []
+
     bound = max(abs(min(edges_values)), abs(max(edges_values)))
 
     out = []

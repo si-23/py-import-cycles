@@ -39,6 +39,8 @@ class ImportStmtsParser:
         self._import_stmts = import_stmts
 
     def get_imports(self) -> Iterator[Module]:
+        yield from self._get_parents()
+
         for module_name in self._get_module_names():
             if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
                 continue
@@ -50,6 +52,14 @@ class ImportStmtsParser:
                 continue
 
             yield module
+
+    def _get_parents(self) -> Iterator[Module]:
+        for parent in self._base_module.name.parents[1:]:
+            if isinstance(
+                parent_module := self._module_factory.make_module_from_name(parent),
+                RegularPackage,
+            ):
+                yield parent_module
 
     def _get_module_names(self) -> Iterator[ModuleName]:
         for import_stmt in self._import_stmts:
@@ -108,11 +118,10 @@ class ImportStmtsParser:
     # -----helper-----
 
     def _validate_module(self, module: Module) -> None:
-        if module == self._base_module or (
-            isinstance(module, RegularPackage)
-            and module.name.parent == self._base_module.name.parent
+        if isinstance(self._base_module, RegularPackage) and str(module.name).startswith(
+            str(self._base_module.name.parent)
         ):
-            # Last if-part: do not add reg pkg, ie. __init__.py, of base module
+            # Importing submodules within a parent init is allowed
             raise ValueError(module)
 
 
@@ -154,5 +163,9 @@ def visit_python_file(module_factory: ModuleFactory, path: Path) -> None | Impor
 
     return ImportsOfModule(
         module,
-        sorted(parser.get_imports(), key=lambda m: tuple(m.name.parts), reverse=True),
+        sorted(
+            frozenset(parser.get_imports()),
+            key=lambda m: tuple(m.name.parts),
+            reverse=True,
+        ),
     )
