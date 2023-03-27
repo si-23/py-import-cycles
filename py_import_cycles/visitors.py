@@ -161,8 +161,11 @@ def visit_python_file(module_factory: ModuleFactory, path: Path) -> None | Impor
         visitor.import_stmts,
     )
 
-    imports = []
-    for i in parser.get_imports():
-        if i not in imports:
-            imports.append(i)
-    return ImportsOfModule(module, sorted(imports, key=lambda m: tuple(m.name.parts), reverse=True))
+    return ImportsOfModule(
+        module,
+        sorted(
+            frozenset(parser.get_imports()),
+            key=lambda m: tuple(m.name.parts),
+            reverse=True,
+        ),
+    )

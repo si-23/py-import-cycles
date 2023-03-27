@@ -5,6 +5,7 @@ import logging
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Callable
 
 from . import __version__
 from .cycles import detect_cycles
@@ -103,7 +104,7 @@ def main() -> int:
     if _debug():
         logger.debug(
             "Imports by module:\n%s",
-            "\n".join(_make_readable_imports_by_module_for_log(imports_by_module)),
+            "\n".join(_make_readable_imports_by_module(imports_by_module)),
         )
 
     logger.info("Detect import cycles with strategy %s", args.strategy)
@@ -136,35 +137,23 @@ def main() -> int:
 #   '----------------------------------------------------------------------'
 
 
-def _make_readable_imports_by_module_for_log(
+def _make_readable_imports_by_module(
     imports_by_module: Mapping[Module, Sequence[Module]]
-) -> list[str]:
+) -> Sequence[str]:
     lines = []
     for ibm, ms in imports_by_module.items():
-        if not ms:
-            continue
-        lines.append(f"  {ibm.name} imports: {', '.join(str(m.name) for m in ms)}")
+        if ms:
+            lines.append(f"  {ibm.name} imports: {', '.join(str(m.name) for m in ms)}")
     return lines
 
 
-def _make_readable_cycles_for_console(sorted_cycles: Sequence[tuple[Module, ...]]) -> list[str]:
-    lines = []
-    for nr, ic in enumerate(sorted_cycles, start=1):
-        if not ic:
-            continue
-        lines.append(f"  Cycle {nr}:")
-        for m in ic:
-            lines.append(f"    {m.name}")
-    return lines
-
-
-def _make_readable_cycles_for_log(sorted_cycles: Sequence[tuple[Module, ...]]) -> list[str]:
-    lines = []
-    for nr, ic in enumerate(sorted_cycles, start=1):
-        if not ic:
-            continue
-        lines.append(f"  Cycle {nr}: {' > '.join(str(m.name) for m in ic)}")
-    return lines
+def _make_readable_cycles(
+    line_handler: Callable[[int, tuple[Module, ...]], Sequence[str]],
+    sorted_cycles: Sequence[tuple[Module, ...]],
+) -> list[str]:
+    return [
+        line for nr, ic in enumerate(sorted_cycles, start=1) for line in line_handler(nr, ic) if ic
+    ]
 
 
 def _log_or_show_cycles(
@@ -172,11 +161,22 @@ def _log_or_show_cycles(
     sorted_cycles: Sequence[tuple[Module, ...]],
 ) -> None:
     if verbose:
-        for line in _make_readable_cycles_for_console(sorted_cycles):
+        for line in _make_readable_cycles(
+            lambda nr, ic: [f"  Cycle {nr}:"] + [f"   {m.name}" for m in ic],
+            sorted_cycles,
+        ):
             sys.stderr.write(f"{line}\n")
 
     if _debug():
-        logger.debug("Import cycles:\n%s", "\n".join(_make_readable_cycles_for_log(sorted_cycles)))
+        logger.debug(
+            "Import cycles:\n%s",
+            "\n".join(
+                _make_readable_cycles(
+                    lambda nr, ic: [f"  Cycle {nr}: {' > '.join(str(m.name) for m in ic)}"],
+                    sorted_cycles,
+                )
+            ),
+        )
 
 
 def _debug() -> bool:
