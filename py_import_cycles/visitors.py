@@ -54,7 +54,12 @@ class ImportStmtsParser:
             yield module
 
     def _get_parents(self) -> Iterator[Module]:
-        for parent in self._base_module.name.parents[1:]:
+        if isinstance(self._base_module, RegularPackage):
+            parents = self._base_module.name.parents[1:]
+        else:
+            parents = self._base_module.name.parents
+
+        for parent in parents:
             if isinstance(
                 parent_module := self._module_factory.make_module_from_name(parent),
                 RegularPackage,
