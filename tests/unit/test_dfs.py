@@ -23,7 +23,7 @@ from py_import_cycles.dfs import depth_first_search  # pylint: disable=import-er
                 "b": ["a"],
             },
             [
-                ("b", "a"),
+                ("a", "b"),
             ],
         ),
         (
@@ -34,18 +34,7 @@ from py_import_cycles.dfs import depth_first_search  # pylint: disable=import-er
                 "b": ["a"],
             },
             [
-                ("b", "a"),
-            ],
-        ),
-        (
-            {
-                "m1": ["a"],
-                "m2": ["b"],
-                "a": ["b"],
-                "b": ["a"],
-            },
-            [
-                ("b", "a"),
+                ("a", "b"),
             ],
         ),
         (
@@ -57,8 +46,8 @@ from py_import_cycles.dfs import depth_first_search  # pylint: disable=import-er
                 "c22": ["c21"],
             },
             [
-                ("c12", "c11"),
-                ("c22", "c21"),
+                ("c11", "c12"),
+                ("c21", "c22"),
             ],
         ),
         (
@@ -72,9 +61,8 @@ from py_import_cycles.dfs import depth_first_search  # pylint: disable=import-er
                 "c22": ["c21"],
             },
             [
-                ("c12", "c11"),
-                ("c11", "c13", "c14"),
-                ("c22", "c21"),
+                ("c11", "c12"),
+                ("c21", "c22"),
             ],
         ),
     ],

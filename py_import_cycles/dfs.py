@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
-from typing import Iterator, List, Mapping, Sequence, Set, TypeVar
+from typing import Iterator, Mapping, Sequence, Set, TypeVar
+
+from networkx import DiGraph, find_cycle
+from networkx.exception import NetworkXNoCycle
 
 from .type_defs import Comparable
 
@@ -8,20 +11,27 @@ T = TypeVar("T", bound=Comparable)
 
 
 def depth_first_search(graph: Mapping[T, Sequence[T]]) -> Iterator[tuple[T, ...]]:
-    visited: Set[T] = set()
+    known_cycles: Set[tuple[T, ...]] = set()
 
-    def _dfs_util(vertex_u: T, path: List[T]) -> Iterator[tuple[T, ...]]:
-        if vertex_u in visited:
-            return
+    def _make_cycle(cyclic_edges: Sequence[tuple[T, T, str]]) -> tuple[T, ...]:
+        # find_cycle returns:
+        # [
+        #     (e0, e1, ORIENTATION),
+        #     (e1, e2, ORIENTATION),
+        #     ...
+        #     (eX-1, eX, ORIENTATION),
+        #     (eX, e0, ORIENTATION),
+        # ]
+        return tuple(cyclic_edges[0][:-1] + tuple(ce[1] for ce in cyclic_edges[1:-1]))
 
-        for vertex_v in graph.get(vertex_u, []):
-            if vertex_v in path:
-                yield tuple(path[path.index(vertex_v) :])
-                continue
-
-            yield from _dfs_util(vertex_v, path + [vertex_v])
-
-        visited.add(vertex_u)
-
+    G = DiGraph([(v, w) for v, vertices, in graph.items() for w in vertices])
     for vertex in sorted(graph):
-        yield from _dfs_util(vertex, [])
+        try:
+            cyclic_edges = find_cycle(G, source=vertex, orientation="original")
+        except NetworkXNoCycle:
+            continue
+
+        if (cycle := _make_cycle(cyclic_edges)) not in known_cycles:
+            known_cycles.add(cycle)
+            known_cycles.add(cycle[::-1])
+            yield cycle
