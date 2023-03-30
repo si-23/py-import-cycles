@@ -43,7 +43,7 @@ setup(
     ],
     packages=["py_import_cycles"],
     include_package_data=True,
-    install_requires=["graphviz"],
+    install_requires=["graphviz", "networkx"],
     entry_points={
         "console_scripts": [
             "py_import_cycles=py_import_cycles.__main__:main",

@@ -61,7 +61,7 @@ def _parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--strategy",
-        choices=["dfs", "tarjan"],
+        choices=["dfs", "tarjan", "johnson"],
         default="dfs",
         help="path-based strong component algorithm",
     )
