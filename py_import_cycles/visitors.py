@@ -39,7 +39,7 @@ class ImportStmtsParser:
         self._import_stmts = import_stmts
 
     def get_imports(self) -> Iterator[Module]:
-        yield from self._get_parents()
+        yield from self._module_factory.make_parents_of_module(self._base_module)
 
         for module_name in self._get_module_names():
             if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
@@ -52,19 +52,6 @@ class ImportStmtsParser:
                 continue
 
             yield module
-
-    def _get_parents(self) -> Iterator[Module]:
-        if isinstance(self._base_module, RegularPackage):
-            parents = self._base_module.name.parents[1:]
-        else:
-            parents = self._base_module.name.parents
-
-        for parent in parents:
-            if isinstance(
-                parent_module := self._module_factory.make_module_from_name(parent),
-                RegularPackage,
-            ):
-                yield parent_module
 
     def _get_module_names(self) -> Iterator[ModuleName]:
         for import_stmt in self._import_stmts:
