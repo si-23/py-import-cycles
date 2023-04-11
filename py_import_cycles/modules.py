@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import abc
 from pathlib import Path
-from typing import Final, Sequence
+from typing import Final, Iterator, Sequence
 
 _INIT_NAME = "__init__"
 
@@ -220,3 +220,21 @@ class ModuleFactory:
             )
 
         raise ValueError(module_path)
+
+    def make_parents_of_module(self, module: Module) -> Iterator[RegularPackage]:
+        # Return the parents - ie. inits - of a module if they exist:
+        # - a.b.c.__init__
+        #   -> a.__init__, b.__init__
+        # - a.b.c
+        #   -> a.__init__, b.__init__, c.__init__
+        if isinstance(module, RegularPackage):
+            parents = module.name.parents[1:]
+        else:
+            parents = module.name.parents
+
+        for parent in parents[::-1]:
+            if isinstance(
+                parent_module := self.make_module_from_name(parent),
+                RegularPackage,
+            ):
+                yield parent_module
