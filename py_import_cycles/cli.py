@@ -85,7 +85,7 @@ def main() -> int:
 
     packages = [Path(p) for p in args.packages]
 
-    outputs_filepaths = get_outputs_filepaths(project_path, packages)
+    outputs_filepaths = get_outputs_filepaths(project_path)
 
     setup_logging(outputs_filepaths.log, args.debug)
 
