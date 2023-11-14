@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import time
 from pathlib import Path
 from typing import Iterator, NamedTuple, Sequence
 
@@ -19,14 +20,11 @@ class OutputsFilepaths(NamedTuple):
     graph: Path
 
 
-def get_outputs_filepaths(project_path: Path, packages: Sequence[Path]) -> OutputsFilepaths:
+def get_outputs_filepaths(project_path: Path) -> OutputsFilepaths:
     target_dir = Path.home() / Path(".local", "py_import_cycles", "outputs")
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    filename_parts = list(project_path.parts[1:])
-    if packages:
-        filename_parts.extend(sorted(["-".join(p.parts) for p in packages]))
-
+    filename_parts = list(project_path.parts[1:]) + [str(int(time.time()))]
     filename = Path("-".join(filename_parts).replace(".", "-"))
 
     return OutputsFilepaths(
