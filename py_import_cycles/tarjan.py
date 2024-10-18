@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 
-from typing import Hashable, List, Mapping, MutableMapping, Sequence, Tuple, TypeVar
+from collections.abc import Hashable
+from typing import List, Mapping, MutableMapping, Sequence, Tuple, TypeVar
 
 T = TypeVar("T", bound=Hashable)
 
 
-def strongly_connected_components(graph: Mapping[T, Sequence[T]]) -> Sequence[Tuple[T, ...]]:
+def strongly_connected_components(
+    graph: Mapping[T, Sequence[T]],
+) -> Sequence[Tuple[T, ...]]:
     """
     Tarjan's Algorithm (named for its discoverer, Robert Tarjan) is a graph theory algorithm
     for finding the strongly connected components of a graph.
