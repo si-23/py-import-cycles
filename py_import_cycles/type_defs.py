@@ -8,8 +8,7 @@ from typing import Protocol, TypeVar
 
 class Comparable(Protocol):
     @abc.abstractmethod
-    def __lt__(self: T, other: T) -> bool:
-        ...
+    def __lt__(self: T, other: T) -> bool: ...
 
 
 T = TypeVar("T", bound=Comparable)
