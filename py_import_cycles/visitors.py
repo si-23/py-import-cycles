@@ -3,11 +3,10 @@
 import ast
 import sys
 from collections.abc import Iterator, Sequence
-from pathlib import Path
 from typing import NamedTuple
 
 from .log import logger
-from .modules import Module, ModuleFactory, ModuleName, NamespacePackage, RegularPackage
+from .modules import Module, ModuleFactory, ModuleName, PyModule, RegularPackage
 
 STDLIB_OR_BUILTIN = sys.stdlib_module_names.union(sys.builtin_module_names)
 ImportSTMT = ast.Import | ast.ImportFrom
@@ -123,15 +122,9 @@ class ImportsOfModule(NamedTuple):
     imports: Sequence[Module]
 
 
-def visit_python_file(module_factory: ModuleFactory, path: Path) -> None | ImportsOfModule:
-    try:
-        module = module_factory.make_module_from_path(path)
-    except ValueError:
-        return None
-
-    if isinstance(module, NamespacePackage):
-        return None
-
+def visit_python_file(
+    module_factory: ModuleFactory, module: RegularPackage | PyModule
+) -> None | ImportsOfModule:
     try:
         with open(module.path, encoding="utf-8") as f:
             content = f.read()

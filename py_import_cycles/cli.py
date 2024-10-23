@@ -12,7 +12,7 @@ from .cycles import detect_cycles
 from .files import get_outputs_filepaths, iter_python_files
 from .graphs import make_graph
 from .log import logger, setup_logging
-from .modules import Module, ModuleFactory
+from .modules import make_modules_from_py_files, Module, ModuleFactory
 from .visitors import visit_python_file
 
 
@@ -90,15 +90,15 @@ def main() -> int:
     setup_logging(outputs_filepaths.log, args.debug)
 
     logger.info("Get Python files")
-    python_files = iter_python_files(project_path, packages)
+    modules = list(make_modules_from_py_files(iter_python_files(project_path, packages)))
 
     logger.info("Visit Python files, get imports by module")
-    module_factory = ModuleFactory(project_path, packages)
+    module_factory = ModuleFactory(project_path, modules)
 
     imports_by_module = {
         visited.module: visited.imports
-        for path in python_files
-        if (visited := visit_python_file(module_factory, path)) is not None
+        for module in modules
+        if (visited := visit_python_file(module_factory, module)) is not None
     }
 
     if _debug():

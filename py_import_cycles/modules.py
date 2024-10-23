@@ -5,17 +5,15 @@ from __future__ import annotations
 import abc
 from collections.abc import Iterator, Sequence
 from pathlib import Path
-from typing import Final
+from typing import Final, Iterable
+
+from .files import PyFile
 
 _INIT_NAME = "__init__"
 
 
 def _make_init_module_path(path: Path) -> Path:
     return path / f"{_INIT_NAME}.py"
-
-
-def _make_init_module_name(name: ModuleName) -> ModuleName:
-    return name.joinname(_INIT_NAME)
 
 
 class ModuleName:
@@ -72,8 +70,9 @@ class ModuleName:
 
 
 class Module(abc.ABC):
-    def __init__(self, *, path: Path, name: ModuleName) -> None:
+    def __init__(self, *, package: Path, path: Path, name: ModuleName) -> None:
         self._validate(path, name)
+        self.package = package
         self.path = path
         self.name = name
 
@@ -114,7 +113,7 @@ class RegularPackage(Module):
         if path.with_suffix("").name != _INIT_NAME:
             raise ValueError(path)
 
-        if not name.parts or name.parts[-1] != _INIT_NAME:
+        if not name.parts or name.parts[-1] == _INIT_NAME:
             raise ValueError(name)
 
 
@@ -136,25 +135,54 @@ class PyModule(Module):
             raise ValueError(name)
 
 
-class ModuleFactory:
-    def __init__(self, project_path: Path, packages: Sequence[Path]) -> None:
-        self._project_path = project_path
-        self._pkgs_names = self._find_package_names(project_path, packages)
+def make_modules_from_py_files(
+    py_files: Iterable[PyFile],
+) -> Iterator[RegularPackage | PyModule]:
+    for py_file in py_files:
+        if py_file.path.with_suffix("").name == _INIT_NAME:
+            parts = py_file.path.with_suffix("").parent.relative_to(py_file.package).parts
+            yield RegularPackage(
+                package=py_file.package,
+                path=py_file.path,
+                name=ModuleName(py_file.package.name, *parts),
+            )
+        else:
+            parts = py_file.path.with_suffix("").relative_to(py_file.package).parts
+            yield PyModule(
+                package=py_file.package,
+                path=py_file.path,
+                name=ModuleName(py_file.package.name, *parts),
+            )
 
-    @staticmethod
-    def _find_package_names(project_path: Path, packages: Sequence[Path]) -> dict[str, Path]:
-        pkgs_names: dict[str, Path] = {}
-        for pkg in packages:
-            if _make_init_module_path(project_path / pkg).exists():
-                pkgs_names.setdefault(pkg.name, pkg)
+
+def _find_parent_modules(
+    modules: Sequence[RegularPackage | PyModule],
+) -> Iterator[RegularPackage | NamespacePackage]:
+    for module in modules:
+        for parent in module.path.parents:
+            if not parent.is_relative_to(module.package):
                 continue
+            if (parent_init_path := _make_init_module_path(parent)).exists():
+                # TODO same as above in make_modules_from_py_files
+                parts = parent_init_path.with_suffix("").parent.relative_to(module.package).parts
+                yield RegularPackage(
+                    package=module.package,
+                    path=parent_init_path,
+                    name=ModuleName(module.package.name, *parts),
+                )
+            else:
+                parts = parent.relative_to(module.package).parts
+                yield NamespacePackage(
+                    package=module.package,
+                    path=parent,
+                    name=ModuleName(module.package.name, *parts),
+                )
 
-            for parent in pkg.parents[::-1]:
-                if _make_init_module_path(project_path / parent).exists():
-                    pkgs_names.setdefault(parent.name, pkg)
-                    break
 
-        return pkgs_names
+class ModuleFactory:
+    def __init__(self, project_path: Path, modules: Sequence[RegularPackage | PyModule]) -> None:
+        self._project_path = project_path
+        self._pkgs_names = {str(m.name): m.path for m in _find_parent_modules(modules)}
 
     def make_module_from_name(self, module_name: ModuleName) -> Module:
         def _get_sanitized_rel_module_path(module_name: ModuleName) -> Path:
@@ -177,53 +205,25 @@ class ModuleFactory:
         if module_path.is_dir():
             if (init_module_path := _make_init_module_path(module_path)).exists():
                 return RegularPackage(
+                    package=Path(),
                     path=init_module_path,
-                    name=_make_init_module_name(module_name),
+                    name=module_name,
                 )
 
             return NamespacePackage(
+                package=Path(),
                 path=module_path,
                 name=module_name,
             )
 
         if (py_module_path := module_path.with_suffix(".py")).exists():
             return PyModule(
+                package=Path(),
                 path=py_module_path,
                 name=module_name,
             )
 
         raise ValueError(module_name)
-
-    def make_module_from_path(self, module_path: Path) -> Module:
-        def _get_sanitized_module_name(module_path: Path) -> ModuleName:
-            module_path = module_path.with_suffix("")
-            for name, path in self._pkgs_names.items():
-                abs_module_path = self._project_path.joinpath(path)
-                if module_path.is_relative_to(abs_module_path):
-                    return ModuleName(name, *module_path.relative_to(abs_module_path).parts)
-            return ModuleName(*module_path.relative_to(self._project_path).parts)
-
-        module_name = _get_sanitized_module_name(module_path)
-
-        if module_path.is_dir():
-            return NamespacePackage(
-                path=module_path,
-                name=module_name,
-            )
-
-        if module_path.is_file() and module_path.suffix == ".py":
-            if module_path.stem == _INIT_NAME:
-                return RegularPackage(
-                    path=module_path,
-                    name=module_name,
-                )
-
-            return PyModule(
-                path=module_path,
-                name=module_name,
-            )
-
-        raise ValueError(module_path)
 
     def make_parents_of_module(self, module: Module) -> Iterator[RegularPackage]:
         # Return the parents - ie. inits - of a module if they exist:
@@ -237,8 +237,10 @@ class ModuleFactory:
             parents = module.name.parents
 
         for parent in parents[::-1]:
-            if isinstance(
-                parent_module := self.make_module_from_name(parent),
-                RegularPackage,
-            ):
+            try:
+                parent_module = self.make_module_from_name(parent)
+            except ValueError:
+                continue
+
+            if isinstance(parent_module, RegularPackage):
                 yield parent_module

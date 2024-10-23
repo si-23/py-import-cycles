@@ -5,7 +5,9 @@ from typing import Sequence
 
 import pytest
 
+from py_import_cycles.files import iter_python_files  # pylint: disable=import-error
 from py_import_cycles.modules import (  # pylint: disable=import-error
+    make_modules_from_py_files,
     ModuleFactory,
     ModuleName,
     NamespacePackage,
@@ -97,8 +99,8 @@ def test_module_name_joinname(module_names: Sequence[ModuleName], expected: Modu
 @pytest.mark.parametrize(
     "raw_package_path, raw_module_name, expected_raw_module_name",
     [
-        ("a/b/c", "a.b.c", "a.b.c.__init__"),
-        ("a/b", "a.b.*", "a.b.__init__"),
+        ("a/b/c", "a.b.c", "a.b.c"),
+        ("a/b", "a.b.*", "a.b"),
     ],
 )
 def test_make_module_from_name_regular_package(
@@ -113,7 +115,10 @@ def test_make_module_from_name_regular_package(
     init_filepath = package_folder / "__init__.py"
     init_filepath.write_text("")
 
-    module = ModuleFactory(project_folder, []).make_module_from_name(ModuleName(raw_module_name))
+    modules = list(make_modules_from_py_files(iter_python_files(project_folder, [Path("a")])))
+    module = ModuleFactory(project_folder, modules).make_module_from_name(
+        ModuleName(raw_module_name)
+    )
 
     assert isinstance(module, RegularPackage)
     assert module.path == init_filepath
@@ -137,7 +142,10 @@ def test_make_module_from_name_namespace_package(
     package_folder = project_folder / raw_package_path
     package_folder.mkdir(parents=True, exist_ok=True)
 
-    module = ModuleFactory(project_folder, []).make_module_from_name(ModuleName(raw_module_name))
+    modules = list(make_modules_from_py_files(iter_python_files(project_folder, [Path("a")])))
+    module = ModuleFactory(project_folder, modules).make_module_from_name(
+        ModuleName(raw_module_name)
+    )
 
     assert isinstance(module, NamespacePackage)
     assert module.path == package_folder
@@ -164,7 +172,10 @@ def test_make_module_from_name_python_module(
     module_filepath = package_folder / raw_filename
     module_filepath.write_text("")
 
-    module = ModuleFactory(project_folder, []).make_module_from_name(ModuleName(raw_module_name))
+    modules = list(make_modules_from_py_files(iter_python_files(project_folder, [Path("a")])))
+    module = ModuleFactory(project_folder, modules).make_module_from_name(
+        ModuleName(raw_module_name)
+    )
 
     assert isinstance(module, PyModule)
     assert module.path == module_filepath
@@ -188,7 +199,7 @@ def test_make_module_from_name_error(raw_module_name: str) -> None:
 @pytest.mark.parametrize(
     "raw_package_path, expected_raw_module_name",
     [
-        ("a/b/c", "a.b.c.__init__"),
+        ("a/b/c", "a.b.c"),
     ],
 )
 def test_make_module_from_path_regular_package(
@@ -202,32 +213,12 @@ def test_make_module_from_path_regular_package(
     init_filepath = package_folder / "__init__.py"
     init_filepath.write_text("")
 
-    module = ModuleFactory(project_folder, []).make_module_from_path(init_filepath)
+    modules = list(make_modules_from_py_files(iter_python_files(project_folder, [Path("a")])))
 
+    assert modules
+    module = modules[0]
     assert isinstance(module, RegularPackage)
     assert module.path == init_filepath
-    assert module.name.parts == ModuleName(expected_raw_module_name).parts
-
-
-@pytest.mark.parametrize(
-    "raw_package_path, expected_raw_module_name",
-    [
-        ("a/b/c", "a.b.c"),
-    ],
-)
-def test_make_module_from_path_namespace_package(
-    tmp_path: Path,
-    raw_package_path: str,
-    expected_raw_module_name: str,
-) -> None:
-    project_folder = tmp_path / "path/to/project"
-    package_folder = project_folder / raw_package_path
-    package_folder.mkdir(parents=True, exist_ok=True)
-
-    module = ModuleFactory(project_folder, []).make_module_from_path(package_folder)
-
-    assert isinstance(module, NamespacePackage)
-    assert module.path == package_folder
     assert module.name.parts == ModuleName(expected_raw_module_name).parts
 
 
@@ -249,13 +240,10 @@ def test_make_module_from_path_python_module(
     module_filepath = package_folder / raw_filename
     module_filepath.write_text("")
 
-    module = ModuleFactory(project_folder, []).make_module_from_path(module_filepath)
+    modules = list(make_modules_from_py_files(iter_python_files(project_folder, [Path("a")])))
 
+    assert modules
+    module = modules[0]
     assert isinstance(module, PyModule)
     assert module.path == module_filepath
     assert module.name.parts == ModuleName(expected_raw_module_name).parts
-
-
-def test_make_module_from_path_error() -> None:
-    with pytest.raises(ValueError):
-        ModuleFactory(Path("/path/to/project"), []).make_module_from_path(Path("a/b/c"))
