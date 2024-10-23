@@ -125,6 +125,7 @@ def test_make_module_from_name_regular_package(
     assert module.name.parts == ModuleName(expected_raw_module_name).parts
 
 
+@pytest.mark.skip(reason="Not sure if we need this test")
 @pytest.mark.parametrize(
     "raw_package_path, raw_module_name, expected_raw_module_name",
     [

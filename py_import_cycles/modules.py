@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import abc
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Final, Iterable
 
@@ -179,50 +179,34 @@ def _find_parent_modules(
                 )
 
 
+def _make_packages_by_name(
+    modules: Sequence[RegularPackage | NamespacePackage | PyModule],
+) -> Mapping[str, RegularPackage | NamespacePackage | PyModule]:
+    # TODO we need to distiguish between
+    # - package abc
+    # - package path/to/abc
+    packages: dict[str, RegularPackage | NamespacePackage | PyModule] = {}
+    for module in sorted(modules, key=lambda m: m.path.parts):
+        packages.setdefault(str(module.name), module)
+    return packages
+
+
 class ModuleFactory:
     def __init__(self, project_path: Path, modules: Sequence[RegularPackage | PyModule]) -> None:
         self._project_path = project_path
-        self._pkgs_names = {str(m.name): m.path for m in _find_parent_modules(modules)}
+        self._packages_by_name = _make_packages_by_name(
+            list(_find_parent_modules(modules)) + list(modules)
+        )
 
     def make_module_from_name(self, module_name: ModuleName) -> Module:
-        def _get_sanitized_rel_module_path(module_name: ModuleName) -> Path:
-            if module_name and module_name.parts[0] in self._pkgs_names:
-                return Path(*self._pkgs_names[module_name.parts[0]].parts) / Path(
-                    *module_name.parts[1:]
-                )
-            return Path(*module_name.parts)
-
         if module_name.parts[-1] == "*":
-            # Note:
+            # TODO
             # from a.b import *
             # - If a.b is a pkg everything from a.b.__init__.py is loaded
             # - If a.b is a mod everything from a.b.py is loaded
-            # -> Getting the "right" filepath is already handled below
             module_name = module_name.parent
-
-        module_path = self._project_path.joinpath(_get_sanitized_rel_module_path(module_name))
-
-        if module_path.is_dir():
-            if (init_module_path := _make_init_module_path(module_path)).exists():
-                return RegularPackage(
-                    package=Path(),
-                    path=init_module_path,
-                    name=module_name,
-                )
-
-            return NamespacePackage(
-                package=Path(),
-                path=module_path,
-                name=module_name,
-            )
-
-        if (py_module_path := module_path.with_suffix(".py")).exists():
-            return PyModule(
-                package=Path(),
-                path=py_module_path,
-                name=module_name,
-            )
-
+        if module := self._packages_by_name.get(str(module_name)):
+            return module
         raise ValueError(module_name)
 
     def make_parents_of_module(self, module: Module) -> Iterator[RegularPackage]:
