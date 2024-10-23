@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from typing import Iterator, Literal, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from typing import Literal
 
 from .dfs import depth_first_search
 from .johnson import johnson

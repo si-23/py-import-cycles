@@ -138,7 +138,7 @@ def main() -> int:
 
 
 def _make_readable_imports_by_module(
-    imports_by_module: Mapping[Module, Sequence[Module]]
+    imports_by_module: Mapping[Module, Sequence[Module]],
 ) -> Sequence[str]:
     lines = []
     for ibm, ms in imports_by_module.items():
@@ -150,7 +150,7 @@ def _make_readable_imports_by_module(
 def _make_readable_cycles(
     line_handler: Callable[[int, tuple[Module, ...]], Sequence[str]],
     sorted_cycles: Sequence[tuple[Module, ...]],
-) -> list[str]:
+) -> Sequence[str]:
     return [
         line for nr, ic in enumerate(sorted_cycles, start=1) for line in line_handler(nr, ic) if ic
     ]

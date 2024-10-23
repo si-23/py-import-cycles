@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import time
+from collections.abc import Iterator, Sequence
 from pathlib import Path
-from typing import Iterator, NamedTuple, Sequence
+from typing import NamedTuple
 
 
 def iter_python_files(project_path: Path, packages: Sequence[Path]) -> Iterator[Path]:

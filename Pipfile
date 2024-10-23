@@ -8,6 +8,7 @@ pylint = "*"
 pytest = "*"
 black = "*"
 mypy = "*"
+bandit = "*"
 
 [packages]
 graphviz = "*"

@@ -2,8 +2,9 @@
 
 import ast
 import sys
+from collections.abc import Iterator, Sequence
 from pathlib import Path
-from typing import Iterator, NamedTuple, Sequence
+from typing import NamedTuple
 
 from .log import logger
 from .modules import Module, ModuleFactory, ModuleName, NamespacePackage, RegularPackage

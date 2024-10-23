@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from collections.abc import Hashable
-from typing import List, Mapping, MutableMapping, Sequence, Tuple, TypeVar
+from collections.abc import Hashable, Mapping, Sequence
+from typing import MutableMapping, Tuple, TypeVar
 
 T = TypeVar("T", bound=Hashable)
 
@@ -16,11 +16,11 @@ def strongly_connected_components(
     Based on: http://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
     """
 
-    index_counter: List[int] = [0]
-    stack: List[T] = []
+    index_counter: list[int] = [0]
+    stack: list[T] = []
     lowlinks: MutableMapping[T, int] = {}
     index: MutableMapping[T, int] = {}
-    result: List[Tuple[T, ...]] = []
+    result: list[Tuple[T, ...]] = []
 
     def strongconnect(node: T) -> None:
         # set the depth index for this node to the smallest unused index
