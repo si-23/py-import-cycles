@@ -115,9 +115,7 @@ def test_make_module_from_name_regular_package(
     init_filepath.write_text("")
 
     modules = list(make_modules(project_folder, [Path("a")]))
-    module = ModuleFactory(project_folder, modules).make_module_from_name(
-        ModuleName(raw_module_name)
-    )
+    module = ModuleFactory(modules).make_module_from_name(ModuleName(raw_module_name))
 
     assert isinstance(module, RegularPackage)
     assert module.path == init_filepath
@@ -143,9 +141,7 @@ def test_make_module_from_name_namespace_package(
     package_folder.mkdir(parents=True, exist_ok=True)
 
     modules = list(make_modules(project_folder, [Path("a")]))
-    module = ModuleFactory(project_folder, modules).make_module_from_name(
-        ModuleName(raw_module_name)
-    )
+    module = ModuleFactory(modules).make_module_from_name(ModuleName(raw_module_name))
 
     assert isinstance(module, NamespacePackage)
     assert module.path == package_folder
@@ -173,9 +169,7 @@ def test_make_module_from_name_python_module(
     module_filepath.write_text("")
 
     modules = list(make_modules(project_folder, [Path("a")]))
-    module = ModuleFactory(project_folder, modules).make_module_from_name(
-        ModuleName(raw_module_name)
-    )
+    module = ModuleFactory(modules).make_module_from_name(ModuleName(raw_module_name))
 
     assert isinstance(module, PyModule)
     assert module.path == module_filepath
@@ -191,9 +185,7 @@ def test_make_module_from_name_python_module(
 )
 def test_make_module_from_name_error(raw_module_name: str) -> None:
     with pytest.raises(ValueError):
-        ModuleFactory(Path("/path/to/project"), []).make_module_from_name(
-            ModuleName(raw_module_name)
-        )
+        ModuleFactory([]).make_module_from_name(ModuleName(raw_module_name))
 
 
 @pytest.mark.parametrize(

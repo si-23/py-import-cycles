@@ -93,7 +93,7 @@ def main() -> int:
     modules = list(make_modules(project_path, packages))
 
     logger.info("Visit Python files, get imports by module")
-    module_factory = ModuleFactory(project_path, modules)
+    module_factory = ModuleFactory(modules)
 
     imports_by_module = {
         visited.module: visited.imports

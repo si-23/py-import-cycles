@@ -195,8 +195,7 @@ def _make_packages_by_name(
 
 
 class ModuleFactory:
-    def __init__(self, project_path: Path, modules: Sequence[RegularPackage | PyModule]) -> None:
-        self._project_path = project_path
+    def __init__(self, modules: Sequence[RegularPackage | PyModule]) -> None:
         self._packages_by_name = _make_packages_by_name(
             list(_find_parent_modules(modules)) + list(modules)
         )
