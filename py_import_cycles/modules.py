@@ -81,6 +81,9 @@ class Module(abc.ABC):
     def _validate(self, path: Path, name: ModuleName) -> None:
         raise NotImplementedError()
 
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}(path={str(self.path)}, name={str(self.name)})"
+
     def __hash__(self) -> int:
         return hash(self.name)
 
