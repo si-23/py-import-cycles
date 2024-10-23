@@ -4,8 +4,9 @@ import itertools
 import random
 import sys
 from collections import defaultdict
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import DefaultDict, Iterable, Iterator, Literal, Mapping, NamedTuple, Sequence, TypeVar
+from typing import DefaultDict, Iterable, Literal, NamedTuple, TypeVar
 
 from graphviz import Digraph
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from typing import Iterator, Mapping, Sequence, TypeVar
+from collections.abc import Iterator, Mapping, Sequence
+from typing import TypeVar
 
 from networkx import DiGraph, simple_cycles
 
@@ -10,5 +11,5 @@ T = TypeVar("T", bound=Comparable)
 
 
 def johnson(graph: Mapping[T, Sequence[T]]) -> Iterator[tuple[T, ...]]:
-    for sc in simple_cycles(DiGraph([(v, w) for v, vertices, in graph.items() for w in vertices])):
+    for sc in simple_cycles(DiGraph([(v, w) for v, vertices in graph.items() for w in vertices])):
         yield tuple(sc)

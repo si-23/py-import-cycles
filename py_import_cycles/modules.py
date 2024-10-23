@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import abc
+from collections.abc import Iterator, Sequence
 from pathlib import Path
-from typing import Final, Iterator, Sequence
+from typing import Final
 
 _INIT_NAME = "__init__"
 
@@ -133,12 +134,12 @@ class PyModule(Module):
 
 
 class ModuleFactory:
-    def __init__(self, project_path: Path, packages: list[Path]) -> None:
+    def __init__(self, project_path: Path, packages: Sequence[Path]) -> None:
         self._project_path = project_path
         self._pkgs_names = self._find_package_names(project_path, packages)
 
     @staticmethod
-    def _find_package_names(project_path: Path, packages: list[Path]) -> dict[str, Path]:
+    def _find_package_names(project_path: Path, packages: Sequence[Path]) -> dict[str, Path]:
         pkgs_names: dict[str, Path] = {}
         for pkg in packages:
             if _make_init_module_path(project_path / pkg).exists():
