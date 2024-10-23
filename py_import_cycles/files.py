@@ -1,26 +1,8 @@
 #!/usr/bin/env python3
 
 import time
-from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
-
-
-@dataclass(frozen=True)
-class PyFile:
-    path: Path
-    package: Path
-
-
-def iter_python_files(project_path: Path, packages: Sequence[Path]) -> Iterator[PyFile]:
-    if packages:
-        folders = [project_path / p for p in packages]
-    else:
-        folders = [project_path]
-    for folder in folders:
-        for file in folder.glob("**/*.py"):
-            yield PyFile(file.resolve(), folder)
 
 
 class OutputsFilepaths(NamedTuple):

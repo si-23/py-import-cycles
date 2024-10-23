@@ -5,9 +5,8 @@ from typing import Sequence
 
 import pytest
 
-from py_import_cycles.files import iter_python_files  # pylint: disable=import-error
 from py_import_cycles.modules import (  # pylint: disable=import-error
-    make_modules_from_py_files,
+    make_modules,
     ModuleFactory,
     ModuleName,
     NamespacePackage,
@@ -115,7 +114,7 @@ def test_make_module_from_name_regular_package(
     init_filepath = package_folder / "__init__.py"
     init_filepath.write_text("")
 
-    modules = list(make_modules_from_py_files(iter_python_files(project_folder, [Path("a")])))
+    modules = list(make_modules(project_folder, [Path("a")]))
     module = ModuleFactory(project_folder, modules).make_module_from_name(
         ModuleName(raw_module_name)
     )
@@ -143,7 +142,7 @@ def test_make_module_from_name_namespace_package(
     package_folder = project_folder / raw_package_path
     package_folder.mkdir(parents=True, exist_ok=True)
 
-    modules = list(make_modules_from_py_files(iter_python_files(project_folder, [Path("a")])))
+    modules = list(make_modules(project_folder, [Path("a")]))
     module = ModuleFactory(project_folder, modules).make_module_from_name(
         ModuleName(raw_module_name)
     )
@@ -173,7 +172,7 @@ def test_make_module_from_name_python_module(
     module_filepath = package_folder / raw_filename
     module_filepath.write_text("")
 
-    modules = list(make_modules_from_py_files(iter_python_files(project_folder, [Path("a")])))
+    modules = list(make_modules(project_folder, [Path("a")]))
     module = ModuleFactory(project_folder, modules).make_module_from_name(
         ModuleName(raw_module_name)
     )
@@ -214,7 +213,7 @@ def test_make_module_from_path_regular_package(
     init_filepath = package_folder / "__init__.py"
     init_filepath.write_text("")
 
-    modules = list(make_modules_from_py_files(iter_python_files(project_folder, [Path("a")])))
+    modules = list(make_modules(project_folder, [Path("a")]))
 
     assert modules
     module = modules[0]
@@ -241,7 +240,7 @@ def test_make_module_from_path_python_module(
     module_filepath = package_folder / raw_filename
     module_filepath.write_text("")
 
-    modules = list(make_modules_from_py_files(iter_python_files(project_folder, [Path("a")])))
+    modules = list(make_modules(project_folder, [Path("a")]))
 
     assert modules
     module = modules[0]

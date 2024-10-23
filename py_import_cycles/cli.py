@@ -9,10 +9,10 @@ from typing import Callable
 
 from . import __version__
 from .cycles import detect_cycles
-from .files import get_outputs_filepaths, iter_python_files
+from .files import get_outputs_filepaths
 from .graphs import make_graph
 from .log import logger, setup_logging
-from .modules import make_modules_from_py_files, Module, ModuleFactory
+from .modules import make_modules, Module, ModuleFactory
 from .visitors import visit_python_file
 
 
@@ -90,7 +90,7 @@ def main() -> int:
     setup_logging(outputs_filepaths.log, args.debug)
 
     logger.info("Get Python files")
-    modules = list(make_modules_from_py_files(iter_python_files(project_path, packages)))
+    modules = list(make_modules(project_path, packages))
 
     logger.info("Visit Python files, get imports by module")
     module_factory = ModuleFactory(project_path, modules)

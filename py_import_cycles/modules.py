@@ -5,9 +5,7 @@ from __future__ import annotations
 import abc
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Final, Iterable
-
-from .files import PyFile
+from typing import Final
 
 _INIT_NAME = "__init__"
 
@@ -135,24 +133,29 @@ class PyModule(Module):
             raise ValueError(name)
 
 
-def make_modules_from_py_files(
-    py_files: Iterable[PyFile],
+def _make_module_from_py_file(package: Path, py_file: Path) -> RegularPackage | PyModule:
+    py_file_without_suffix = py_file.with_suffix("")
+    if py_file_without_suffix.name == _INIT_NAME:
+        parts = py_file_without_suffix.parent.relative_to(package).parts
+        return RegularPackage(
+            package=package,
+            path=py_file,
+            name=ModuleName(package.name, *parts),
+        )
+    parts = py_file_without_suffix.relative_to(package).parts
+    return PyModule(
+        package=package,
+        path=py_file,
+        name=ModuleName(package.name, *parts),
+    )
+
+
+def make_modules(
+    project_path: Path, packages: Sequence[Path]
 ) -> Iterator[RegularPackage | PyModule]:
-    for py_file in py_files:
-        if py_file.path.with_suffix("").name == _INIT_NAME:
-            parts = py_file.path.with_suffix("").parent.relative_to(py_file.package).parts
-            yield RegularPackage(
-                package=py_file.package,
-                path=py_file.path,
-                name=ModuleName(py_file.package.name, *parts),
-            )
-        else:
-            parts = py_file.path.with_suffix("").relative_to(py_file.package).parts
-            yield PyModule(
-                package=py_file.package,
-                path=py_file.path,
-                name=ModuleName(py_file.package.name, *parts),
-            )
+    for folder in [project_path / p for p in packages] if packages else [project_path]:
+        for file in folder.glob("**/*.py"):
+            yield _make_module_from_py_file(folder, file.resolve())
 
 
 def _find_parent_modules(
@@ -163,7 +166,7 @@ def _find_parent_modules(
             if not parent.is_relative_to(module.package):
                 continue
             if (parent_init_path := _make_init_module_path(parent)).exists():
-                # TODO same as above in make_modules_from_py_files
+                # TODO same as above in _make_module_from_py_file
                 parts = parent_init_path.with_suffix("").parent.relative_to(module.package).parts
                 yield RegularPackage(
                     package=module.package,
