@@ -9,7 +9,6 @@ cd "$REPO_PATH" || exit 1
 
 for project in ./e2e_test_inputs/*; do
     echo "===== Test $project ====="
-
     if [ -f "$REPO_PATH/$project/skip_main" ]; then
         echo "Skip testing main due to:"
         cat "$REPO_PATH/$project/skip_main"
@@ -21,18 +20,20 @@ for project in ./e2e_test_inputs/*; do
     echo "Test cycles..."
 
     threshold="$(cat "$REPO_PATH/$project"/found_cycles)"
-    PYTHONPATH="." ./run-main --project-path "$REPO_PATH/$project" --threshold "$threshold" >/dev/null 2>&1
-    if ! echo $? >/dev/null; then
-        echo "Test $project failed (number of cycles exceeds $threshold)." >&2
-        exit 1
+    result=$(PYTHONPATH="." ./run-main --project-path "$REPO_PATH/$project" --strategy johnson 2>&1)
+    if [ "$result" == "Found $threshold import cycles" ]; then
+       continue
     fi
+    echo "Test $project failed (expect $threshold cycles, got '$result')." >&2
+    exit 1
 done
 
 echo "===== Self test ====="
 echo "Test cycles..."
 
-PYTHONPATH="." ./run-main --project-path "$REPO_PATH/py_import_cycles" >/dev/null 2>&1
-if ! echo $? >/dev/null; then
-    echo "Self test failed: Found cycles." >&2
-    exit 1
+result=$(PYTHONPATH="." ./run-main --project-path "$REPO_PATH/py_import_cycles" --strategy johnson 2>&1)
+if [ "$result" == "Found 0 import cycles" ]; then
+   exit 0
 fi
+echo "Test $project failed (expect 0 cycles, got '$result')." >&2
+exit 1
