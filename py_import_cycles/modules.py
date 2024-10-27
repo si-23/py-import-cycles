@@ -5,6 +5,7 @@ from __future__ import annotations
 import abc
 from collections.abc import Iterator, Sequence
 from pathlib import Path
+from string import ascii_letters, digits
 from typing import Final
 
 _INIT_NAME = "__init__"
@@ -18,12 +19,26 @@ def _make_init_module_name(name: ModuleName) -> ModuleName:
     return name.joinname(_INIT_NAME)
 
 
+def _parse_part(part: str) -> str:
+    # A variable name must start with a letter or the underscore character.
+    # A variable name cannot start with a number.
+    # A variable name can only contain alpha-numeric characters and underscores (A-z, 0-9, and _ )
+    if not part:
+        raise ValueError(part)
+    # TODO remove "*"; at the moment this is handled later in "_make_init_module_name"
+    if part[0] not in ascii_letters + "_*":
+        raise ValueError(part[0])
+    if not set(part[1:]).issubset(ascii_letters + digits + "_*"):
+        raise ValueError(part[1:])
+    return part
+
+
 class ModuleName:
     """This class is inspired by pathlib.Path"""
 
     def __init__(self, *parts: str | ModuleName) -> None:
         self._parts: Final[tuple[str, ...]] = tuple(
-            entry
+            _parse_part(entry)
             for part in parts
             for entry in (part.parts if isinstance(part, ModuleName) else part.split("."))
         )
