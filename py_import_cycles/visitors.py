@@ -3,9 +3,9 @@
 import ast
 import sys
 from collections.abc import Iterator, Sequence
-from pathlib import Path
 from typing import NamedTuple
 
+from .files import PyFile
 from .log import logger
 from .modules import Module, ModuleFactory, ModuleName, NamespacePackage, RegularPackage
 
@@ -123,9 +123,9 @@ class ImportsOfModule(NamedTuple):
     imports: Sequence[Module]
 
 
-def visit_python_file(module_factory: ModuleFactory, path: Path) -> None | ImportsOfModule:
+def visit_python_file(module_factory: ModuleFactory, py_file: PyFile) -> None | ImportsOfModule:
     try:
-        module = module_factory.make_module_from_path(path)
+        module = module_factory.make_module_from_path(py_file.path)
     except ValueError:
         return None
 
