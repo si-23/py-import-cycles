@@ -15,17 +15,13 @@ def _make_init_module_path(path: Path) -> Path:
     return path / f"{_INIT_NAME}.py"
 
 
-def _make_init_module_name(name: ModuleName) -> ModuleName:
-    return name.joinname(_INIT_NAME)
-
-
 def _parse_part(part: str) -> str:
     # A variable name must start with a letter or the underscore character.
     # A variable name cannot start with a number.
     # A variable name can only contain alpha-numeric characters and underscores (A-z, 0-9, and _ )
     if not part:
         raise ValueError(part)
-    # TODO remove "*"; at the moment this is handled later in "_make_init_module_name"
+    # TODO remove "*"; at the moment this is handled later in "make_module_from_name"
     if part[0] not in ascii_letters + "_*":
         raise ValueError(part[0])
     if not set(part[1:]).issubset(ascii_letters + digits + "_*"):
@@ -129,7 +125,7 @@ class RegularPackage(Module):
         if path.with_suffix("").name != _INIT_NAME:
             raise ValueError(path)
 
-        if not name.parts or name.parts[-1] != _INIT_NAME:
+        if not name.parts or name.parts[-1] == _INIT_NAME:
             raise ValueError(name)
 
 
@@ -193,7 +189,7 @@ class ModuleFactory:
             if (init_module_path := _make_init_module_path(module_path)).exists():
                 return RegularPackage(
                     path=init_module_path,
-                    name=_make_init_module_name(module_name),
+                    name=module_name,
                 )
 
             return NamespacePackage(
@@ -230,7 +226,7 @@ class ModuleFactory:
             if module_path.stem == _INIT_NAME:
                 return RegularPackage(
                     path=module_path,
-                    name=module_name,
+                    name=ModuleName(*module_name.parts[:-1]),
                 )
 
             return PyModule(
