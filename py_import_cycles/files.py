@@ -2,18 +2,29 @@
 
 import time
 from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
 
-def iter_python_files(project_path: Path, packages: Sequence[Path]) -> Iterator[Path]:
+@dataclass(frozen=True, kw_only=True)
+class PyFile:
+    package: Path
+    path: Path
+
+
+def iter_python_files(project_path: Path, packages: Sequence[Path]) -> Iterator[PyFile]:
     if packages:
         for pkg in packages:
-            yield from (p.resolve() for p in (project_path / pkg).glob("**/*.py"))
+            yield from (
+                PyFile(package=project_path / pkg, path=p.resolve())
+                for p in (project_path / pkg).glob("**/*.py")
+            )
+
         return
 
     for p in project_path.glob("**/*.py"):
-        yield p.resolve()
+        yield PyFile(package=project_path, path=p.resolve())
 
 
 class OutputsFilepaths(NamedTuple):
