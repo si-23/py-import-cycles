@@ -49,7 +49,8 @@ class ImportStmtsParser:
             try:
                 module = self._module_factory.make_module_from_name(module_name)
                 self._validate_module(module)
-            except ValueError:
+            except ValueError as e:
+                logger.debug("Cannot make module from module name: %s: %s", module_name, e)
                 continue
 
             yield module
@@ -75,7 +76,12 @@ class ImportStmtsParser:
     ) -> Iterator[ModuleName]:
         try:
             yield (anchor := self._get_anchor(import_from_stmt))
-        except ValueError:
+        except ValueError as e:
+            logger.debug(
+                "Cannot get anchor of import from stmt: %s: %s",
+                ast.dump(import_from_stmt),
+                e,
+            )
             return
 
         for alias in import_from_stmt.names:
@@ -126,7 +132,8 @@ class ImportsOfModule(NamedTuple):
 def visit_python_file(module_factory: ModuleFactory, py_file: PyFile) -> None | ImportsOfModule:
     try:
         module = module_factory.make_module_from_path(py_file.path)
-    except ValueError:
+    except ValueError as e:
+        logger.debug("Cannot make module from python file %s: %s", py_file.path, e)
         return None
 
     if isinstance(module, NamespacePackage):
@@ -136,13 +143,13 @@ def visit_python_file(module_factory: ModuleFactory, py_file: PyFile) -> None | 
         with open(module.path, encoding="utf-8") as f:
             content = f.read()
     except UnicodeDecodeError as e:
-        logger.debug("Cannot read python file %s: %s", module.path, e)
+        logger.debug("Cannot read python file %s: %s", py_file.path, e)
         return None
 
     try:
         tree = ast.parse(content)
     except SyntaxError as e:
-        logger.debug("Cannot visit python file %s: %s", module.path, e)
+        logger.debug("Cannot visit python file %s: %s", py_file.path, e)
         return None
 
     visitor = NodeVisitorImports()
