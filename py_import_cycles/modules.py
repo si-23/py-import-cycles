@@ -8,6 +8,8 @@ from pathlib import Path
 from string import ascii_letters, digits
 from typing import Final
 
+from .log import logger
+
 _INIT_NAME = "__init__"
 
 
@@ -248,8 +250,11 @@ class ModuleFactory:
             parents = module.name.parents
 
         for parent in parents[::-1]:
-            if isinstance(
-                parent_module := self.make_module_from_name(parent),
-                RegularPackage,
-            ):
+            try:
+                parent_module = self.make_module_from_name(parent)
+            except ValueError as e:
+                logger.debug("Cannot make module from module name: %s: %s", parent, e)
+                continue
+
+            if isinstance(parent_module, RegularPackage):
                 yield parent_module
