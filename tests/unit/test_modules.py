@@ -97,8 +97,8 @@ def test_module_name_joinname(module_names: Sequence[ModuleName], expected: Modu
 @pytest.mark.parametrize(
     "raw_package_path, raw_module_name, expected_raw_module_name",
     [
-        ("a/b/c", "a.b.c", "a.b.c.__init__"),
-        ("a/b", "a.b.*", "a.b.__init__"),
+        ("a/b/c", "a.b.c", "a.b.c"),
+        ("a/b", "a.b.*", "a.b"),
     ],
 )
 def test_make_module_from_name_regular_package(
@@ -188,7 +188,7 @@ def test_make_module_from_name_error(raw_module_name: str) -> None:
 @pytest.mark.parametrize(
     "raw_package_path, expected_raw_module_name",
     [
-        ("a/b/c", "a.b.c.__init__"),
+        ("a/b/c", "a.b.c"),
     ],
 )
 def test_make_module_from_path_regular_package(
