@@ -4,7 +4,6 @@ import time
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -27,7 +26,8 @@ def iter_python_files(project_path: Path, packages: Sequence[Path]) -> Iterator[
         yield PyFile(package=project_path, path=p.resolve())
 
 
-class OutputsFilePaths(NamedTuple):
+@dataclass(frozen=True, kw_only=True)
+class OutputsFilePaths:
     log: Path
     graph: Path
 
