@@ -12,7 +12,7 @@ from .cycles import detect_cycles
 from .files import get_outputs_filepaths, iter_python_files
 from .graphs import make_graph
 from .log import logger, setup_logging
-from .modules import Module, ModuleFactory
+from .modules import Module, ModuleFactory, NamespacePackage, PyModule, RegularPackage
 from .visitors import visit_python_file
 
 
@@ -39,6 +39,10 @@ def _parse_arguments() -> argparse.Namespace:
         "--verbose",
         action="store_true",
         help="show cycles if some are found",
+    )
+    parser.add_argument(
+        "--outputs",
+        help="path to outputs folder. If no set $HOME/.local/py-import-cycles/outputs/ is used",
     )
     parser.add_argument(
         "--graph",
@@ -85,7 +89,7 @@ def main() -> int:
 
     packages = [Path(p) for p in args.packages]
 
-    outputs_filepaths = get_outputs_filepaths(project_path)
+    outputs_filepaths = get_outputs_filepaths(Path(args.outputs) if args.outputs else None)
 
     setup_logging(outputs_filepaths.log, args.debug)
 
@@ -137,13 +141,25 @@ def main() -> int:
 #   '----------------------------------------------------------------------'
 
 
+def _show_module(module: Module) -> str:
+    match module:
+        case NamespacePackage():
+            return f"{module.name}/"
+        case RegularPackage():
+            return f"{module.name}.__init__"
+        case PyModule():
+            return f"{module.name}"
+        case _:
+            raise TypeError(module)
+
+
 def _make_readable_imports_by_module(
     imports_by_module: Mapping[Module, Sequence[Module]],
 ) -> Sequence[str]:
     lines = []
     for ibm, ms in imports_by_module.items():
         if ms:
-            lines.append(f"  {ibm.name} imports: {', '.join(str(m.name) for m in ms)}")
+            lines.append(f"  {_show_module(ibm)} imports: {', '.join(_show_module(m) for m in ms)}")
     return lines
 
 
@@ -162,7 +178,7 @@ def _log_or_show_cycles(
 ) -> None:
     if verbose:
         for line in _make_readable_cycles(
-            lambda nr, ic: [f"  Cycle {nr}:"] + [f"   {m.name}" for m in ic],
+            lambda nr, ic: [f"  Cycle {nr}:"] + [f"   {_show_module(m)}" for m in ic],
             sorted_cycles,
         ):
             sys.stderr.write(f"{line}\n")
@@ -172,7 +188,7 @@ def _log_or_show_cycles(
             "Import cycles:\n%s",
             "\n".join(
                 _make_readable_cycles(
-                    lambda nr, ic: [f"  Cycle {nr}: {' > '.join(str(m.name) for m in ic)}"],
+                    lambda nr, ic: [f"  Cycle {nr}: {' > '.join(_show_module(m) for m in ic)}"],
                     sorted_cycles,
                 )
             ),
