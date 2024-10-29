@@ -42,9 +42,7 @@ def _parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--outputs",
-        help=(
-            "path to outputs folder." " If no set $HOME/.local/py-import-cycles/outputs/ is used"
-        ),
+        help="path to outputs folder. If no set $HOME/.local/py-import-cycles/outputs/ is used",
     )
     parser.add_argument(
         "--graph",
