@@ -9,7 +9,7 @@ from typing import Callable
 
 from . import __version__
 from .cycles import detect_cycles
-from .files import get_outputs_filepaths, iter_python_files
+from .files import get_outputs_file_paths, iter_python_files
 from .graphs import make_graph
 from .log import logger, setup_logging
 from .modules import Module, ModuleFactory, NamespacePackage, PyModule, RegularPackage
@@ -41,8 +41,12 @@ def _parse_arguments() -> argparse.Namespace:
         help="show cycles if some are found",
     )
     parser.add_argument(
-        "--outputs",
+        "--outputs-folder",
         help="path to outputs folder. If no set $HOME/.local/py-import-cycles/outputs/ is used",
+    )
+    parser.add_argument(
+        "--outputs-filename",
+        help="outputs filename. If no set the current timestamp is used",
     )
     parser.add_argument(
         "--graph",
@@ -89,7 +93,10 @@ def main() -> int:
 
     packages = [Path(p) for p in args.packages]
 
-    outputs_filepaths = get_outputs_filepaths(Path(args.outputs) if args.outputs else None)
+    outputs_filepaths = get_outputs_file_paths(
+        Path(args.outputs_folder) if args.outputs_folder else None,
+        args.outputs_filename or "",
+    )
 
     setup_logging(outputs_filepaths.log, args.debug)
 
