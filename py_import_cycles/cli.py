@@ -41,6 +41,12 @@ def _parse_arguments() -> argparse.Namespace:
         help="show cycles if some are found",
     )
     parser.add_argument(
+        "--outputs",
+        help=(
+            "path to outputs folder." " If no set $HOME/.local/py-import-cycles/outputs/ is used"
+        ),
+    )
+    parser.add_argument(
         "--graph",
         action="store_true",
         help="create graphical representation",
@@ -85,7 +91,7 @@ def main() -> int:
 
     packages = [Path(p) for p in args.packages]
 
-    outputs_filepaths = get_outputs_filepaths(project_path)
+    outputs_filepaths = get_outputs_filepaths(Path(args.outputs) if args.outputs else None)
 
     setup_logging(outputs_filepaths.log, args.debug)
 

@@ -32,14 +32,12 @@ class OutputsFilepaths(NamedTuple):
     graph: Path
 
 
-def get_outputs_filepaths(project_path: Path) -> OutputsFilepaths:
-    target_dir = Path.home() / Path(".local", "py_import_cycles", "outputs")
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    filename_parts = list(project_path.parts[1:]) + [str(int(time.time()))]
-    filename = Path("-".join(filename_parts).replace(".", "-"))
-
+def get_outputs_filepaths(outputs_folder: Path | None) -> OutputsFilepaths:
+    if not outputs_folder:
+        outputs_folder = Path.home() / Path(".local", "py-import-cycles", "outputs")
+    outputs_folder.mkdir(parents=True, exist_ok=True)
+    file_name = str(int(time.time()))
     return OutputsFilepaths(
-        log=target_dir / filename.with_suffix(".log"),
-        graph=target_dir / filename.with_suffix(".gv"),
+        log=(outputs_folder / file_name).with_suffix(".log"),
+        graph=(outputs_folder / file_name).with_suffix(".gv"),
     )
