@@ -27,17 +27,18 @@ def iter_python_files(project_path: Path, packages: Sequence[Path]) -> Iterator[
         yield PyFile(package=project_path, path=p.resolve())
 
 
-class OutputsFilepaths(NamedTuple):
+class OutputsFilePaths(NamedTuple):
     log: Path
     graph: Path
 
 
-def get_outputs_filepaths(outputs_folder: Path | None) -> OutputsFilepaths:
+def get_outputs_file_paths(outputs_folder: Path | None, outputs_filename: str) -> OutputsFilePaths:
     if not outputs_folder:
         outputs_folder = Path.home() / Path(".local", "py-import-cycles", "outputs")
     outputs_folder.mkdir(parents=True, exist_ok=True)
-    file_name = str(int(time.time()))
-    return OutputsFilepaths(
-        log=(outputs_folder / file_name).with_suffix(".log"),
-        graph=(outputs_folder / file_name).with_suffix(".gv"),
+    if not outputs_filename:
+        outputs_filename = str(int(time.time()))
+    return OutputsFilePaths(
+        log=(outputs_folder / outputs_filename).with_suffix(".log"),
+        graph=(outputs_folder / outputs_filename).with_suffix(".gv"),
     )
