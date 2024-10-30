@@ -1,29 +1,37 @@
 #!/usr/bin/env python3
 
+import os
 import time
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-
-@dataclass(frozen=True, kw_only=True)
-class PyFile:
-    package: Path
-    path: Path
+from .log import logger
+from .modules import PyFile
 
 
-def iter_python_files(project_path: Path, packages: Sequence[Path]) -> Iterator[PyFile]:
-    if packages:
-        for pkg in packages:
-            yield from (
-                PyFile(package=project_path / pkg, path=p.resolve())
-                for p in (project_path / pkg).glob("**/*.py")
-            )
+def scan_project(project_path: Path, packages: Sequence[Path]) -> Iterator[PyFile]:
+    for package_path in [project_path / p for p in packages] if packages else [project_path]:
+        for root, _dirs, files in os.walk(package_path):
+            root_path = Path(root)
 
-        return
+            if root_path.name.startswith("."):
+                break
 
-    for p in project_path.glob("**/*.py"):
-        yield PyFile(package=project_path, path=p.resolve())
+            for file in files:
+                # Regular package or Python module
+                if (file_path := root_path / file).suffix == ".py":
+                    try:
+                        yield PyFile(package=package_path, path=file_path)
+                    except ValueError as e:
+                        logger.error("Cannot make py file from %s: %s", file_path, e)
+
+            if not (root_path / "__init__.py").exists():
+                # Namespace package
+                try:
+                    yield PyFile(package=package_path, path=root_path)
+                except ValueError as e:
+                    logger.error("Cannot make py file from %s: %s", root_path, e)
 
 
 @dataclass(frozen=True, kw_only=True)

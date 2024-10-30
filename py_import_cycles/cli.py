@@ -9,11 +9,11 @@ from typing import Callable
 
 from . import __version__
 from .cycles import detect_cycles
-from .files import get_outputs_file_paths, iter_python_files
+from .files import get_outputs_file_paths, scan_project
 from .graphs import make_graph
 from .log import logger, setup_logging
-from .modules import Module, ModuleFactory, NamespacePackage, PyModule, RegularPackage
-from .visitors import visit_python_file
+from .modules import Module, ModuleFactory, NamespacePackage, PyFileType, PyModule, RegularPackage
+from .visitors import visit_py_file
 
 
 def _parse_arguments() -> argparse.Namespace:
@@ -101,15 +101,16 @@ def main() -> int:
     setup_logging(outputs_filepaths.log, args.debug)
 
     logger.info("Get Python files")
-    python_files = iter_python_files(project_path, packages)
+    py_files = scan_project(project_path, packages)
 
     logger.info("Visit Python files, get imports by module")
     module_factory = ModuleFactory(project_path, packages)
 
     imports_by_module = {
         visited.module: visited.imports
-        for path in python_files
-        if (visited := visit_python_file(module_factory, path)) is not None
+        for py_file in py_files
+        if py_file.type is not PyFileType.NAMESPACE_PACKAGE
+        and (visited := visit_py_file(module_factory, py_file)) is not None
     }
 
     if _debug():

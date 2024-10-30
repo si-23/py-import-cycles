@@ -5,10 +5,12 @@ from typing import Sequence
 
 import pytest
 
-from py_import_cycles.modules import (  # pylint: disable=import-error
+from py_import_cycles.modules import (  # pylint: disable=import-error  # pylint: disable=import-error
     ModuleFactory,
     ModuleName,
     NamespacePackage,
+    PyFile,
+    PyFileType,
     PyModule,
     RegularPackage,
 )
@@ -92,6 +94,44 @@ def test_module_name_parents(module_name: ModuleName, expected: Sequence[ModuleN
 )
 def test_module_name_joinname(module_names: Sequence[ModuleName], expected: ModuleName) -> None:
     assert ModuleName().joinname(*module_names) == expected
+
+
+def test_py_file_namespace_package(tmp_path: Path) -> None:
+    path = tmp_path / "path/to/package"
+    path.mkdir(parents=True, exist_ok=True)
+    py_file = PyFile(
+        package=tmp_path / "path/to",
+        path=tmp_path / "path/to/package",
+    )
+    assert py_file.type is PyFileType.NAMESPACE_PACKAGE
+    assert py_file.name == ModuleName("package")
+    assert str(py_file) == "package/"
+
+
+def test_py_file_regular_package(tmp_path: Path) -> None:
+    path = tmp_path / "path/to/package"
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "__init__.py").touch()
+    py_file = PyFile(
+        package=tmp_path / "path/to",
+        path=tmp_path / "path/to/package/__init__.py",
+    )
+    assert py_file.type is PyFileType.REGULAR_PACKAGE
+    assert py_file.name == ModuleName("package")
+    assert str(py_file) == "package.__init__"
+
+
+def test_py_file_module(tmp_path: Path) -> None:
+    path = tmp_path / "path/to/package"
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "module.py").touch()
+    py_file = PyFile(
+        package=tmp_path / "path/to",
+        path=tmp_path / "path/to/package/module.py",
+    )
+    assert py_file.type is PyFileType.MODULE
+    assert py_file.name == ModuleName("package.module")
+    assert str(py_file) == "package.module"
 
 
 @pytest.mark.parametrize(

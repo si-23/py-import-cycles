@@ -5,9 +5,8 @@ import sys
 from collections.abc import Iterator, Sequence
 from typing import NamedTuple
 
-from .files import PyFile
 from .log import logger
-from .modules import Module, ModuleFactory, ModuleName, NamespacePackage, RegularPackage
+from .modules import Module, ModuleFactory, ModuleName, NamespacePackage, PyFile, RegularPackage
 
 STDLIB_OR_BUILTIN = sys.stdlib_module_names.union(sys.builtin_module_names)
 ImportSTMT = ast.Import | ast.ImportFrom
@@ -129,7 +128,7 @@ class ImportsOfModule(NamedTuple):
     imports: Sequence[Module]
 
 
-def visit_python_file(module_factory: ModuleFactory, py_file: PyFile) -> None | ImportsOfModule:
+def visit_py_file(module_factory: ModuleFactory, py_file: PyFile) -> None | ImportsOfModule:
     try:
         module = module_factory.make_module_from_path(py_file.path)
     except ValueError as e:
