@@ -65,20 +65,29 @@ class ImportStmtsParser:
     def _get_module_names(self) -> Iterator[ModuleName]:
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
-                yield from self._get_module_names_of_import_stmt(import_stmt)
+                for alias in import_stmt.names:
+                    yield ModuleName(alias.name)
 
             elif isinstance(import_stmt, ast.ImportFrom):
-                yield from self._get_module_names_of_import_from_stmt(import_stmt)
-
-    # -----ast.Import-----
-
-    def _get_module_names_of_import_stmt(self, import_stmt: ast.Import) -> Iterator[ModuleName]:
-        for alias in import_stmt.names:
-            yield ModuleName(alias.name)
+                if import_stmt.level == 0:
+                    yield from self._get_module_names_of_abs_import_from_stmt(import_stmt)
+                else:
+                    yield from self._get_module_names_of_rel_import_from_stmt(import_stmt)
 
     # -----ast.ImportFrom-----
 
-    def _get_module_names_of_import_from_stmt(
+    def _get_module_names_of_abs_import_from_stmt(
+        self, import_from_stmt: ast.ImportFrom
+    ) -> Iterator[ModuleName]:
+        assert import_from_stmt.module
+
+        anchor = ModuleName(import_from_stmt.module)
+        yield anchor
+
+        for alias in import_from_stmt.names:
+            yield anchor.joinname(alias.name)
+
+    def _get_module_names_of_rel_import_from_stmt(
         self, import_from_stmt: ast.ImportFrom
     ) -> Iterator[ModuleName]:
         try:
