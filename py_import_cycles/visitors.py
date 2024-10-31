@@ -4,17 +4,9 @@ import ast
 import sys
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import NamedTuple
 
 from .log import logger
-from .modules import (
-    make_module_from_py_file,
-    Module,
-    ModuleName,
-    NamespacePackage,
-    PyFile,
-    PyFileType,
-)
+from .modules import make_module_from_py_file, Module, ModuleName, PyFile, PyFileType
 
 STDLIB_OR_BUILTIN = sys.stdlib_module_names.union(sys.builtin_module_names)
 ImportSTMT = ast.Import | ast.ImportFrom
@@ -165,31 +157,21 @@ class ImportStmtsParser:
             raise ValueError(module)
 
 
-class ImportsOfModule(NamedTuple):
-    module: Module
-    imports: Sequence[Module]
-
-
 def visit_py_file(
     py_files_by_name: Mapping[ModuleName, PyFile], py_file: PyFile
-) -> None | ImportsOfModule:
-    module = make_module_from_py_file(py_file)
-
-    if isinstance(module, NamespacePackage):
-        return None
-
+) -> Sequence[Module]:
     try:
-        with open(module.path, encoding="utf-8") as f:
+        with open(py_file.path, encoding="utf-8") as f:
             content = f.read()
     except UnicodeDecodeError as e:
         logger.debug("Cannot read python file %s: %s", py_file.path, e)
-        return None
+        return []
 
     try:
         tree = ast.parse(content)
     except SyntaxError as e:
         logger.debug("Cannot visit python file %s: %s", py_file.path, e)
-        return None
+        return []
 
     visitor = NodeVisitorImports()
     visitor.visit(tree)
@@ -200,11 +182,8 @@ def visit_py_file(
         visitor.import_stmts,
     )
 
-    return ImportsOfModule(
-        module,
-        sorted(
-            frozenset(parser.get_imports()),
-            key=lambda m: tuple(m.name.parts),
-            reverse=True,
-        ),
+    return sorted(
+        frozenset(parser.get_imports()),
+        key=lambda m: tuple(m.name.parts),
+        reverse=True,
     )
