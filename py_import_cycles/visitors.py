@@ -6,7 +6,15 @@ from collections.abc import Iterator, Sequence
 from typing import NamedTuple
 
 from .log import logger
-from .modules import Module, ModuleFactory, ModuleName, NamespacePackage, PyFile, RegularPackage
+from .modules import (
+    make_module_from_py_file,
+    Module,
+    ModuleFactory,
+    ModuleName,
+    NamespacePackage,
+    PyFile,
+    RegularPackage,
+)
 
 STDLIB_OR_BUILTIN = sys.stdlib_module_names.union(sys.builtin_module_names)
 ImportSTMT = ast.Import | ast.ImportFrom
@@ -129,11 +137,7 @@ class ImportsOfModule(NamedTuple):
 
 
 def visit_py_file(module_factory: ModuleFactory, py_file: PyFile) -> None | ImportsOfModule:
-    try:
-        module = module_factory.make_module_from_path(py_file.path)
-    except ValueError as e:
-        logger.debug("Cannot make module from python file %s: %s", py_file.path, e)
-        return None
+    module = make_module_from_py_file(py_file)
 
     if isinstance(module, NamespacePackage):
         return None

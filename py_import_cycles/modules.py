@@ -195,7 +195,7 @@ class RegularPackage(Module):
         if path.with_suffix("").name != _INIT_NAME:
             raise ValueError(path)
 
-        if not name.parts or name.parts[-1] == _INIT_NAME:
+        if name.parts and name.parts[-1] == _INIT_NAME:
             raise ValueError(name)
 
 
@@ -215,6 +215,16 @@ class PyModule(Module):
 
         if name.parts and name.parts[-1] == _INIT_NAME:
             raise ValueError(name)
+
+
+def make_module_from_py_file(py_file: PyFile) -> Module:
+    match py_file.type:
+        case PyFileType.NAMESPACE_PACKAGE:
+            return NamespacePackage(path=py_file.path, name=py_file.name)
+        case PyFileType.REGULAR_PACKAGE:
+            return RegularPackage(path=py_file.path, name=py_file.name)
+        case PyFileType.MODULE:
+            return PyModule(path=py_file.path, name=py_file.name)
 
 
 class ModuleFactory:
@@ -274,37 +284,6 @@ class ModuleFactory:
             )
 
         raise ValueError(module_name)
-
-    def make_module_from_path(self, module_path: Path) -> Module:
-        def _get_sanitized_module_name(module_path: Path) -> ModuleName:
-            module_path = module_path.with_suffix("")
-            for name, path in self._pkgs_names.items():
-                abs_module_path = self._project_path.joinpath(path)
-                if module_path.is_relative_to(abs_module_path):
-                    return ModuleName(name, *module_path.relative_to(abs_module_path).parts)
-            return ModuleName(*module_path.relative_to(self._project_path).parts)
-
-        module_name = _get_sanitized_module_name(module_path)
-
-        if module_path.is_dir():
-            return NamespacePackage(
-                path=module_path,
-                name=module_name,
-            )
-
-        if module_path.is_file() and module_path.suffix == ".py":
-            if module_path.stem == _INIT_NAME:
-                return RegularPackage(
-                    path=module_path,
-                    name=ModuleName(*module_name.parts[:-1]),
-                )
-
-            return PyModule(
-                path=module_path,
-                name=module_name,
-            )
-
-        raise ValueError(module_path)
 
     def make_parents_of_module(self, module: Module) -> Iterator[RegularPackage]:
         # Return the parents - ie. inits - of a module if they exist:
