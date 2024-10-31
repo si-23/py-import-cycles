@@ -5,15 +5,7 @@ from typing import Sequence
 
 import pytest
 
-from py_import_cycles.modules import (  # pylint: disable=import-error  # pylint: disable=import-error
-    make_module_from_py_file,
-    ModuleName,
-    NamespacePackage,
-    PyFile,
-    PyFileType,
-    PyModule,
-    RegularPackage,
-)
+from py_import_cycles.modules import ModuleName, PyFile, PyFileType  # pylint: disable=import-error
 
 
 @pytest.mark.parametrize(
@@ -93,7 +85,6 @@ def test_py_file_namespace_package(tmp_path: Path) -> None:
     assert py_file.type is PyFileType.NAMESPACE_PACKAGE
     assert py_file.name == ModuleName("package")
     assert str(py_file) == "package/"
-    assert isinstance(make_module_from_py_file(py_file), NamespacePackage)
     assert list(py_file.parents) == [PyFile(package=tmp_path / "path/to", path=Path())]
 
 
@@ -108,7 +99,6 @@ def test_py_file_regular_package(tmp_path: Path) -> None:
     assert py_file.type is PyFileType.REGULAR_PACKAGE
     assert py_file.name == ModuleName("package")
     assert str(py_file) == "package.__init__"
-    assert isinstance(make_module_from_py_file(py_file), RegularPackage)
     assert list(py_file.parents) == [PyFile(package=tmp_path / "path/to", path=Path())]
 
 
@@ -123,7 +113,6 @@ def test_py_file_module(tmp_path: Path) -> None:
     assert py_file.type is PyFileType.MODULE
     assert py_file.name == ModuleName("package.module")
     assert str(py_file) == "package.module"
-    assert isinstance(make_module_from_py_file(py_file), PyModule)
     assert list(py_file.parents) == [
         PyFile(
             package=tmp_path / "path/to",

@@ -6,7 +6,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 
 from .log import logger
-from .modules import make_module_from_py_file, Module, ModuleName, PyFile, PyFileType
+from .modules import ModuleName, PyFile, PyFileType
 
 STDLIB_OR_BUILTIN = sys.stdlib_module_names.union(sys.builtin_module_names)
 ImportSTMT = ast.Import | ast.ImportFrom
@@ -38,26 +38,22 @@ class ImportStmtsParser:
         self._py_file = py_file
         self._import_stmts = import_stmts
 
-    def get_imports(self) -> Iterator[Module]:
-        yield from (
-            make_module_from_py_file(p)
-            for p in self._py_file.parents
-            if p.type is PyFileType.REGULAR_PACKAGE
-        )
+    def get_imports(self) -> Iterator[PyFile]:
+        yield from (p for p in self._py_file.parents if p.type is PyFileType.REGULAR_PACKAGE)
 
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
                 for alias in import_stmt.names:
-                    if module := self._make_module_from_name(ModuleName(alias.name)):
-                        yield module
+                    if py_file := self._make_py_file_from_name(ModuleName(alias.name)):
+                        yield py_file
 
             elif isinstance(import_stmt, ast.ImportFrom):
                 if import_stmt.level == 0:
                     for module_name in self._get_module_names_of_abs_import_from_stmt(import_stmt):
-                        if module := self._make_module_from_name(module_name):
-                            yield module
+                        if py_file := self._make_py_file_from_name(module_name):
+                            yield py_file
                 else:
-                    yield from self._get_modules_of_rel_import_from_stmt(import_stmt)
+                    yield from self._get_py_files_of_rel_import_from_stmt(import_stmt)
 
     # -----ast.ImportFrom-----
 
@@ -72,9 +68,9 @@ class ImportStmtsParser:
         for alias in import_from_stmt.names:
             yield anchor.joinname(alias.name)
 
-    def _get_modules_of_rel_import_from_stmt(
+    def _get_py_files_of_rel_import_from_stmt(
         self, import_from_stmt: ast.ImportFrom
-    ) -> Iterator[Module]:
+    ) -> Iterator[PyFile]:
         assert import_from_stmt.level >= 1
 
         if self._py_file.type is PyFileType.REGULAR_PACKAGE:
@@ -89,14 +85,14 @@ class ImportStmtsParser:
 
         if import_from_stmt.module:
             ref_path = ref_path.joinpath(*ModuleName(import_from_stmt.module).parts)
-            if module := self._get_module_of_rel_import_from_stmt(ref_path):
-                yield module
+            if py_file := self._get_py_file_of_rel_import_from_stmt(ref_path):
+                yield py_file
 
         for alias in import_from_stmt.names:
-            if module := self._get_module_of_rel_import_from_stmt(ref_path.joinpath(alias.name)):
-                yield module
+            if py_file := self._get_py_file_of_rel_import_from_stmt(ref_path.joinpath(alias.name)):
+                yield py_file
 
-    def _get_module_of_rel_import_from_stmt(self, path: Path) -> Module | None:
+    def _get_py_file_of_rel_import_from_stmt(self, path: Path) -> PyFile | None:
         try:
             if (init_file_path := path / "__init__.py").exists():
                 py_file = PyFile(package=self._py_file.package, path=init_file_path)
@@ -108,18 +104,16 @@ class ImportStmtsParser:
             logger.debug("Cannot make py file from %s: %s", path, e)
             return None
 
-        module = make_module_from_py_file(py_file)
-
         try:
-            self._validate_module(module)
+            self._validate_py_file(py_file)
         except ValueError:
             return None
 
-        return module
+        return py_file
 
     # -----helper-----
 
-    def _make_module_from_name(self, module_name: ModuleName) -> Module | None:
+    def _make_py_file_from_name(self, module_name: ModuleName) -> PyFile | None:
         if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
             return None
 
@@ -134,14 +128,12 @@ class ImportStmtsParser:
         if not (py_file := self._lookup_py_file(module_name)):
             return None
 
-        module = make_module_from_py_file(py_file)
-
         try:
-            self._validate_module(module)
+            self._validate_py_file(py_file)
         except ValueError:
             return None
 
-        return module
+        return py_file
 
     def _lookup_py_file(self, module_name: ModuleName) -> PyFile | None:
         if py_file := self._py_files_by_name.get(module_name):
@@ -149,17 +141,17 @@ class ImportStmtsParser:
         # TODO hack (missing namespace in self._py_files_by_name)
         return self._py_files_by_name.get(ModuleName(*module_name.parts[1:]))
 
-    def _validate_module(self, module: Module) -> None:
-        if self._py_file.type is PyFileType.REGULAR_PACKAGE and str(module.name).startswith(
+    def _validate_py_file(self, py_file: PyFile) -> None:
+        if self._py_file.type is PyFileType.REGULAR_PACKAGE and str(py_file.name).startswith(
             str(self._py_file.name)
         ):
             # Importing submodules within a parent init is allowed
-            raise ValueError(module)
+            raise ValueError(py_file)
 
 
 def visit_py_file(
     py_files_by_name: Mapping[ModuleName, PyFile], py_file: PyFile
-) -> Sequence[Module]:
+) -> Sequence[PyFile]:
     try:
         with open(py_file.path, encoding="utf-8") as f:
             content = f.read()

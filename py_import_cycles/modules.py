@@ -2,18 +2,11 @@
 
 from __future__ import annotations
 
-import abc
 from collections.abc import Iterator, Sequence
 from enum import auto, Enum
 from pathlib import Path
 from string import ascii_letters, digits
 from typing import Final
-
-_INIT_NAME = "__init__"
-
-
-def _make_init_module_path(path: Path) -> Path:
-    return path / f"{_INIT_NAME}.py"
 
 
 def _parse_part(part: str) -> str:
@@ -158,78 +151,3 @@ class PyFile:
                 yield PyFile(package=self.package, path=init_file_path)
             else:
                 yield PyFile(package=self.package, path=parent)
-
-
-class Module(abc.ABC):
-    def __init__(self, *, path: Path, name: ModuleName) -> None:
-        self._validate(path, name)
-        self.path = path
-        self.name = name
-
-    @abc.abstractmethod
-    def _validate(self, path: Path, name: ModuleName) -> None:
-        raise NotImplementedError()
-
-    def __str__(self) -> str:
-        return f"{self.__class__.__name__}(path={str(self.path)}, name={str(self.name)})"
-
-    def __hash__(self) -> int:
-        return hash(self.name)
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Module):
-            return NotImplemented
-        return self.name == other.name
-
-    def __lt__(self, other: object) -> bool:
-        if not isinstance(other, Module):
-            return NotImplemented
-        return self.name < other.name
-
-    def __gt__(self, other: object) -> bool:
-        if not isinstance(other, Module):
-            return NotImplemented
-        return self.name > other.name
-
-    def __le__(self, other: object) -> bool:
-        return self < other or self == other
-
-    def __ge__(self, other: object) -> bool:
-        return self > other or self == other
-
-
-class RegularPackage(Module):
-    def _validate(self, path: Path, name: ModuleName) -> None:
-        if path.with_suffix("").name != _INIT_NAME:
-            raise ValueError(path)
-
-        if name.parts and name.parts[-1] == _INIT_NAME:
-            raise ValueError(name)
-
-
-class NamespacePackage(Module):
-    def _validate(self, path: Path, name: ModuleName) -> None:
-        if path.with_suffix("").name == _INIT_NAME:
-            raise ValueError(path)
-
-        if name.parts and name.parts[-1] == _INIT_NAME:
-            raise ValueError(name)
-
-
-class PyModule(Module):
-    def _validate(self, path: Path, name: ModuleName) -> None:
-        if path.with_suffix("").name == _INIT_NAME:
-            raise ValueError(path)
-
-        if name.parts and name.parts[-1] == _INIT_NAME:
-            raise ValueError(name)
-
-
-def make_module_from_py_file(py_file: PyFile) -> Module:
-    match py_file.type:
-        case PyFileType.NAMESPACE_PACKAGE:
-            return NamespacePackage(path=py_file.path, name=py_file.name)
-        case PyFileType.REGULAR_PACKAGE:
-            return RegularPackage(path=py_file.path, name=py_file.name)
-        case PyFileType.MODULE:
-            return PyModule(path=py_file.path, name=py_file.name)

@@ -5,14 +5,14 @@ from typing import Literal
 
 from .dfs import depth_first_search
 from .johnson import johnson
-from .modules import Module
+from .modules import PyFile
 from .tarjan import strongly_connected_components
 
 
 def detect_cycles(
     strategy: Literal["dfs", "tarjan"],
-    graph: Mapping[Module, Sequence[Module]],
-) -> Iterator[tuple[Module, ...]]:
+    graph: Mapping[PyFile, Sequence[PyFile]],
+) -> Iterator[tuple[PyFile, ...]]:
     if strategy == "dfs":
         return depth_first_search(graph)
     if strategy == "tarjan":

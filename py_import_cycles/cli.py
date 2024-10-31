@@ -12,14 +12,7 @@ from .cycles import detect_cycles
 from .files import get_outputs_file_paths, scan_project
 from .graphs import make_graph
 from .log import logger, setup_logging
-from .modules import (
-    make_module_from_py_file,
-    Module,
-    NamespacePackage,
-    PyFileType,
-    PyModule,
-    RegularPackage,
-)
+from .modules import PyFile, PyFileType
 from .visitors import visit_py_file
 
 
@@ -110,11 +103,11 @@ def main() -> int:
     logger.info("Get Python files")
     py_files = list(scan_project(project_path, packages))
 
-    logger.info("Visit Python files, get imports by module")
+    logger.info("Visit Python files, get imports of py files")
     py_files_by_name = {p.name: p for p in py_files}
 
-    imports_by_module = {
-        make_module_from_py_file(py_file): imports
+    imports_by_py_file = {
+        py_file: imports
         for py_file in py_files
         if py_file.type is not PyFileType.NAMESPACE_PACKAGE
         and (imports := visit_py_file(py_files_by_name, py_file))
@@ -122,12 +115,12 @@ def main() -> int:
 
     if _debug():
         logger.debug(
-            "Imports by module:\n%s",
-            "\n".join(_make_readable_imports_by_module(imports_by_module)),
+            "Imports of py files:\n%s",
+            "\n".join(_make_readable_imports_by_py_file(imports_by_py_file)),
         )
 
     logger.info("Detect import cycles with strategy %s", args.strategy)
-    unsorted_cycles = set(detect_cycles(args.strategy, imports_by_module))
+    unsorted_cycles = set(detect_cycles(args.strategy, imports_by_py_file))
 
     logger.info("Sort import cycles")
     sorted_cycles = sorted(unsorted_cycles, key=lambda t: (len(t), t[0].name))
@@ -156,31 +149,19 @@ def main() -> int:
 #   '----------------------------------------------------------------------'
 
 
-def _show_module(module: Module) -> str:
-    match module:
-        case NamespacePackage():
-            return f"{module.name}/"
-        case RegularPackage():
-            return f"{module.name}.__init__"
-        case PyModule():
-            return f"{module.name}"
-        case _:
-            raise TypeError(module)
-
-
-def _make_readable_imports_by_module(
-    imports_by_module: Mapping[Module, Sequence[Module]],
+def _make_readable_imports_by_py_file(
+    imports_by_py_file: Mapping[PyFile, Sequence[PyFile]],
 ) -> Sequence[str]:
     lines = []
-    for ibm, ms in imports_by_module.items():
+    for ibm, ms in imports_by_py_file.items():
         if ms:
-            lines.append(f"  {_show_module(ibm)} imports: {', '.join(_show_module(m) for m in ms)}")
+            lines.append(f"  {str(ibm)} imports: {', '.join(str(m) for m in ms)}")
     return lines
 
 
 def _make_readable_cycles(
-    line_handler: Callable[[int, tuple[Module, ...]], Sequence[str]],
-    sorted_cycles: Sequence[tuple[Module, ...]],
+    line_handler: Callable[[int, tuple[PyFile, ...]], Sequence[str]],
+    sorted_cycles: Sequence[tuple[PyFile, ...]],
 ) -> Sequence[str]:
     return [
         line for nr, ic in enumerate(sorted_cycles, start=1) for line in line_handler(nr, ic) if ic
@@ -189,11 +170,11 @@ def _make_readable_cycles(
 
 def _log_or_show_cycles(
     verbose: bool,
-    sorted_cycles: Sequence[tuple[Module, ...]],
+    sorted_cycles: Sequence[tuple[PyFile, ...]],
 ) -> None:
     if verbose:
         for line in _make_readable_cycles(
-            lambda nr, ic: [f"  Cycle {nr}:"] + [f"   {_show_module(m)}" for m in ic],
+            lambda nr, ic: [f"  Cycle {nr}:"] + [f"   {str(m)}" for m in ic],
             sorted_cycles,
         ):
             sys.stderr.write(f"{line}\n")
@@ -203,7 +184,7 @@ def _log_or_show_cycles(
             "Import cycles:\n%s",
             "\n".join(
                 _make_readable_cycles(
-                    lambda nr, ic: [f"  Cycle {nr}: {' > '.join(_show_module(m) for m in ic)}"],
+                    lambda nr, ic: [f"  Cycle {nr}: {' > '.join(str(m) for m in ic)}"],
                     sorted_cycles,
                 )
             ),
