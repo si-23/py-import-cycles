@@ -72,19 +72,6 @@ def test_module_name_parent(module_name: ModuleName, expected: Sequence[str]) ->
 
 
 @pytest.mark.parametrize(
-    "module_name, expected",
-    [
-        (ModuleName(), []),
-        (ModuleName("a"), []),
-        (ModuleName("a", "b"), [ModuleName("a")]),
-        (ModuleName("a", "b", "c"), [ModuleName("a", "b"), ModuleName("a")]),
-    ],
-)
-def test_module_name_parents(module_name: ModuleName, expected: Sequence[ModuleName]) -> None:
-    assert module_name.parents == expected
-
-
-@pytest.mark.parametrize(
     "module_names, expected",
     [
         ([], ModuleName()),
@@ -108,6 +95,7 @@ def test_py_file_namespace_package(tmp_path: Path) -> None:
     assert py_file.name == ModuleName("package")
     assert str(py_file) == "package/"
     assert isinstance(make_module_from_py_file(py_file), NamespacePackage)
+    assert list(py_file.parents) == [PyFile(package=tmp_path / "path/to", path=Path())]
 
 
 def test_py_file_regular_package(tmp_path: Path) -> None:
@@ -122,6 +110,7 @@ def test_py_file_regular_package(tmp_path: Path) -> None:
     assert py_file.name == ModuleName("package")
     assert str(py_file) == "package.__init__"
     assert isinstance(make_module_from_py_file(py_file), RegularPackage)
+    assert list(py_file.parents) == [PyFile(package=tmp_path / "path/to", path=Path())]
 
 
 def test_py_file_module(tmp_path: Path) -> None:
@@ -136,6 +125,46 @@ def test_py_file_module(tmp_path: Path) -> None:
     assert py_file.name == ModuleName("package.module")
     assert str(py_file) == "package.module"
     assert isinstance(make_module_from_py_file(py_file), PyModule)
+    assert list(py_file.parents) == [
+        PyFile(
+            package=tmp_path / "path/to",
+            path=tmp_path / "path/to/package",
+        ),
+        PyFile(
+            package=tmp_path / "path/to",
+            path=Path(),
+        ),
+    ]
+
+
+def test_py_file_module_parents(tmp_path: Path) -> None:
+    path = tmp_path / "path/to/package"
+    path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "path/to/package/__init__.py").touch()
+    (tmp_path / "path/to/__init__.py").touch()
+    (path / "module.py").touch()
+    py_file = PyFile(
+        package=tmp_path,
+        path=tmp_path / "path/to/package/module.py",
+    )
+    assert list(py_file.parents) == [
+        PyFile(
+            package=tmp_path,
+            path=tmp_path / "path/to/package/__init__.py",
+        ),
+        PyFile(
+            package=tmp_path,
+            path=tmp_path / "path/to/__init__.py",
+        ),
+        PyFile(
+            package=tmp_path,
+            path=tmp_path / "path",
+        ),
+        PyFile(
+            package=tmp_path,
+            path=Path(),
+        ),
+    ]
 
 
 @pytest.mark.parametrize(

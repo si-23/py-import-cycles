@@ -9,8 +9,6 @@ from pathlib import Path
 from string import ascii_letters, digits
 from typing import Final
 
-from .log import logger
-
 _INIT_NAME = "__init__"
 
 
@@ -76,10 +74,6 @@ class ModuleName:
     @property
     def parent(self) -> ModuleName:
         return ModuleName(*self._parts[:-1])
-
-    @property
-    def parents(self) -> Sequence[ModuleName]:
-        return [ModuleName(*self._parts[:idx]) for idx in range(1, len(self._parts))][::-1]
 
     def joinname(self, *names: str | ModuleName) -> ModuleName:
         return ModuleName(*self._parts, *names)
@@ -150,6 +144,20 @@ class PyFile:
 
     def __ge__(self, other: object) -> bool:
         return self > other or self == other
+
+    @property
+    def parents(self) -> Iterator[PyFile]:
+        for parent in (
+            self.path.parent.parents
+            if self.type is PyFileType.REGULAR_PACKAGE
+            else self.path.parents
+        ):
+            if not parent.is_relative_to(self.package):
+                break
+            if (init_file_path := parent / "__init__.py").exists():
+                yield PyFile(package=self.package, path=init_file_path)
+            else:
+                yield PyFile(package=self.package, path=parent)
 
 
 class Module(abc.ABC):
@@ -284,24 +292,3 @@ class ModuleFactory:
             )
 
         raise ValueError(module_name)
-
-    def make_parents_of_module(self, module: Module) -> Iterator[RegularPackage]:
-        # Return the parents - ie. inits - of a module if they exist:
-        # - a.b.c.__init__
-        #   -> a.__init__, b.__init__
-        # - a.b.c
-        #   -> a.__init__, b.__init__, c.__init__
-        if isinstance(module, RegularPackage):
-            parents = module.name.parents[1:]
-        else:
-            parents = module.name.parents
-
-        for parent in parents[::-1]:
-            try:
-                parent_module = self.make_module_from_name(parent)
-            except ValueError as e:
-                logger.debug("Cannot make module from module name: %s: %s", parent, e)
-                continue
-
-            if isinstance(parent_module, RegularPackage):
-                yield parent_module

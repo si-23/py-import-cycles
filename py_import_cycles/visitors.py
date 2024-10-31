@@ -15,7 +15,6 @@ from .modules import (
     NamespacePackage,
     PyFile,
     PyFileType,
-    RegularPackage,
 )
 
 STDLIB_OR_BUILTIN = sys.stdlib_module_names.union(sys.builtin_module_names)
@@ -42,16 +41,18 @@ class ImportStmtsParser:
         self,
         module_factory: ModuleFactory,
         py_file: PyFile,
-        base_module: Module,
         import_stmts: Sequence[ImportSTMT],
     ) -> None:
         self._module_factory = module_factory
         self._py_file = py_file
-        self._base_module = base_module
         self._import_stmts = import_stmts
 
     def get_imports(self) -> Iterator[Module]:
-        yield from self._module_factory.make_parents_of_module(self._base_module)
+        yield from (
+            make_module_from_py_file(p)
+            for p in self._py_file.parents
+            if p.type is PyFileType.REGULAR_PACKAGE
+        )
 
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
@@ -140,8 +141,8 @@ class ImportStmtsParser:
         return module
 
     def _validate_module(self, module: Module) -> None:
-        if isinstance(self._base_module, RegularPackage) and str(module.name).startswith(
-            str(self._base_module.name.parent)
+        if self._py_file.type is PyFileType.REGULAR_PACKAGE and str(module.name).startswith(
+            str(self._py_file.name)
         ):
             # Importing submodules within a parent init is allowed
             raise ValueError(module)
@@ -177,7 +178,6 @@ def visit_py_file(module_factory: ModuleFactory, py_file: PyFile) -> None | Impo
     parser = ImportStmtsParser(
         module_factory,
         py_file,
-        module,
         visitor.import_stmts,
     )
 
