@@ -12,7 +12,7 @@ from .cycles import detect_cycles
 from .files import get_outputs_file_paths, scan_project
 from .graphs import make_graph
 from .log import logger, setup_logging
-from .modules import Module, ModuleFactory, NamespacePackage, PyFileType, PyModule, RegularPackage
+from .modules import Module, NamespacePackage, PyFileType, PyModule, RegularPackage
 from .visitors import visit_py_file
 
 
@@ -101,16 +101,16 @@ def main() -> int:
     setup_logging(outputs_filepaths.log, args.debug)
 
     logger.info("Get Python files")
-    py_files = scan_project(project_path, packages)
+    py_files = list(scan_project(project_path, packages))
 
     logger.info("Visit Python files, get imports by module")
-    module_factory = ModuleFactory(project_path, packages)
+    py_files_by_name = {p.name: p for p in py_files}
 
     imports_by_module = {
         visited.module: visited.imports
         for py_file in py_files
         if py_file.type is not PyFileType.NAMESPACE_PACKAGE
-        and (visited := visit_py_file(module_factory, py_file)) is not None
+        and (visited := visit_py_file(py_files_by_name, py_file)) is not None
     }
 
     if _debug():

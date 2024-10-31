@@ -2,7 +2,7 @@
 
 import ast
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import NamedTuple
 
@@ -10,7 +10,6 @@ from .log import logger
 from .modules import (
     make_module_from_py_file,
     Module,
-    ModuleFactory,
     ModuleName,
     NamespacePackage,
     PyFile,
@@ -39,11 +38,11 @@ class NodeVisitorImports(ast.NodeVisitor):
 class ImportStmtsParser:
     def __init__(
         self,
-        module_factory: ModuleFactory,
+        py_files_by_name: Mapping[ModuleName, PyFile],
         py_file: PyFile,
         import_stmts: Sequence[ImportSTMT],
     ) -> None:
-        self._module_factory = module_factory
+        self._py_files_by_name = py_files_by_name
         self._py_file = py_file
         self._import_stmts = import_stmts
 
@@ -132,13 +131,31 @@ class ImportStmtsParser:
         if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
             return None
 
+        if module_name.parts[-1] == "*":
+            # Note:
+            # from a.b import *
+            # - If a.b is a pkg everything from a.b.__init__.py is loaded
+            # - If a.b is a mod everything from a.b.py is loaded
+            # -> Getting the "right" filepath is already handled below
+            module_name = module_name.parent
+
+        if not (py_file := self._lookup_py_file(module_name)):
+            return None
+
+        module = make_module_from_py_file(py_file)
+
         try:
-            module = self._module_factory.make_module_from_name(module_name)
             self._validate_module(module)
         except ValueError:
             return None
 
         return module
+
+    def _lookup_py_file(self, module_name: ModuleName) -> PyFile | None:
+        if py_file := self._py_files_by_name.get(module_name):
+            return py_file
+        # TODO hack (missing namespace in self._py_files_by_name)
+        return self._py_files_by_name.get(ModuleName(*module_name.parts[1:]))
 
     def _validate_module(self, module: Module) -> None:
         if self._py_file.type is PyFileType.REGULAR_PACKAGE and str(module.name).startswith(
@@ -153,7 +170,9 @@ class ImportsOfModule(NamedTuple):
     imports: Sequence[Module]
 
 
-def visit_py_file(module_factory: ModuleFactory, py_file: PyFile) -> None | ImportsOfModule:
+def visit_py_file(
+    py_files_by_name: Mapping[ModuleName, PyFile], py_file: PyFile
+) -> None | ImportsOfModule:
     module = make_module_from_py_file(py_file)
 
     if isinstance(module, NamespacePackage):
@@ -176,7 +195,7 @@ def visit_py_file(module_factory: ModuleFactory, py_file: PyFile) -> None | Impo
     visitor.visit(tree)
 
     parser = ImportStmtsParser(
-        module_factory,
+        py_files_by_name,
         py_file,
         visitor.import_stmts,
     )
