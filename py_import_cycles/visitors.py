@@ -2,12 +2,11 @@
 
 import ast
 import sys
-from collections.abc import Iterator, Sequence
-from typing import NamedTuple
+from collections.abc import Iterator, Mapping, Sequence
+from pathlib import Path
 
-from .files import PyFile
 from .log import logger
-from .modules import Module, ModuleFactory, ModuleName, NamespacePackage, RegularPackage
+from .modules import ModuleName, PyFile, PyFileType
 
 STDLIB_OR_BUILTIN = sys.stdlib_module_names.union(sys.builtin_module_names)
 ImportSTMT = ast.Import | ast.ImportFrom
@@ -31,141 +30,152 @@ class NodeVisitorImports(ast.NodeVisitor):
 class ImportStmtsParser:
     def __init__(
         self,
-        module_factory: ModuleFactory,
-        base_module: Module,
+        py_files_by_name: Mapping[ModuleName, PyFile],
+        py_file: PyFile,
         import_stmts: Sequence[ImportSTMT],
     ) -> None:
-        self._module_factory = module_factory
-        self._base_module = base_module
+        self._py_files_by_name = py_files_by_name
+        self._py_file = py_file
         self._import_stmts = import_stmts
 
-    def get_imports(self) -> Iterator[Module]:
-        yield from self._module_factory.make_parents_of_module(self._base_module)
+    def get_imports(self) -> Iterator[PyFile]:
+        yield from (p for p in self._py_file.parents if p.type is PyFileType.REGULAR_PACKAGE)
 
-        for module_name in self._get_module_names():
-            if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
-                continue
-
-            try:
-                module = self._module_factory.make_module_from_name(module_name)
-                self._validate_module(module)
-            except ValueError as e:
-                logger.debug("Cannot make module from module name: %s: %s", module_name, e)
-                continue
-
-            yield module
-
-    def _get_module_names(self) -> Iterator[ModuleName]:
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
-                yield from self._get_module_names_of_import_stmt(import_stmt)
+                for alias in import_stmt.names:
+                    if py_file := self._make_py_file_from_name(ModuleName(alias.name)):
+                        yield py_file
 
             elif isinstance(import_stmt, ast.ImportFrom):
-                yield from self._get_module_names_of_import_from_stmt(import_stmt)
-
-    # -----ast.Import-----
-
-    def _get_module_names_of_import_stmt(self, import_stmt: ast.Import) -> Iterator[ModuleName]:
-        for alias in import_stmt.names:
-            yield ModuleName(alias.name)
+                if import_stmt.level == 0:
+                    for module_name in self._get_module_names_of_abs_import_from_stmt(import_stmt):
+                        if py_file := self._make_py_file_from_name(module_name):
+                            yield py_file
+                else:
+                    yield from self._get_py_files_of_rel_import_from_stmt(import_stmt)
 
     # -----ast.ImportFrom-----
 
-    def _get_module_names_of_import_from_stmt(
+    def _get_module_names_of_abs_import_from_stmt(
         self, import_from_stmt: ast.ImportFrom
     ) -> Iterator[ModuleName]:
-        try:
-            yield (anchor := self._get_anchor(import_from_stmt))
-        except ValueError as e:
-            logger.debug(
-                "Cannot get anchor of import from stmt: %s: %s",
-                ast.dump(import_from_stmt),
-                e,
-            )
-            return
+        assert import_from_stmt.module
+
+        anchor = ModuleName(import_from_stmt.module)
+        yield anchor
 
         for alias in import_from_stmt.names:
-            # Add packages/modules to above prefix:
-            # 1 -> ../a/b/c{.py,/}
-            # 2 -> ../BASE/c{.py,/}
-            # 3 -> ../BASE/a/b/c{.py,/}
-            # 4 -> ../BASE_PARENT/a/b/c{.py,/}
             yield anchor.joinname(alias.name)
 
-    def _get_anchor(self, import_from_stmt: ast.ImportFrom) -> ModuleName:
-        # Handle the cases:
-        # 1 from a.b import c (module == "a.b", level == 0)
-        #   -> Python module/package: ../a/b{.py,/}
-        # 2 from . import c (module == None, level == 1)
-        #   -> Python module/package: ../BASE{.py,/}
-        # 3 from .a.b import c (module == "a.b", level == 1)
-        #   -> Python module/package: ../BASE/a/b{.py,/}
-        # 4 from ..a.b import c (module == "a.b", level == 2)
-        #   -> Python module/package: ../BASE_PARENT/a/b{.py,/}
-        if import_from_stmt.level == 0:
-            if import_from_stmt.module:
-                return ModuleName(import_from_stmt.module)
-            raise ValueError(import_from_stmt.module)
+    def _get_py_files_of_rel_import_from_stmt(
+        self, import_from_stmt: ast.ImportFrom
+    ) -> Iterator[PyFile]:
+        assert import_from_stmt.level >= 1
+
+        if self._py_file.type is PyFileType.REGULAR_PACKAGE:
+            if import_from_stmt.level == 1:
+                ref_path = self._py_file.path.parent
+            else:
+                ref_path = self._py_file.path.parents[import_from_stmt.level - 2]
+        else:
+            # TODO PyFileType.MODULE, PyFileType.NAMESPACE_PACKAGE are already excluded
+            # when calling visit_py_file
+            ref_path = self._py_file.path.parents[import_from_stmt.level - 1]
+
+        if import_from_stmt.module:
+            ref_path = ref_path.joinpath(*ModuleName(import_from_stmt.module).parts)
+            if py_file := self._get_py_file_of_rel_import_from_stmt(ref_path):
+                yield py_file
+
+        for alias in import_from_stmt.names:
+            if py_file := self._get_py_file_of_rel_import_from_stmt(ref_path.joinpath(alias.name)):
+                yield py_file
+
+    def _get_py_file_of_rel_import_from_stmt(self, path: Path) -> PyFile | None:
+        try:
+            if (init_file_path := path / "__init__.py").exists():
+                py_file = PyFile(package=self._py_file.package, path=init_file_path)
+            elif (module_file_path := path.with_suffix(".py")).exists():
+                py_file = PyFile(package=self._py_file.package, path=module_file_path)
+            else:  # TODO Namespace?
+                py_file = PyFile(package=self._py_file.package, path=path)
+        except ValueError as e:
+            logger.debug("Cannot make py file from %s: %s", path, e)
+            return None
 
         try:
-            parent = self._base_module.name.parents[import_from_stmt.level - 1]
-        except IndexError:
-            parent = ModuleName()
+            self._validate_py_file(py_file)
+        except ValueError:
+            return None
 
-        return parent.joinname(import_from_stmt.module) if import_from_stmt.module else parent
+        return py_file
 
     # -----helper-----
 
-    def _validate_module(self, module: Module) -> None:
-        if isinstance(self._base_module, RegularPackage) and str(module.name).startswith(
-            str(self._base_module.name.parent)
+    def _make_py_file_from_name(self, module_name: ModuleName) -> PyFile | None:
+        if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
+            return None
+
+        if module_name.parts[-1] == "*":
+            # Note:
+            # from a.b import *
+            # - If a.b is a pkg everything from a.b.__init__.py is loaded
+            # - If a.b is a mod everything from a.b.py is loaded
+            # -> Getting the "right" filepath is already handled below
+            module_name = module_name.parent
+
+        if not (py_file := self._lookup_py_file(module_name)):
+            return None
+
+        try:
+            self._validate_py_file(py_file)
+        except ValueError:
+            return None
+
+        return py_file
+
+    def _lookup_py_file(self, module_name: ModuleName) -> PyFile | None:
+        if py_file := self._py_files_by_name.get(module_name):
+            return py_file
+        # TODO hack (missing namespace in self._py_files_by_name)
+        return self._py_files_by_name.get(ModuleName(*module_name.parts[1:]))
+
+    def _validate_py_file(self, py_file: PyFile) -> None:
+        if self._py_file.type is PyFileType.REGULAR_PACKAGE and str(py_file.name).startswith(
+            str(self._py_file.name)
         ):
             # Importing submodules within a parent init is allowed
-            raise ValueError(module)
+            raise ValueError(py_file)
 
 
-class ImportsOfModule(NamedTuple):
-    module: Module
-    imports: Sequence[Module]
-
-
-def visit_python_file(module_factory: ModuleFactory, py_file: PyFile) -> None | ImportsOfModule:
+def visit_py_file(
+    py_files_by_name: Mapping[ModuleName, PyFile], py_file: PyFile
+) -> Sequence[PyFile]:
     try:
-        module = module_factory.make_module_from_path(py_file.path)
-    except ValueError as e:
-        logger.debug("Cannot make module from python file %s: %s", py_file.path, e)
-        return None
-
-    if isinstance(module, NamespacePackage):
-        return None
-
-    try:
-        with open(module.path, encoding="utf-8") as f:
+        with open(py_file.path, encoding="utf-8") as f:
             content = f.read()
     except UnicodeDecodeError as e:
         logger.debug("Cannot read python file %s: %s", py_file.path, e)
-        return None
+        return []
 
     try:
         tree = ast.parse(content)
     except SyntaxError as e:
         logger.debug("Cannot visit python file %s: %s", py_file.path, e)
-        return None
+        return []
 
     visitor = NodeVisitorImports()
     visitor.visit(tree)
 
     parser = ImportStmtsParser(
-        module_factory,
-        module,
+        py_files_by_name,
+        py_file,
         visitor.import_stmts,
     )
 
-    return ImportsOfModule(
-        module,
-        sorted(
-            frozenset(parser.get_imports()),
-            key=lambda m: tuple(m.name.parts),
-            reverse=True,
-        ),
+    return sorted(
+        frozenset(parser.get_imports()),
+        key=lambda m: tuple(m.name.parts),
+        reverse=True,
     )
