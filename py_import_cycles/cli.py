@@ -9,7 +9,7 @@ from typing import Callable
 
 from . import __version__
 from .cycles import detect_cycles
-from .files import get_outputs_file_paths, scan_project
+from .files import get_outputs_file_paths, scan_packages
 from .graphs import make_graph
 from .log import logger, setup_logging
 from .modules import PyFile, PyFileType
@@ -54,14 +54,6 @@ def _parse_arguments() -> argparse.Namespace:
         help="create graphical representation",
     )
     parser.add_argument(
-        "--project-path",
-        required=True,
-        help=(
-            "path to project. If no packages are given collect all Python"
-            " files from this directory."
-        ),
-    )
-    parser.add_argument(
         "--packages",
         nargs="+",
         help="collect Python files from top-level packages",
@@ -86,12 +78,7 @@ def _parse_arguments() -> argparse.Namespace:
 def main() -> int:
     args = _parse_arguments()
 
-    project_path = Path(args.project_path)
-    if not project_path.exists() or not project_path.is_dir():
-        sys.stderr.write(f"No such directory: {project_path}\n")
-        return 1
-
-    packages = [Path(p) for p in args.packages]
+    packages = [pp for p in args.packages if (pp := Path(p)).is_dir()]
 
     outputs_filepaths = get_outputs_file_paths(
         Path(args.outputs_folder) if args.outputs_folder else None,
@@ -101,7 +88,7 @@ def main() -> int:
     setup_logging(outputs_filepaths.log, args.debug)
 
     logger.info("Get Python files")
-    py_files = list(scan_project(project_path, packages))
+    py_files = list(scan_packages(packages))
 
     logger.info("Visit Python files, get imports of py files")
     py_files_by_name = {p.name: p for p in py_files}

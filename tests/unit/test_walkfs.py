@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from py_import_cycles.files import scan_project  # pylint: disable=import-error
+from py_import_cycles.files import scan_packages  # pylint: disable=import-error
 from py_import_cycles.modules import PyFile, PyFileType  # pylint: disable=import-error
 
 
@@ -26,7 +26,7 @@ def test_no_files(root: Path) -> None:
 
     assert (
         frozenset(
-            [f for f in scan_project(root, [projdir]) if f.type is not PyFileType.NAMESPACE_PACKAGE]
+            [f for f in scan_packages([projdir]) if f.type is not PyFileType.NAMESPACE_PACKAGE]
         )
         == frozenset()
     )
@@ -39,7 +39,7 @@ def test_single_file(root: Path) -> None:
     setup_py_file(proj)
 
     assert frozenset(
-        [f for f in scan_project(root, [proj.parent]) if f.type is not PyFileType.NAMESPACE_PACKAGE]
+        [f for f in scan_packages([proj.parent]) if f.type is not PyFileType.NAMESPACE_PACKAGE]
     ) == {PyFile(package=proj.parent, path=proj)}
 
 
@@ -56,7 +56,7 @@ def test_multiple_files(root: Path) -> None:
     assert frozenset(
         [
             f
-            for f in scan_project(root, [p.parent for p in proj])
+            for f in scan_packages([p.parent for p in proj])
             if f.type is not PyFileType.NAMESPACE_PACKAGE
         ]
     ) == {PyFile(package=p.parent, path=p) for p in proj}
@@ -71,7 +71,7 @@ def test_multiple_file_with_excludes(root: Path) -> None:
     assert frozenset(
         [
             f
-            for f in scan_project(root, [p.parent for p in proj])
+            for f in scan_packages([p.parent for p in proj])
             if f.type is not PyFileType.NAMESPACE_PACKAGE
         ]
     ) == {PyFile(package=p.parent, path=p) for p in proj}
@@ -86,11 +86,7 @@ def test_ignore_files_without_py_extention(root: Path) -> None:
         setup_py_file(p)
 
     assert frozenset(
-        [
-            f
-            for f in scan_project(root, [p.parent for p in proj])
-            if f.type is not PyFileType.NAMESPACE_PACKAGE
-        ]
+        [f for f in scan_packages([projdir]) if f.type is not PyFileType.NAMESPACE_PACKAGE]
     ) == {PyFile(package=p.parent, path=p) for p in proj}
 
 
@@ -103,7 +99,7 @@ def test_ignore_extra_names_in_second_arg(root: Path) -> None:
     assert frozenset(
         [
             f
-            for f in scan_project(root, [projdir, Path("extra"), Path("args")])
+            for f in scan_packages([projdir, projdir / Path("extra"), projdir / Path("args")])
             if f.type is not PyFileType.NAMESPACE_PACKAGE
         ]
     ) == {PyFile(package=p.parent, path=p) for p in proj}
@@ -125,7 +121,7 @@ def test_recurse_dirs(root: Path) -> None:
     assert frozenset(
         [
             f
-            for f in scan_project(root, [Path("p1"), Path("p2")])
+            for f in scan_packages([root / Path("p1"), root / Path("p2")])
             if f.type is not PyFileType.NAMESPACE_PACKAGE
         ]
     ) == {PyFile(package=p.parents[-7], path=p) for p in proj}

@@ -10,8 +10,8 @@ from .log import logger
 from .modules import PyFile
 
 
-def scan_project(project_path: Path, packages: Sequence[Path]) -> Iterator[PyFile]:
-    for package_path in [project_path / p for p in packages] if packages else [project_path]:
+def scan_packages(packages: Sequence[Path]) -> Iterator[PyFile]:
+    for package_path in packages:
         for root, _dirs, files in os.walk(package_path):
             root_path = Path(root)
 
