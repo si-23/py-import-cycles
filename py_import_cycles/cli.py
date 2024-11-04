@@ -42,11 +42,11 @@ def _parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--outputs-folder",
-        help="path to outputs folder. If no set $HOME/.local/py-import-cycles/outputs/ is used",
+        help="path to outputs folder. If not set $HOME/.local/py-import-cycles/outputs/ is used",
     )
     parser.add_argument(
         "--outputs-filename",
-        help="outputs filename. If no set the current timestamp is used",
+        help="outputs filename. If not set the current timestamp is used",
     )
     parser.add_argument(
         "--graph",
