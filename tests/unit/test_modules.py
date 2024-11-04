@@ -5,7 +5,11 @@ from typing import Sequence
 
 import pytest
 
-from py_import_cycles.modules import ModuleName, PyFile, PyFileType  # pylint: disable=import-error
+from py_import_cycles.modules import (  # pylint: disable=import-error
+    ModuleName,
+    PyModule,
+    PyModuleType,
+)
 
 
 @pytest.mark.parametrize(
@@ -75,80 +79,80 @@ def test_module_name_joinname(module_names: Sequence[ModuleName], expected: Modu
     assert ModuleName().joinname(*module_names) == expected
 
 
-def test_py_file_namespace_package(tmp_path: Path) -> None:
+def test_py_module_namespace_package(tmp_path: Path) -> None:
     path = tmp_path / "path/to/package"
     path.mkdir(parents=True, exist_ok=True)
-    py_file = PyFile(
+    py_module = PyModule(
         package=tmp_path / "path/to",
         path=tmp_path / "path/to/package",
     )
-    assert py_file.type is PyFileType.NAMESPACE_PACKAGE
-    assert py_file.name == ModuleName("package")
-    assert str(py_file) == "package/"
-    assert list(py_file.parents) == [PyFile(package=tmp_path / "path/to", path=Path())]
+    assert py_module.type is PyModuleType.NAMESPACE_PACKAGE
+    assert py_module.name == ModuleName("package")
+    assert str(py_module) == "package/"
+    assert list(py_module.parents) == [PyModule(package=tmp_path / "path/to", path=Path())]
 
 
-def test_py_file_regular_package(tmp_path: Path) -> None:
+def test_py_module_regular_package(tmp_path: Path) -> None:
     path = tmp_path / "path/to/package"
     path.mkdir(parents=True, exist_ok=True)
     (path / "__init__.py").touch()
-    py_file = PyFile(
+    py_module = PyModule(
         package=tmp_path / "path/to",
         path=tmp_path / "path/to/package/__init__.py",
     )
-    assert py_file.type is PyFileType.REGULAR_PACKAGE
-    assert py_file.name == ModuleName("package")
-    assert str(py_file) == "package.__init__"
-    assert list(py_file.parents) == [PyFile(package=tmp_path / "path/to", path=Path())]
+    assert py_module.type is PyModuleType.REGULAR_PACKAGE
+    assert py_module.name == ModuleName("package")
+    assert str(py_module) == "package.__init__"
+    assert list(py_module.parents) == [PyModule(package=tmp_path / "path/to", path=Path())]
 
 
-def test_py_file_module(tmp_path: Path) -> None:
+def test_py_module_module(tmp_path: Path) -> None:
     path = tmp_path / "path/to/package"
     path.mkdir(parents=True, exist_ok=True)
     (path / "module.py").touch()
-    py_file = PyFile(
+    py_module = PyModule(
         package=tmp_path / "path/to",
         path=tmp_path / "path/to/package/module.py",
     )
-    assert py_file.type is PyFileType.MODULE
-    assert py_file.name == ModuleName("package.module")
-    assert str(py_file) == "package.module"
-    assert list(py_file.parents) == [
-        PyFile(
+    assert py_module.type is PyModuleType.MODULE
+    assert py_module.name == ModuleName("package.module")
+    assert str(py_module) == "package.module"
+    assert list(py_module.parents) == [
+        PyModule(
             package=tmp_path / "path/to",
             path=tmp_path / "path/to/package",
         ),
-        PyFile(
+        PyModule(
             package=tmp_path / "path/to",
             path=Path(),
         ),
     ]
 
 
-def test_py_file_module_parents(tmp_path: Path) -> None:
+def test_py_module_module_parents(tmp_path: Path) -> None:
     path = tmp_path / "path/to/package"
     path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "path/to/package/__init__.py").touch()
     (tmp_path / "path/to/__init__.py").touch()
     (path / "module.py").touch()
-    py_file = PyFile(
+    py_module = PyModule(
         package=tmp_path,
         path=tmp_path / "path/to/package/module.py",
     )
-    assert list(py_file.parents) == [
-        PyFile(
+    assert list(py_module.parents) == [
+        PyModule(
             package=tmp_path,
             path=tmp_path / "path/to/package/__init__.py",
         ),
-        PyFile(
+        PyModule(
             package=tmp_path,
             path=tmp_path / "path/to/__init__.py",
         ),
-        PyFile(
+        PyModule(
             package=tmp_path,
             path=tmp_path / "path",
         ),
-        PyFile(
+        PyModule(
             package=tmp_path,
             path=Path(),
         ),

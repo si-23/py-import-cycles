@@ -7,11 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .log import logger
-from .modules import PyFile
+from .modules import PyModule
 
 
-def scan_project(project_path: Path, packages: Sequence[Path]) -> Iterator[PyFile]:
-    for package_path in [project_path / p for p in packages] if packages else [project_path]:
+def scan_packages(packages: Sequence[Path]) -> Iterator[PyModule]:
+    for package_path in packages:
         for root, _dirs, files in os.walk(package_path):
             root_path = Path(root)
 
@@ -22,14 +22,14 @@ def scan_project(project_path: Path, packages: Sequence[Path]) -> Iterator[PyFil
                 # Regular package or Python module
                 if (file_path := root_path / file).suffix == ".py":
                     try:
-                        yield PyFile(package=package_path, path=file_path)
+                        yield PyModule(package=package_path, path=file_path)
                     except ValueError as e:
                         logger.error("Cannot make py file from %s: %s", file_path, e)
 
             if not (root_path / "__init__.py").exists():
                 # Namespace package
                 try:
-                    yield PyFile(package=package_path, path=root_path)
+                    yield PyModule(package=package_path, path=root_path)
                 except ValueError as e:
                     logger.error("Cannot make py file from %s: %s", root_path, e)
 

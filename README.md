@@ -13,4 +13,4 @@ Usage
 
 * `python3 -m py_import_cycles --version`
 * `python3 -m py_import_cycles --help`
-* `python3 -m py_import_cycles --project-path /path/to/project`
+* `python3 -m py_import_cycles --packages /path/to/project/package`

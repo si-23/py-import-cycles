@@ -20,7 +20,7 @@ for project in ./e2e_test_inputs/*; do
     echo "Test cycles..."
 
     threshold="$(cat "$REPO_PATH/$project"/found_cycles)"
-    result=$(PYTHONPATH="." ./run-main --project-path "$REPO_PATH/$project" --strategy johnson 2>&1)
+    result=$(PYTHONPATH="." ./run-main --packages "$REPO_PATH/$project" --strategy johnson 2>&1)
     if [ "$result" == "Found $threshold import cycles" ]; then
        continue
     fi
@@ -31,7 +31,7 @@ done
 echo "===== Self test ====="
 echo "Test cycles..."
 
-result=$(PYTHONPATH="." ./run-main --project-path "$REPO_PATH/py_import_cycles" --strategy johnson 2>&1)
+result=$(PYTHONPATH="." ./run-main --packages "$REPO_PATH/py_import_cycles" --strategy johnson 2>&1)
 if [ "$result" == "Found 0 import cycles" ]; then
    exit 0
 fi
