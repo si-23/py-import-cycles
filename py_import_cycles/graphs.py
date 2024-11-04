@@ -11,14 +11,14 @@ from typing import DefaultDict, Iterable, Literal, NamedTuple, TypeVar
 from graphviz import Digraph
 
 from .log import logger
-from .modules import PyFile, PyFileType
+from .modules import PyModule, PyModuleType
 from .type_defs import Comparable
 
 
 class ImportEdge(NamedTuple):
     title: str
-    from_py_file: PyFile
-    to_py_file: PyFile
+    from_py_module: PyModule
+    to_py_module: PyModule
     edge_color: str
 
 
@@ -29,7 +29,7 @@ TC = TypeVar("TC", bound=Comparable)
 def make_graph(
     filepath: Path,
     opt_strategy: Literal["dfs", "tarjan"],
-    import_cycles: Sequence[tuple[PyFile, ...]],
+    import_cycles: Sequence[tuple[PyModule, ...]],
 ) -> None:
     sys.stderr.write(f"Write graph data to {filepath}\n")
 
@@ -42,28 +42,32 @@ def make_graph(
     with d.subgraph() as ds:
         for edge in edges:
             ds.node(
-                str(edge.from_py_file.name),
-                shape=_get_shape(edge.from_py_file),
+                str(edge.from_py_module.name),
+                shape=_get_shape(edge.from_py_module),
             )
 
             ds.node(
-                str(edge.to_py_file.name),
-                shape=_get_shape(edge.to_py_file),
+                str(edge.to_py_module.name),
+                shape=_get_shape(edge.to_py_module),
             )
 
             ds.attr("edge", color=edge.edge_color)
 
             if edge.title:
-                ds.edge(str(edge.from_py_file.name), str(edge.to_py_file.name), edge.title)
+                ds.edge(
+                    str(edge.from_py_module.name),
+                    str(edge.to_py_module.name),
+                    edge.title,
+                )
             else:
-                ds.edge(str(edge.from_py_file.name), str(edge.to_py_file.name))
+                ds.edge(str(edge.from_py_module.name), str(edge.to_py_module.name))
 
     d.unflatten(stagger=50)
     d.view()
 
 
-def _get_shape(py_file: PyFile) -> str:
-    return "" if py_file.type is PyFileType.MODULE else "box"
+def _get_shape(py_module: PyModule) -> str:
+    return "" if py_module.type is PyModuleType.MODULE else "box"
 
 
 def pairwise(iterable: Iterable[T]) -> Iterator[tuple[T, T]]:
@@ -107,7 +111,7 @@ def normalize(value: float, lower: float, higher: float) -> float:
 
 def _make_edges(
     opt_strategy: Literal["dfs", "tarjan"],
-    import_cycles: Sequence[tuple[PyFile, ...]],
+    import_cycles: Sequence[tuple[PyModule, ...]],
 ) -> Sequence[ImportEdge]:
     if opt_strategy == "dfs":
         return _make_dfs_import_edges(import_cycles)
@@ -115,7 +119,7 @@ def _make_edges(
 
 
 def _make_dfs_import_edges(
-    cycles: Sequence[tuple[PyFile, ...]],
+    cycles: Sequence[tuple[PyModule, ...]],
 ) -> Sequence[ImportEdge]:
     edges = badness(dedup_edges(cycles))
     if not (edges_values := edges.values()):
@@ -140,7 +144,7 @@ def _make_dfs_import_edges(
 
 
 def _make_only_cycles_edges(
-    import_cycles: Sequence[tuple[PyFile, ...]],
+    import_cycles: Sequence[tuple[PyModule, ...]],
 ) -> Sequence[ImportEdge]:
     edges: set[ImportEdge] = set()
     for nr, import_cycle in enumerate(import_cycles, start=1):
@@ -150,15 +154,15 @@ def _make_only_cycles_edges(
             random.randint(50, 200),
         )
 
-        start_py_file = import_cycle[0]
-        for next_py_file in import_cycle[1:]:
+        start_py_module = import_cycle[0]
+        for next_py_module in import_cycle[1:]:
             edges.add(
                 ImportEdge(
                     f"{str(nr)} ({len(import_cycle) - 1})",
-                    start_py_file,
-                    next_py_file,
+                    start_py_module,
+                    next_py_module,
                     color,
                 )
             )
-            start_py_file = next_py_file
+            start_py_module = next_py_module
     return sorted(edges)

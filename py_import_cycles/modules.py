@@ -72,25 +72,25 @@ class ModuleName:
         return ModuleName(*self._parts, *names)
 
 
-class PyFileType(Enum):
+class PyModuleType(Enum):
     NAMESPACE_PACKAGE = auto()
     REGULAR_PACKAGE = auto()
     MODULE = auto()
 
 
-def _compute_py_file_type(path: Path) -> PyFileType:
+def _compute_py_module_type(path: Path) -> PyModuleType:
     if path.is_dir():
-        return PyFileType.NAMESPACE_PACKAGE
+        return PyModuleType.NAMESPACE_PACKAGE
     if path.is_file():
         if path.name == "__init__.py":
-            return PyFileType.REGULAR_PACKAGE
+            return PyModuleType.REGULAR_PACKAGE
         if path.suffix == ".py":
-            return PyFileType.MODULE
+            return PyModuleType.MODULE
     raise ValueError(path)
 
 
-def _compute_py_file_name(package: Path, path: Path, py_file_type: PyFileType) -> ModuleName:
-    ref_path = path.parent if py_file_type is PyFileType.REGULAR_PACKAGE else path
+def _compute_py_module_name(package: Path, path: Path, py_module_type: PyModuleType) -> ModuleName:
+    ref_path = path.parent if py_module_type is PyModuleType.REGULAR_PACKAGE else path
     if not ref_path.is_relative_to(package) or (rel_path := ref_path.relative_to(package)) == Path(
         "."
     ):
@@ -98,37 +98,37 @@ def _compute_py_file_name(package: Path, path: Path, py_file_type: PyFileType) -
     return ModuleName(*rel_path.with_suffix("").parts)
 
 
-class PyFile:
+class PyModule:
     def __init__(self, package: Path, path: Path) -> None:
         self.package: Final[Path] = package
         self.path: Final[Path] = path
-        self.type: Final[PyFileType] = _compute_py_file_type(path)
-        self.name: Final[ModuleName] = _compute_py_file_name(package, path, self.type)
+        self.type: Final[PyModuleType] = _compute_py_module_type(path)
+        self.name: Final[ModuleName] = _compute_py_module_name(package, path, self.type)
 
     def __str__(self) -> str:
         match self.type:
-            case PyFileType.NAMESPACE_PACKAGE:
+            case PyModuleType.NAMESPACE_PACKAGE:
                 return f"{self.name}/"
-            case PyFileType.REGULAR_PACKAGE:
+            case PyModuleType.REGULAR_PACKAGE:
                 return f"{self.name}.__init__"
-            case PyFileType.MODULE:
+            case PyModuleType.MODULE:
                 return f"{self.name}"
 
     def __hash__(self) -> int:
         return hash(self.path)
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, PyFile):
+        if not isinstance(other, PyModule):
             return NotImplemented
         return self.name == other.name
 
     def __lt__(self, other: object) -> bool:
-        if not isinstance(other, PyFile):
+        if not isinstance(other, PyModule):
             return NotImplemented
         return self.name < other.name
 
     def __gt__(self, other: object) -> bool:
-        if not isinstance(other, PyFile):
+        if not isinstance(other, PyModule):
             return NotImplemented
         return self.name > other.name
 
@@ -139,15 +139,15 @@ class PyFile:
         return self > other or self == other
 
     @property
-    def parents(self) -> Iterator[PyFile]:
+    def parents(self) -> Iterator[PyModule]:
         for parent in (
             self.path.parent.parents
-            if self.type is PyFileType.REGULAR_PACKAGE
+            if self.type is PyModuleType.REGULAR_PACKAGE
             else self.path.parents
         ):
             if not parent.is_relative_to(self.package):
                 break
             if (init_file_path := parent / "__init__.py").exists():
-                yield PyFile(package=self.package, path=init_file_path)
+                yield PyModule(package=self.package, path=init_file_path)
             else:
-                yield PyFile(package=self.package, path=parent)
+                yield PyModule(package=self.package, path=parent)
