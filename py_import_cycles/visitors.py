@@ -134,19 +134,13 @@ def _validate_py_module(base_py_module: PyModule, import_py_module: PyModule) ->
         raise ValueError(import_py_module)
 
 
-def _compute_py_module_from_rel_import_from_stmt(
-    base_py_module: PyModule, path: Path
-) -> PyModule | None:
-    try:
-        if (init_file_path := path / "__init__.py").exists():
-            return PyModule(package=base_py_module.package, path=init_file_path)
-        if (module_file_path := path.with_suffix(".py")).exists():
-            return PyModule(package=base_py_module.package, path=module_file_path)
-        # TODO Namespace?
-        return PyModule(package=base_py_module.package, path=path)
-    except ValueError as e:
-        logger.debug("Cannot make py file from %s: %s", path, e)
-        return None
+def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path: Path) -> PyModule:
+    if (init_file_path := path / "__init__.py").exists():
+        return PyModule(package=base_py_module.package, path=init_file_path)
+    if (module_file_path := path.with_suffix(".py")).exists():
+        return PyModule(package=base_py_module.package, path=module_file_path)
+    # TODO Namespace?
+    return PyModule(package=base_py_module.package, path=path)
 
 
 def _compute_py_modules_from_rel_import_from_stmt(
@@ -164,16 +158,18 @@ def _compute_py_modules_from_rel_import_from_stmt(
 
     if rel_import_stmt.module:
         ref_path = ref_path.joinpath(*ModuleName(rel_import_stmt.module).parts)
-        if import_py_module := _compute_py_module_from_rel_import_from_stmt(
-            base_py_module, ref_path
-        ):
-            yield import_py_module
+        try:
+            yield _compute_py_module_from_rel_import_from_stmt(base_py_module, ref_path)
+        except ValueError as e:
+            logger.debug("Cannot make py file from %s: %s", ref_path, e)
 
     for name in rel_import_stmt.names:
-        if import_py_module := _compute_py_module_from_rel_import_from_stmt(
-            base_py_module, ref_path.joinpath(name)
-        ):
-            yield import_py_module
+        try:
+            yield _compute_py_module_from_rel_import_from_stmt(
+                base_py_module, ref_path.joinpath(name)
+            )
+        except ValueError as e:
+            logger.debug("Cannot make py file from %s: %s", ref_path, e)
 
 
 def visit_py_module(
