@@ -87,10 +87,10 @@ def main() -> int:
 
     setup_logging(outputs_filepaths.log, args.debug)
 
-    logger.info("Get Python files")
+    logger.info("Scan packages")
     py_modules = list(scan_packages(packages))
 
-    logger.info("Visit Python files, get imports of py files")
+    logger.info("Visit and compute imports of py modules")
     py_modules_by_name = {p.name: p for p in py_modules}
 
     imports_by_py_module = {
@@ -108,7 +108,7 @@ def main() -> int:
 
     if _debug():
         logger.debug(
-            "Imports of py files:\n%s",
+            "Imports of py modules:\n%s",
             "\n".join(_make_readable_imports_by_py_module(imports_by_py_module)),
         )
 

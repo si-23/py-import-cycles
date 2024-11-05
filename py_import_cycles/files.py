@@ -24,14 +24,14 @@ def scan_packages(packages: Sequence[Path]) -> Iterator[PyModule]:
                     try:
                         yield PyModule(package=package_path, path=file_path)
                     except ValueError as e:
-                        logger.error("Cannot make py file from %s: %s", file_path, e)
+                        logger.error("Cannot make py module from %s: %s", file_path, e)
 
             if not (root_path / "__init__.py").exists():
                 # Namespace package
                 try:
                     yield PyModule(package=package_path, path=root_path)
                 except ValueError as e:
-                    logger.error("Cannot make py file from %s: %s", root_path, e)
+                    logger.error("Cannot make py module from %s: %s", root_path, e)
 
 
 @dataclass(frozen=True, kw_only=True)

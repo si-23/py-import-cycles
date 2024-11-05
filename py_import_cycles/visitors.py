@@ -107,7 +107,7 @@ def _compute_py_modules_from_rel_import_from_stmt(
         try:
             yield _compute_py_module_from_rel_import_from_stmt(base_py_module, ref_path)
         except ValueError as e:
-            logger.debug("Cannot make py file from %s: %s", ref_path, e)
+            logger.debug("Cannot make py module from %s: %s", ref_path, e)
 
     for name in rel_import_stmt.names:
         try:
@@ -115,7 +115,7 @@ def _compute_py_modules_from_rel_import_from_stmt(
                 base_py_module, ref_path.joinpath(name)
             )
         except ValueError as e:
-            logger.debug("Cannot make py file from %s: %s", ref_path, e)
+            logger.debug("Cannot make py module from %s: %s", ref_path, e)
 
 
 def _validate_py_module(base_py_module: PyModule, import_py_module: PyModule) -> None:
