@@ -16,11 +16,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - Changed default outputs folder from `$HOME/.local/py_import_cycles/outputs` to
 `$HOME/.local/py-import-cycles/outputs`.
-- Paths of the command line option '--packages' have to be absolute paths
+- Paths of the command line option `--packages` have to be absolute paths
 
 ### Removed
 
 - Removed project path from outputs filename. Use the current timestamp instead.
-- Removed command line option '--project-path'
+- Removed command line option `--project-path`
 
 ### Fixed
