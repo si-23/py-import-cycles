@@ -97,7 +97,13 @@ def main() -> int:
         py_module: imports
         for py_module in py_modules
         if py_module.type is not PyModuleType.NAMESPACE_PACKAGE
-        and (imports := visit_py_module(py_modules_by_name, py_module))
+        and (
+            imports := sorted(
+                frozenset(visit_py_module(py_modules_by_name, py_module)),
+                key=lambda m: tuple(m.name.parts),
+                reverse=True,
+            )
+        )
     }
 
     if _debug():

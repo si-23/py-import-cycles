@@ -153,19 +153,21 @@ class ImportStmtsParser:
 
 def visit_py_module(
     py_modules_by_name: Mapping[ModuleName, PyModule], py_module: PyModule
-) -> Sequence[PyModule]:
+) -> Iterator[PyModule]:
     try:
         with open(py_module.path, encoding="utf-8") as f:
             content = f.read()
     except UnicodeDecodeError as e:
         logger.debug("Cannot read python file %s: %s", py_module.path, e)
-        return []
+        yield from ()
+        return
 
     try:
         tree = ast.parse(content)
     except SyntaxError as e:
         logger.debug("Cannot visit python file %s: %s", py_module.path, e)
-        return []
+        yield from ()
+        return
 
     visitor = NodeVisitorImports()
     visitor.visit(tree)
@@ -175,9 +177,4 @@ def visit_py_module(
         py_module,
         visitor.import_stmts,
     )
-
-    return sorted(
-        frozenset(parser.get_imports()),
-        key=lambda m: tuple(m.name.parts),
-        reverse=True,
-    )
+    yield from parser.get_imports()
