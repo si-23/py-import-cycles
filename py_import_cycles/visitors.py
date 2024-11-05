@@ -25,19 +25,19 @@ class _RelImportStmt:
 
 class NodeVisitorImports(ast.NodeVisitor):
     def __init__(self) -> None:
-        self._import_stmts: list[ImportSTMT] = []
+        self._module_names: list[ModuleName] = []
         self._rel_import_stmts: list[_RelImportStmt] = []
 
     @property
-    def import_stmts(self) -> Sequence[ImportSTMT]:
-        return self._import_stmts
+    def module_names(self) -> Sequence[ModuleName]:
+        return self._module_names
 
     @property
     def rel_import_stmts(self) -> Sequence[_RelImportStmt]:
         return self._rel_import_stmts
 
     def visit_Import(self, node: ast.Import) -> None:
-        self._import_stmts.append(node)
+        self._module_names.extend(ModuleName(a.name) for a in node.names)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         if node.level >= 1:
@@ -49,89 +49,35 @@ class NodeVisitorImports(ast.NodeVisitor):
                 )
             )
         else:
-            self._import_stmts.append(node)
+            assert node.module
+            anchor = ModuleName(node.module)
+            self._module_names.append(anchor)
+            self._module_names.extend(anchor.joinname(a.name) for a in node.names)
 
 
-class ImportStmtsParser:
-    def __init__(
-        self,
-        py_modules_by_name: Mapping[ModuleName, PyModule],
-        py_module: PyModule,
-        import_stmts: Sequence[ImportSTMT],
-    ) -> None:
-        self._py_modules_by_name = py_modules_by_name
-        self._py_module = py_module
-        self._import_stmts = import_stmts
+def _compute_py_module_from_module_name(
+    py_modules_by_name: Mapping[ModuleName, PyModule], module_name: ModuleName
+) -> Iterator[PyModule]:
+    if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
+        yield from ()
+        return
 
-    def get_imports(self) -> Iterator[PyModule]:
-        for import_stmt in self._import_stmts:
-            if isinstance(import_stmt, ast.Import):
-                for alias in import_stmt.names:
-                    if py_module := self._make_py_module_from_name(ModuleName(alias.name)):
-                        yield py_module
+    if module_name.parts[-1] == "*":
+        # Note:
+        # from a.b import *
+        # - If a.b is a pkg everything from a.b.__init__.py is loaded
+        # - If a.b is a mod everything from a.b.py is loaded
+        # -> Getting the "right" filepath is already handled below
+        module_name = module_name.parent
 
-            elif isinstance(import_stmt, ast.ImportFrom):
-                for module_name in self._get_module_names_of_abs_import_from_stmt(import_stmt):
-                    if py_module := self._make_py_module_from_name(module_name):
-                        yield py_module
+    if import_py_module := py_modules_by_name.get(module_name):
+        yield import_py_module
+        return
 
-    # -----ast.ImportFrom-----
-
-    def _get_module_names_of_abs_import_from_stmt(
-        self, import_from_stmt: ast.ImportFrom
-    ) -> Iterator[ModuleName]:
-        assert import_from_stmt.module
-
-        anchor = ModuleName(import_from_stmt.module)
-        yield anchor
-
-        for alias in import_from_stmt.names:
-            yield anchor.joinname(alias.name)
-
-    # -----helper-----
-
-    def _make_py_module_from_name(self, module_name: ModuleName) -> PyModule | None:
-        if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
-            return None
-
-        if module_name.parts[-1] == "*":
-            # Note:
-            # from a.b import *
-            # - If a.b is a pkg everything from a.b.__init__.py is loaded
-            # - If a.b is a mod everything from a.b.py is loaded
-            # -> Getting the "right" filepath is already handled below
-            module_name = module_name.parent
-
-        if not (py_module := self._lookup_py_module(module_name)):
-            return None
-
-        try:
-            self._validate_py_module(py_module)
-        except ValueError:
-            return None
-
-        return py_module
-
-    def _lookup_py_module(self, module_name: ModuleName) -> PyModule | None:
-        if py_module := self._py_modules_by_name.get(module_name):
-            return py_module
-        # TODO hack (missing namespace in self._py_modules_by_name)
-        return self._py_modules_by_name.get(ModuleName(*module_name.parts[1:]))
-
-    def _validate_py_module(self, py_module: PyModule) -> None:
-        if self._py_module.type is PyModuleType.REGULAR_PACKAGE and str(py_module.name).startswith(
-            str(self._py_module.name)
-        ):
-            # Importing submodules within a parent init is allowed
-            raise ValueError(py_module)
-
-
-def _validate_py_module(base_py_module: PyModule, import_py_module: PyModule) -> None:
-    if base_py_module.type is PyModuleType.REGULAR_PACKAGE and str(
-        import_py_module.name
-    ).startswith(str(base_py_module.name)):
-        # Importing submodules within a parent init is allowed
-        raise ValueError(import_py_module)
+    # TODO hack (missing namespace in self._py_modules_by_name)
+    if import_py_module := py_modules_by_name.get(ModuleName(*module_name.parts[1:])):
+        yield import_py_module
+        return
 
 
 def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path: Path) -> PyModule:
@@ -172,6 +118,14 @@ def _compute_py_modules_from_rel_import_from_stmt(
             logger.debug("Cannot make py file from %s: %s", ref_path, e)
 
 
+def _validate_py_module(base_py_module: PyModule, import_py_module: PyModule) -> None:
+    if base_py_module.type is PyModuleType.REGULAR_PACKAGE and str(
+        import_py_module.name
+    ).startswith(str(base_py_module.name)):
+        # Importing submodules within a parent init is allowed
+        raise ValueError(import_py_module)
+
+
 def visit_py_module(
     py_modules_by_name: Mapping[ModuleName, PyModule], base_py_module: PyModule
 ) -> Iterator[PyModule]:
@@ -193,15 +147,20 @@ def visit_py_module(
     visitor = NodeVisitorImports()
     visitor.visit(tree)
 
-    parser = ImportStmtsParser(
-        py_modules_by_name,
-        base_py_module,
-        visitor.import_stmts,
-    )
-
     yield from (p for p in base_py_module.parents if p.type is PyModuleType.REGULAR_PACKAGE)
 
-    yield from parser.get_imports()
+    for module_name in visitor.module_names:
+        for import_py_module in _compute_py_module_from_module_name(
+            py_modules_by_name, module_name
+        ):
+            try:
+                _validate_py_module(
+                    base_py_module=base_py_module, import_py_module=import_py_module
+                )
+            except ValueError:
+                continue
+
+            yield import_py_module
 
     for rel_import_stmt in visitor.rel_import_stmts:
         for import_py_module in _compute_py_modules_from_rel_import_from_stmt(
