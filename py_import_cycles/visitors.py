@@ -139,21 +139,14 @@ def _compute_py_module_from_rel_import_from_stmt(
 ) -> PyModule | None:
     try:
         if (init_file_path := path / "__init__.py").exists():
-            import_py_module = PyModule(package=base_py_module.package, path=init_file_path)
-        elif (module_file_path := path.with_suffix(".py")).exists():
-            import_py_module = PyModule(package=base_py_module.package, path=module_file_path)
-        else:  # TODO Namespace?
-            import_py_module = PyModule(package=base_py_module.package, path=path)
+            return PyModule(package=base_py_module.package, path=init_file_path)
+        if (module_file_path := path.with_suffix(".py")).exists():
+            return PyModule(package=base_py_module.package, path=module_file_path)
+        # TODO Namespace?
+        return PyModule(package=base_py_module.package, path=path)
     except ValueError as e:
         logger.debug("Cannot make py file from %s: %s", path, e)
         return None
-
-    try:
-        _validate_py_module(base_py_module=base_py_module, import_py_module=import_py_module)
-    except ValueError:
-        return None
-
-    return import_py_module
 
 
 def _compute_py_modules_from_rel_import_from_stmt(
@@ -215,4 +208,14 @@ def visit_py_module(
     yield from parser.get_imports()
 
     for rel_import_stmt in visitor.rel_import_stmts:
-        yield from _compute_py_modules_from_rel_import_from_stmt(base_py_module, rel_import_stmt)
+        for import_py_module in _compute_py_modules_from_rel_import_from_stmt(
+            base_py_module, rel_import_stmt
+        ):
+            try:
+                _validate_py_module(
+                    base_py_module=base_py_module, import_py_module=import_py_module
+                )
+            except ValueError:
+                continue
+
+            yield import_py_module
