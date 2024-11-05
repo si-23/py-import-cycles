@@ -39,8 +39,6 @@ class ImportStmtsParser:
         self._import_stmts = import_stmts
 
     def get_imports(self) -> Iterator[PyModule]:
-        yield from (p for p in self._py_module.parents if p.type is PyModuleType.REGULAR_PACKAGE)
-
         for import_stmt in self._import_stmts:
             if isinstance(import_stmt, ast.Import):
                 for alias in import_stmt.names:
@@ -177,4 +175,6 @@ def visit_py_module(
         py_module,
         visitor.import_stmts,
     )
+
+    yield from (p for p in py_module.parents if p.type is PyModuleType.REGULAR_PACKAGE)
     yield from parser.get_imports()
