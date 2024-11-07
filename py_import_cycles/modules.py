@@ -90,12 +90,13 @@ def _compute_py_module_type(path: Path) -> PyModuleType:
 
 
 def _compute_py_module_name(package: Path, path: Path, py_module_type: PyModuleType) -> ModuleName:
+    module_name = ModuleName(package.name)
     ref_path = path.parent if py_module_type is PyModuleType.REGULAR_PACKAGE else path
     if not ref_path.is_relative_to(package) or (rel_path := ref_path.relative_to(package)) == Path(
         "."
     ):
-        return ModuleName()
-    return ModuleName(*rel_path.with_suffix("").parts)
+        return module_name
+    return module_name.joinname(*rel_path.with_suffix("").parts)
 
 
 class PyModule:
@@ -149,5 +150,3 @@ class PyModule:
                 break
             if (init_file_path := parent / "__init__.py").exists():
                 yield PyModule(package=self.package, path=init_file_path)
-            else:
-                yield PyModule(package=self.package, path=parent)
