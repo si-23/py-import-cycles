@@ -117,9 +117,10 @@ def _compute_py_modules_from_rel_import_from_stmt(
 def _is_valid(base_py_module: PyModule, import_py_module: PyModule) -> bool:
     if base_py_module == import_py_module:
         return False
-    if base_py_module.type is PyModuleType.REGULAR_PACKAGE and str(
-        import_py_module.name
-    ).startswith(str(base_py_module.name)):
+    if (
+        base_py_module.type is PyModuleType.REGULAR_PACKAGE
+        and import_py_module.path.is_relative_to(base_py_module.path.parent)
+    ):
         # Importing submodules within a parent init is allowed
         return False
     return True
