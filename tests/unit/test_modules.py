@@ -117,12 +117,7 @@ def test_py_module(tmp_path: Path) -> None:
     assert py_module.type is PyModuleType.MODULE
     assert py_module.name == ModuleName("package.module")
     assert str(py_module) == "package.module"
-    assert list(py_module.parents) == [
-        PyModule(
-            package=tmp_path / "path/to/package",
-            path=tmp_path / "path/to/package",
-        ),
-    ]
+    assert not list(py_module.parents)
 
 
 def test_py_module_parents(tmp_path: Path) -> None:
@@ -143,13 +138,5 @@ def test_py_module_parents(tmp_path: Path) -> None:
         PyModule(
             package=tmp_path,
             path=tmp_path / "path/to/__init__.py",
-        ),
-        PyModule(
-            package=tmp_path,
-            path=tmp_path / "path",
-        ),
-        PyModule(
-            package=tmp_path,
-            path=Path(),
         ),
     ]

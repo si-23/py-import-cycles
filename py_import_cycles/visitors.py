@@ -113,15 +113,15 @@ def _compute_py_modules_from_rel_import_from_stmt(
             logger.debug("Cannot make py module from %s: %s", ref_path, e)
 
 
-def _finalize_import(base_py_module: PyModule, import_py_module: PyModule) -> Iterator[PyModule]:
+def _is_valid(base_py_module: PyModule, import_py_module: PyModule) -> bool:
     if base_py_module == import_py_module:
-        return
+        return False
     if base_py_module.type is PyModuleType.REGULAR_PACKAGE and str(
         import_py_module.name
     ).startswith(str(base_py_module.name)):
         # Importing submodules within a parent init is allowed
-        return
-    yield import_py_module
+        return False
+    return True
 
 
 def visit_py_module(
@@ -145,16 +145,18 @@ def visit_py_module(
     visitor = NodeVisitorImports()
     visitor.visit(tree)
 
-    yield from (p for p in base_py_module.parents if p.type is PyModuleType.REGULAR_PACKAGE)
-
     for module_name in visitor.module_names:
         for import_py_module in _compute_py_module_from_module_name(
             py_modules_by_name, module_name
         ):
-            yield from _finalize_import(base_py_module, import_py_module)
+            if _is_valid(base_py_module, import_py_module):
+                yield import_py_module
+                yield from import_py_module.parents
 
     for rel_import_stmt in visitor.rel_import_stmts:
         for import_py_module in _compute_py_modules_from_rel_import_from_stmt(
             base_py_module, rel_import_stmt
         ):
-            yield from _finalize_import(base_py_module, import_py_module)
+            if _is_valid(base_py_module, import_py_module):
+                yield import_py_module
+                yield from import_py_module.parents

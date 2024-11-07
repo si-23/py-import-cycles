@@ -150,5 +150,3 @@ class PyModule:
                 break
             if (init_file_path := parent / "__init__.py").exists():
                 yield PyModule(package=self.package, path=init_file_path)
-            else:
-                yield PyModule(package=self.package, path=parent)
