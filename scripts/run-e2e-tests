@@ -35,5 +35,5 @@ result=$(PYTHONPATH="." ./run-main --packages "$REPO_PATH/py_import_cycles" --st
 if [ "$result" == "Found 0 import cycles" ]; then
    exit 0
 fi
-echo "Test $project failed (expect 0 cycles, got '$result')." >&2
+echo "Self test failed (expect 0 cycles, got '$result')." >&2
 exit 1
