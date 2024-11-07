@@ -151,13 +151,13 @@ def visit_py_module(
             py_modules_by_name, module_name
         ):
             if _is_valid(base_py_module, import_py_module):
+                yield from list(import_py_module.parents)[::-1]
                 yield import_py_module
-                yield from import_py_module.parents
 
     for rel_import_stmt in visitor.rel_import_stmts:
         for import_py_module in _compute_py_modules_from_rel_import_from_stmt(
             base_py_module, rel_import_stmt
         ):
             if _is_valid(base_py_module, import_py_module):
+                yield from list(import_py_module.parents)[::-1]
                 yield import_py_module
-                yield from import_py_module.parents
