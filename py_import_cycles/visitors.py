@@ -74,11 +74,6 @@ def _compute_py_module_from_module_name(
         yield import_py_module
         return
 
-    # TODO hack (missing namespace in self._py_modules_by_name)
-    if import_py_module := py_modules_by_name.get(ModuleName(*module_name.parts[1:])):
-        yield import_py_module
-        return
-
 
 def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path: Path) -> PyModule:
     if (init_file_path := path / "__init__.py").exists():
