@@ -1,9 +1,9 @@
 From https://github.com/bndr/pycycle/issues/15:
 Traceback (most recent call last):
   File "run.py", line 1, in <module>
-    from package.module import Anything
-  File "/home/dom/Code/package/package/module.py", line 1, in <module>
-    from package.subpackage.module import Thing
-  File "/home/dom/Code/package/package/subpackage/module.py", line 1, in <module>
-    from package.module import Anything
-ImportError: cannot import name 'Anything' from 'package.module' (/home/dom/Code/package/package/module.py)
+    from pkg.mod import Anything
+  File "/home/dom/Code/pkg/pkg/mod.py", line 1, in <module>
+    from pkg.sub.mod import Thing
+  File "/home/dom/Code/pkg/pkg/sub/mod.py", line 1, in <module>
+    from pkg.mod import Anything
+ImportError: cannot import name 'Anything' from 'pkg.mod' (/home/dom/Code/pkg/pkg/mod.py)
