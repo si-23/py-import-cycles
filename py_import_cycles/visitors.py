@@ -80,8 +80,9 @@ def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path:
         return PyModule(package=base_py_module.package, path=init_file_path)
     if (module_file_path := path.with_suffix(".py")).exists():
         return PyModule(package=base_py_module.package, path=module_file_path)
-    # TODO Namespace?
-    return PyModule(package=base_py_module.package, path=path)
+    if path.is_dir():
+        return PyModule(package=base_py_module.package, path=path)
+    raise ValueError(path)
 
 
 def _compute_py_modules_from_rel_import_from_stmt(
