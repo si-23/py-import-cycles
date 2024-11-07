@@ -1,3 +1,3 @@
 #!/usr/bin/env python3
 
-import mod3
+import pkg.mod1
