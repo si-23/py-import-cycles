@@ -59,7 +59,6 @@ def _compute_py_module_from_module_name(
     py_modules_by_name: Mapping[ModuleName, PyModule], module_name: ModuleName
 ) -> Iterator[PyModule]:
     if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
-        yield from ()
         return
 
     if module_name.parts[-1] == "*":
@@ -128,7 +127,6 @@ def visit_py_module(
     py_modules_by_name: Mapping[ModuleName, PyModule], base_py_module: PyModule
 ) -> Iterator[PyModule]:
     if base_py_module.type is PyModuleType.NAMESPACE_PACKAGE:
-        yield from ()
         return
 
     try:
@@ -136,14 +134,12 @@ def visit_py_module(
             content = f.read()
     except UnicodeDecodeError as e:
         logger.debug("Cannot read python file %s: %s", base_py_module.path, e)
-        yield from ()
         return
 
     try:
         tree = ast.parse(content)
     except SyntaxError as e:
         logger.debug("Cannot visit python file %s: %s", base_py_module.path, e)
-        yield from ()
         return
 
     visitor = NodeVisitorImports()
