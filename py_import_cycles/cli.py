@@ -11,7 +11,7 @@ from .cycles import detect_cycles
 from .files import get_outputs_file_paths, scan_packages
 from .graphs import make_graph
 from .log import logger, setup_logging
-from .modules import PyModule, PyModuleType
+from .modules import PyModule
 from .visitors import visit_py_module
 
 
@@ -95,8 +95,7 @@ def main() -> int:
     imports_by_py_module = {
         py_module: imports
         for py_module in py_modules
-        if py_module.type is not PyModuleType.NAMESPACE_PACKAGE
-        and (
+        if (
             imports := sorted(
                 frozenset(visit_py_module(py_modules_by_name, py_module)),
                 key=lambda m: tuple(m.name.parts),
