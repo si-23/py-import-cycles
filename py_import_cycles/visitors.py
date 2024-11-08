@@ -73,6 +73,18 @@ def _compute_py_module_from_module_name(
         yield import_py_module
 
 
+def _compute_ref_path_from_rel_import_from_stmt(
+    base_py_module: PyModule, rel_import_stmt: _RelImportStmt
+) -> Path:
+    # Note: PyModuleType.NAMESPACE_PACKAGE are already excluded when calling 'visit_py_module'
+    if base_py_module.type is PyModuleType.MODULE:
+        return base_py_module.path.parents[rel_import_stmt.level - 1]
+    # PyModuleType.REGULAR_PACKAGE
+    if rel_import_stmt.level == 1:
+        return base_py_module.path.parent
+    return base_py_module.path.parents[rel_import_stmt.level - 2]
+
+
 def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path: Path) -> PyModule:
     if (init_file_path := path / "__init__.py").exists():
         return PyModule(package=base_py_module.package, path=init_file_path)
@@ -86,14 +98,7 @@ def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path:
 def _compute_py_modules_from_rel_import_from_stmt(
     base_py_module: PyModule, rel_import_stmt: _RelImportStmt
 ) -> Iterator[PyModule]:
-    if base_py_module.type is PyModuleType.REGULAR_PACKAGE:
-        if rel_import_stmt.level == 1:
-            ref_path = base_py_module.path.parent
-        else:
-            ref_path = base_py_module.path.parents[rel_import_stmt.level - 2]
-    else:  # PyModuleType.MODULE
-        # Note: PyModuleType.NAMESPACE_PACKAGE are already excluded when calling 'visit_py_module'
-        ref_path = base_py_module.path.parents[rel_import_stmt.level - 1]
+    ref_path = _compute_ref_path_from_rel_import_from_stmt(base_py_module, rel_import_stmt)
 
     if rel_import_stmt.module:
         ref_path = ref_path.joinpath(*ModuleName(rel_import_stmt.module).parts)
