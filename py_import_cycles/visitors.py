@@ -158,5 +158,4 @@ def visit_py_module(
             base_py_module, rel_import_stmt
         ):
             if _is_valid(base_py_module, import_py_module):
-                yield from list(import_py_module.parents)[::-1]
                 yield import_py_module
