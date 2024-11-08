@@ -58,6 +58,12 @@ class NodeVisitorImports(ast.NodeVisitor):
 def _compute_py_module_from_module_name(
     py_modules_by_name: Mapping[ModuleName, PyModule], module_name: ModuleName
 ) -> Iterator[PyModule]:
+    # https://docs.python.org/3/reference/simple_stmts.html#import
+    # import foo                 # foo imported and bound locally
+    # import foo.bar.baz         # foo, foo.bar, and foo.bar.baz imported, foo bound locally
+    # import foo.bar.baz as fbb  # foo, foo.bar, and foo.bar.baz imported, foo.bar.baz bound as fbb
+    # from foo.bar import baz    # foo, foo.bar, and foo.bar.baz imported, foo.bar.baz bound as baz
+    # from foo import attr       # foo imported and foo.attr bound as attr
     if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
         return
 
