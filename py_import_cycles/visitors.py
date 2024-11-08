@@ -72,7 +72,6 @@ def _compute_py_module_from_module_name(
 
     if import_py_module := py_modules_by_name.get(module_name):
         yield import_py_module
-        return
 
 
 def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path: Path) -> PyModule:
@@ -93,9 +92,8 @@ def _compute_py_modules_from_rel_import_from_stmt(
             ref_path = base_py_module.path.parent
         else:
             ref_path = base_py_module.path.parents[rel_import_stmt.level - 2]
-    else:
-        # TODO PyModuleType.MODULE, PyModuleType.NAMESPACE_PACKAGE are already excluded
-        # when calling visit_py_module
+    else:  # PyModuleType.MODULE
+        # Note: PyModuleType.NAMESPACE_PACKAGE are already excluded when calling 'visit_py_module'
         ref_path = base_py_module.path.parents[rel_import_stmt.level - 1]
 
     if rel_import_stmt.module:
@@ -129,6 +127,10 @@ def _is_valid(base_py_module: PyModule, import_py_module: PyModule) -> bool:
 def visit_py_module(
     py_modules_by_name: Mapping[ModuleName, PyModule], base_py_module: PyModule
 ) -> Iterator[PyModule]:
+    if base_py_module.type is PyModuleType.NAMESPACE_PACKAGE:
+        yield from ()
+        return
+
     try:
         with open(base_py_module.path, encoding="utf-8") as f:
             content = f.read()
