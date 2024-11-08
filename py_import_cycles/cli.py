@@ -3,9 +3,8 @@
 import argparse
 import logging
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Callable
 
 from . import __version__
 from .cycles import detect_cycles
@@ -144,21 +143,21 @@ def main() -> int:
 
 def _make_readable_imports_by_py_module(
     imports_by_py_module: Mapping[PyModule, Sequence[PyModule]],
-) -> Sequence[str]:
-    lines = []
+) -> Iterator[str]:
     for ibm, ms in imports_by_py_module.items():
         if ms:
-            lines.append(f"  {str(ibm)} imports: {', '.join(str(m) for m in ms)}")
-    return lines
+            yield f"  {str(ibm)} imports:"
+            yield from (f"    {str(m)}" for m in ms)
 
 
 def _make_readable_cycles(
-    line_handler: Callable[[int, tuple[PyModule, ...]], Sequence[str]],
     sorted_cycles: Sequence[tuple[PyModule, ...]],
-) -> Sequence[str]:
-    return [
-        line for nr, ic in enumerate(sorted_cycles, start=1) for line in line_handler(nr, ic) if ic
-    ]
+) -> Iterator[str]:
+    for nr, ic in enumerate(sorted_cycles, start=1):
+        if ic:
+            yield f"  Cycle {nr}:"
+            yield f"    {str(ic[0])}"
+            yield from (f"    > {str(i)} " for i in ic[1:])
 
 
 def _log_or_show_cycles(
@@ -166,21 +165,13 @@ def _log_or_show_cycles(
     sorted_cycles: Sequence[tuple[PyModule, ...]],
 ) -> None:
     if verbose:
-        for line in _make_readable_cycles(
-            lambda nr, ic: [f"  Cycle {nr}:"] + [f"   {str(m)}" for m in ic],
-            sorted_cycles,
-        ):
+        for line in _make_readable_cycles(sorted_cycles):
             sys.stderr.write(f"{line}\n")
 
     if _debug():
         logger.debug(
             "Import cycles:\n%s",
-            "\n".join(
-                _make_readable_cycles(
-                    lambda nr, ic: [f"  Cycle {nr}: {' > '.join(str(m) for m in ic)}"],
-                    sorted_cycles,
-                )
-            ),
+            "\n".join(_make_readable_cycles(sorted_cycles)),
         )
 
 
