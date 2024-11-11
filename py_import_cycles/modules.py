@@ -79,13 +79,13 @@ class PyModuleType(Enum):
 
 
 def _compute_py_module_type(path: Path) -> PyModuleType:
-    if path.is_dir():
-        return PyModuleType.NAMESPACE_PACKAGE
     if path.is_file():
         if path.name == "__init__.py":
             return PyModuleType.REGULAR_PACKAGE
         if path.suffix == ".py":
             return PyModuleType.MODULE
+    if path.is_dir() and not (path / "__init__.py").exists():
+        return PyModuleType.NAMESPACE_PACKAGE
     raise ValueError(path)
 
 

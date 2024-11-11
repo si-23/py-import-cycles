@@ -6,7 +6,6 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from .log import logger
 from .modules import PyModule
 
 
@@ -24,19 +23,18 @@ def scan_packages(packages: Sequence[Path]) -> Iterator[PyModule]:
                 continue
 
             for file in files:
-                # Regular package or Python module
-                if (file_path := root_path / file).suffix == ".py":
-                    try:
-                        yield PyModule(package=package_path, path=file_path)
-                    except ValueError as e:
-                        logger.error("Cannot make py module from %s: %s", file_path, e)
-
-            if not (root_path / "__init__.py").exists():
-                # Namespace package
+                # May be a regular package or a module
+                file_path = root_path / file
                 try:
-                    yield PyModule(package=package_path, path=root_path)
-                except ValueError as e:
-                    logger.error("Cannot make py module from %s: %s", root_path, e)
+                    yield PyModule(package=package_path, path=file_path)
+                except ValueError:
+                    pass
+
+            # May be a namespace package
+            try:
+                yield PyModule(package=package_path, path=root_path)
+            except ValueError:
+                pass
 
 
 @dataclass(frozen=True, kw_only=True)
