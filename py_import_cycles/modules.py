@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from enum import auto, Enum
 from pathlib import Path
 from string import ascii_letters, digits
@@ -138,15 +138,3 @@ class PyModule:
 
     def __ge__(self, other: object) -> bool:
         return self > other or self == other
-
-    @property
-    def parents(self) -> Iterator[PyModule]:
-        for parent in (
-            self.path.parent.parents
-            if self.type is PyModuleType.REGULAR_PACKAGE
-            else self.path.parents
-        ):
-            if not parent.is_relative_to(self.package):
-                break
-            if (init_file_path := parent / "__init__.py").exists():
-                yield PyModule(package=self.package, path=init_file_path)

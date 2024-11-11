@@ -215,7 +215,6 @@ def visit_py_module(
             py_modules_by_name, abs_import_stmt
         ):
             if _is_valid(base_py_module, import_py_module):
-                yield from list(import_py_module.parents)[::-1]
                 yield import_py_module
 
     for abs_import_from_stmt in visitor.abs_import_from_stmts:
@@ -223,7 +222,6 @@ def visit_py_module(
             py_modules_by_name, abs_import_from_stmt
         ):
             if _is_valid(base_py_module, import_py_module):
-                yield from list(import_py_module.parents)[::-1]
                 yield import_py_module
 
     for rel_import_from_stmt in visitor.rel_import_from_stmts:

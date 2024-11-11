@@ -89,7 +89,6 @@ def test_namespace_package(tmp_path: Path) -> None:
     assert py_module.type is PyModuleType.NAMESPACE_PACKAGE
     assert py_module.name == ModuleName("package")
     assert str(py_module) == "package/"
-    assert not list(py_module.parents)
 
 
 def test_regular_package(tmp_path: Path) -> None:
@@ -103,7 +102,6 @@ def test_regular_package(tmp_path: Path) -> None:
     assert py_module.type is PyModuleType.REGULAR_PACKAGE
     assert py_module.name == ModuleName("package")
     assert str(py_module) == "package.__init__"
-    assert not list(py_module.parents)
 
 
 def test_py_module(tmp_path: Path) -> None:
@@ -117,26 +115,3 @@ def test_py_module(tmp_path: Path) -> None:
     assert py_module.type is PyModuleType.MODULE
     assert py_module.name == ModuleName("package.module")
     assert str(py_module) == "package.module"
-    assert not list(py_module.parents)
-
-
-def test_py_module_parents(tmp_path: Path) -> None:
-    path = tmp_path / "path/to/package"
-    path.mkdir(parents=True, exist_ok=True)
-    (tmp_path / "path/to/package/__init__.py").touch()
-    (tmp_path / "path/to/__init__.py").touch()
-    (path / "module.py").touch()
-    py_module = PyModule(
-        package=tmp_path,
-        path=tmp_path / "path/to/package/module.py",
-    )
-    assert list(py_module.parents) == [
-        PyModule(
-            package=tmp_path,
-            path=tmp_path / "path/to/package/__init__.py",
-        ),
-        PyModule(
-            package=tmp_path,
-            path=tmp_path / "path/to/__init__.py",
-        ),
-    ]
