@@ -14,7 +14,7 @@ ImportSTMT = ast.Import | ast.ImportFrom
 
 
 @dataclass(frozen=True)
-class _RelImportStmt:
+class _RelImportFromStmt:
     level: int
     module: str
     names: tuple[str, ...]
@@ -26,23 +26,23 @@ class _RelImportStmt:
 class NodeVisitorImports(ast.NodeVisitor):
     def __init__(self) -> None:
         self._module_names: list[ModuleName] = []
-        self._rel_import_stmts: list[_RelImportStmt] = []
+        self._rel_import_from_stmts: list[_RelImportFromStmt] = []
 
     @property
     def module_names(self) -> Sequence[ModuleName]:
         return self._module_names
 
     @property
-    def rel_import_stmts(self) -> Sequence[_RelImportStmt]:
-        return self._rel_import_stmts
+    def rel_import_from_stmts(self) -> Sequence[_RelImportFromStmt]:
+        return self._rel_import_from_stmts
 
     def visit_Import(self, node: ast.Import) -> None:
         self._module_names.extend(ModuleName(a.name) for a in node.names)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         if node.level >= 1:
-            self._rel_import_stmts.append(
-                _RelImportStmt(
+            self._rel_import_from_stmts.append(
+                _RelImportFromStmt(
                     node.level,
                     node.module or "",
                     tuple(a.name for a in node.names),
@@ -80,15 +80,15 @@ def _compute_py_module_from_module_name(
 
 
 def _compute_ref_path_from_rel_import_from_stmt(
-    base_py_module: PyModule, rel_import_stmt: _RelImportStmt
+    base_py_module: PyModule, rel_import_from_stmt: _RelImportFromStmt
 ) -> Path:
     # Note: PyModuleType.NAMESPACE_PACKAGE are already excluded when calling 'visit_py_module'
     if base_py_module.type is PyModuleType.MODULE:
-        return base_py_module.path.parents[rel_import_stmt.level - 1]
+        return base_py_module.path.parents[rel_import_from_stmt.level - 1]
     # PyModuleType.REGULAR_PACKAGE
-    if rel_import_stmt.level == 1:
+    if rel_import_from_stmt.level == 1:
         return base_py_module.path.parent
-    return base_py_module.path.parents[rel_import_stmt.level - 2]
+    return base_py_module.path.parents[rel_import_from_stmt.level - 2]
 
 
 def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path: Path) -> PyModule:
@@ -102,18 +102,18 @@ def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path:
 
 
 def _compute_py_modules_from_rel_import_from_stmt(
-    base_py_module: PyModule, rel_import_stmt: _RelImportStmt
+    base_py_module: PyModule, rel_import_from_stmt: _RelImportFromStmt
 ) -> Iterator[PyModule]:
-    ref_path = _compute_ref_path_from_rel_import_from_stmt(base_py_module, rel_import_stmt)
+    ref_path = _compute_ref_path_from_rel_import_from_stmt(base_py_module, rel_import_from_stmt)
 
-    if rel_import_stmt.module:
-        ref_path = ref_path.joinpath(*ModuleName(rel_import_stmt.module).parts)
+    if rel_import_from_stmt.module:
+        ref_path = ref_path.joinpath(*ModuleName(rel_import_from_stmt.module).parts)
         try:
             yield _compute_py_module_from_rel_import_from_stmt(base_py_module, ref_path)
         except ValueError as e:
             logger.debug("Cannot make py module from %s: %s", ref_path, e)
 
-    for name in rel_import_stmt.names:
+    for name in rel_import_from_stmt.names:
         try:
             yield _compute_py_module_from_rel_import_from_stmt(
                 base_py_module, ref_path.joinpath(name)
@@ -164,9 +164,9 @@ def visit_py_module(
                 yield from list(import_py_module.parents)[::-1]
                 yield import_py_module
 
-    for rel_import_stmt in visitor.rel_import_stmts:
+    for rel_import_from_stmt in visitor.rel_import_from_stmts:
         for import_py_module in _compute_py_modules_from_rel_import_from_stmt(
-            base_py_module, rel_import_stmt
+            base_py_module, rel_import_from_stmt
         ):
             if _is_valid(base_py_module, import_py_module):
                 yield import_py_module
