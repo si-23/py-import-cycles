@@ -32,7 +32,6 @@ def test__compute_py_module_from_abs_import_from_stmt_all_modules(
             py_modules_by_name, _AbsImportFromStmt("package.a.b", ("c", "d"))
         )
     ) == [
-        PyModule(tmp_path / "path/to/package", path / "__init__.py"),
         PyModule(tmp_path / "path/to/package", path / "c.py"),
         PyModule(tmp_path / "path/to/package", path / "d.py"),
     ]
@@ -58,6 +57,6 @@ def test__compute_py_module_from_abs_import_from_stmt_not_all_modules(
             py_modules_by_name, _AbsImportFromStmt("package.a.b", ("c", "d"))
         )
     ) == [
-        PyModule(tmp_path / "path/to/package", path / "__init__.py"),
         PyModule(tmp_path / "path/to/package", path / "c.py"),
+        PyModule(tmp_path / "path/to/package", path / "__init__.py"),
     ]

@@ -117,10 +117,20 @@ def _compute_py_module_from_abs_import_from_stmt(
     # from foo.bar import baz    # foo, foo.bar, and foo.bar.baz imported, foo.bar.baz bound as baz
     # from foo import attr       # foo imported and foo.attr bound as attr
     anchor = ModuleName(abs_import_from_stmt.module)
-    yield from _compute_py_module_from_module_name(py_modules_by_name, anchor)
+    import_py_modules = [
+        import_py_module
+        for name in abs_import_from_stmt.names
+        for import_py_module in _compute_py_module_from_module_name(
+            py_modules_by_name, anchor.joinname(name)
+        )
+    ]
+    yield from import_py_modules
 
-    for name in abs_import_from_stmt.names:
-        yield from _compute_py_module_from_module_name(py_modules_by_name, anchor.joinname(name))
+    if len(import_py_modules) != len(abs_import_from_stmt.names):
+        # from a.b import c, d
+        # Check if c and d are modules or objects. If c or d is not a module then we have to
+        # collect 'a.b'
+        yield from _compute_py_module_from_module_name(py_modules_by_name, anchor)
 
 
 def _compute_ref_path_from_rel_import_from_stmt(
