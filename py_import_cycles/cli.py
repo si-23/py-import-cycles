@@ -3,8 +3,11 @@
 import argparse
 import logging
 import sys
+import time
+from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
+from typing import Literal
 
 from . import __version__
 from .cycles import detect_cycles
@@ -70,11 +73,21 @@ def _parse_arguments() -> argparse.Namespace:
         default=0,
         help="Tolerate a certain number of cycles, ie. an upper threshold.",
     )
+    parser.add_argument(
+        "--stats",
+        action="store_true",
+        help="show some statistics",
+    )
 
     return parser.parse_args()
 
 
 def main() -> int:
+    now = time.time()
+    stats: Counter[Literal["num_of_modules", "num_of_modules_with_imports", "num_of_imports"]] = (
+        Counter()
+    )
+
     args = _parse_arguments()
 
     packages = [pp for p in args.packages if (pp := Path(p)).is_dir()]
@@ -88,6 +101,9 @@ def main() -> int:
 
     logger.info("Scan packages")
     py_modules = list(scan_packages(packages))
+
+    if args.stats:
+        stats["num_of_modules"] = len(py_modules)
 
     logger.info("Visit and compute imports of py modules")
     py_modules_by_name = {p.name: p for p in py_modules}
@@ -103,6 +119,10 @@ def main() -> int:
             )
         )
     }
+
+    if args.stats:
+        stats["num_of_imports"] = sum(len(ims) for ims in imports_by_py_module.values())
+        stats["num_of_modules_with_imports"] = len(imports_by_py_module)
 
     if _debug():
         logger.debug(
@@ -126,6 +146,9 @@ def main() -> int:
             args.strategy,
             [((cycle[-1],) + cycle) for cycle in sorted_cycles],
         )
+
+    if args.stats:
+        _show_stats(time.time() - now, stats)
 
     return len(unsorted_cycles) > args.threshold
 
@@ -172,6 +195,16 @@ def _log_or_show_cycles(
             "Import cycles:\n%s",
             "\n".join(_make_readable_cycles(sorted_cycles)),
         )
+
+
+def _show_stats(
+    duration: float,
+    stats: Counter[Literal["num_of_modules", "num_of_modules_with_imports", "num_of_imports"]],
+) -> None:
+    logger.info("Duration: %ss", f"{duration:.2f}")
+    logger.info("Number of found modules: %s", stats["num_of_modules"])
+    logger.info("Number of imports: %s", stats["num_of_imports"])
+    logger.info("Number of modules with imports: %s", stats["num_of_modules_with_imports"])
 
 
 def _debug() -> bool:
