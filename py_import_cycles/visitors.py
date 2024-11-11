@@ -180,10 +180,11 @@ def _is_valid(base_py_module: PyModule, import_py_module: PyModule) -> bool:
     if base_py_module == import_py_module:
         return False
     if (
-        base_py_module.type is PyModuleType.REGULAR_PACKAGE
-        and import_py_module.path.is_relative_to(base_py_module.path.parent)
+        base_py_module.type is PyModuleType.MODULE
+        and import_py_module.type is PyModuleType.REGULAR_PACKAGE
+        and base_py_module.path.parent == import_py_module.path.parent
     ):
-        # Importing submodules within a parent init is allowed
+        # Do not take 'foo.bar.baz imports foo.bar.__init__' into account
         return False
     return True
 
