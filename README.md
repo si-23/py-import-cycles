@@ -3,16 +3,16 @@ py-import-cycles
 
 Detect import cycles in Python projects.
 
-This tool:
+It:
 
 * walks over given packages,
 * collects (file-based) Python modules,
-* extracts import statements and
+* extracts import statements via `ast` and
 * computes cycles.
 
-The import statements are collected from the outside via `ast` and this tool does not take any
-Python module finder or loader mechanisms into account. It is conceived for having an indication
-whether Python packages may have structural weak points.
+It is conceived for having an indication whether Python packages may have structural weak points.
+
+`py-import-cycles` does not take any Python module finder or loader mechanisms into account. 
 
 Installation
 ------------
