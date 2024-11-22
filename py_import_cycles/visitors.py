@@ -37,8 +37,60 @@ class _RelImportFromStmt:
         assert self.level >= 1
 
 
+def _is_import_stmt(import_stmt: str, raw_node: str) -> bool:
+    # Either the args are the same or 'from a import (' vs 'from a import b'
+    import_stmt_parts = [i.strip() for i in import_stmt.split()]
+    raw_node_parts = [n.strip() for n in raw_node.split()]
+    return import_stmt_parts == raw_node_parts or import_stmt_parts[:-1] == raw_node_parts[:-1]
+
+
+def _has_ignore_comment(comments: Sequence[str]) -> bool:
+    return "py-import-cycles: ignore" in [c.strip() for c in comments]
+
+
+def _ignore(code_lines: Sequence[str], raw_node: str, lineno: int) -> bool:
+    # === 1 ===
+    # import foo.bar # linter-1: ... # py-import-cycles: ignore # linter-2: ...
+    # === 2 ===
+    # from foo (  # linter-1: ... # py-import-cycles: ignore # linter-2: ...
+    #     bar,
+    #     baz,
+    #     ...
+    # )
+    try:
+        import_stmt, *comments = code_lines[lineno - 1].split("#")
+    except IndexError:
+        import_stmt = ""
+        comments = []
+
+    if _is_import_stmt(import_stmt, raw_node) and _has_ignore_comment(comments):
+        logger.debug("(same line) Found ignore statment for %r", raw_node)
+        return True
+
+    # === 3 ===
+    # # linter-1: ... # py-import-cycles: ignore # linter-2: ...
+    # import foo.bar
+    try:
+        comment_line = code_lines[lineno - 2]
+        import_stmt = code_lines[lineno - 1]
+    except IndexError:
+        comment_line = ""
+        import_stmt = ""
+
+    if (
+        _is_import_stmt(import_stmt, raw_node)
+        and comment_line.strip().startswith("#")
+        and _has_ignore_comment(comment_line.split("#")[1:])
+    ):
+        logger.debug("(above line) Found ignore statment for %r", raw_node)
+        return True
+
+    return False
+
+
 class NodeVisitorImports(ast.NodeVisitor):
-    def __init__(self) -> None:
+    def __init__(self, code: str) -> None:
+        self._code_lines = code.split("\n")
         self._abs_import_stmts: list[_AbsImportStmt] = []
         self._abs_import_from_stmts: list[_AbsImportFromStmt] = []
         self._rel_import_from_stmts: list[_RelImportFromStmt] = []
@@ -56,6 +108,8 @@ class NodeVisitorImports(ast.NodeVisitor):
         return self._rel_import_from_stmts
 
     def visit_Import(self, node: ast.Import) -> None:
+        if _ignore(self._code_lines, ast.unparse(node), node.lineno):
+            return
         self._abs_import_stmts.append(
             _AbsImportStmt(
                 tuple(a.name for a in node.names),
@@ -63,6 +117,8 @@ class NodeVisitorImports(ast.NodeVisitor):
         )
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if _ignore(self._code_lines, ast.unparse(node), node.lineno):
+            return
         if node.level >= 1:
             self._rel_import_from_stmts.append(
                 _RelImportFromStmt(
@@ -197,18 +253,18 @@ def visit_py_module(
 
     try:
         with open(base_py_module.path, encoding="utf-8") as f:
-            content = f.read()
+            code = f.read()
     except UnicodeDecodeError as e:
         logger.debug("Cannot read python file %s: %s", base_py_module.path, e)
         return
 
     try:
-        tree = ast.parse(content)
+        tree = ast.parse(code)
     except SyntaxError as e:
         logger.debug("Cannot visit python file %s: %s", base_py_module.path, e)
         return
 
-    visitor = NodeVisitorImports()
+    visitor = NodeVisitorImports(code)
     visitor.visit(tree)
 
     for abs_import_stmt in visitor.abs_import_stmts:
