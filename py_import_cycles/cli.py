@@ -68,12 +68,6 @@ def _parse_arguments() -> argparse.Namespace:
         help="path-based strong component algorithm",
     )
     parser.add_argument(
-        "--threshold",
-        type=int,
-        default=0,
-        help="Tolerate a certain number of cycles, ie. an upper threshold.",
-    )
-    parser.add_argument(
         "--stats",
         action="store_true",
         help="show some statistics",
@@ -150,7 +144,7 @@ def main() -> int:
     if args.stats:
         _show_stats(time.time() - now, stats)
 
-    return len(unsorted_cycles) > args.threshold
+    return len(unsorted_cycles) > 0
 
 
 #   .--helper--------------------------------------------------------------.
