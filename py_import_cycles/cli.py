@@ -20,7 +20,20 @@ from .visitors import visit_py_module
 
 def _parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=__doc__,
+        description="""description:
+  Detect import cycles in Python projects.
+
+  py-import-cycles is conceived for having an indication whether Python packages may have
+  structural weak points and does not take any Python module finder or loader mechanisms into
+  account.
+
+  Single import statements can be ignored via '# py-import-cycles: ignore':
+
+    import a  # py-import-cycles: ignore
+
+    # py-import-cycles: ignore
+    import b
+""",
         formatter_class=argparse.RawTextHelpFormatter,
         allow_abbrev=False,
     )
@@ -51,11 +64,6 @@ def _parse_arguments() -> argparse.Namespace:
         help="outputs filename. If not set the current timestamp is used",
     )
     parser.add_argument(
-        "--graph",
-        action="store_true",
-        help="create graphical representation",
-    )
-    parser.add_argument(
         "--packages",
         nargs="+",
         help="collect Python files from top-level packages",
@@ -66,6 +74,11 @@ def _parse_arguments() -> argparse.Namespace:
         choices=["dfs", "tarjan", "johnson"],
         default="dfs",
         help="path-based strong component algorithm",
+    )
+    parser.add_argument(
+        "--graph",
+        action="store_true",
+        help="create graphical representation",
     )
     parser.add_argument(
         "--stats",
