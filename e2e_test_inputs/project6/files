@@ -1,0 +1,8 @@
+pkg/pkg3/mod3.py
+pkg/pkg3/__init__.py
+pkg/pkg2/__init__.py
+pkg/pkg2/mod2.py
+pkg/pkg1/mod1.py
+pkg/pkg1/__init__.py
+pkg/__init__.py
+pkg/mod.py
