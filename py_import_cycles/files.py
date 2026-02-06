@@ -37,13 +37,31 @@ def scan_packages(packages: Sequence[Path]) -> Iterator[PyModule]:
                 pass
 
 
+def parse_files(files: Sequence[str]) -> Iterator[PyModule]:
+    cwd = Path.cwd()
+    for file in files:
+        raw_root_path, raw_rel_file_path = file.split("::", 1)
+
+        root_path = Path(raw_root_path)
+        if not root_path.is_absolute():
+            root_path = cwd / raw_root_path
+
+        rel_file_path = Path(raw_rel_file_path)
+        yield PyModule(
+            package=root_path / rel_file_path.parts[0],
+            path=root_path / rel_file_path,
+        )
+
+
 @dataclass(frozen=True, kw_only=True)
 class OutputsFilePaths:
     log: Path
     graph: Path
 
 
-def get_outputs_file_paths(outputs_folder: Path | None, outputs_filename: str) -> OutputsFilePaths:
+def get_outputs_file_paths(
+    outputs_folder: Path | None, outputs_filename: str
+) -> OutputsFilePaths:
     if not outputs_folder:
         outputs_folder = Path.home() / Path(".local", "py-import-cycles", "outputs")
     outputs_folder.mkdir(parents=True, exist_ok=True)

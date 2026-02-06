@@ -19,7 +19,9 @@ for project in ./e2e_test_inputs/*; do
         pipenv run python3 "$project/main.py" 1>/dev/null || { echo "Test $project failed (execution of main)." >&2; exit 1; }
     fi
 
-    echo "Test cycles..."
+    num_cycles="$(cat "$REPO_PATH/$project"/found_cycles)"
+
+    echo "Test cycles (--packages)..."
     packages=""
     while read -r line; do
         for word in $line; do
@@ -27,22 +29,52 @@ for project in ./e2e_test_inputs/*; do
         done
     done <"$REPO_PATH/$project"/packages
 
-    num_cycles="$(cat "$REPO_PATH/$project"/found_cycles)"
     # shellcheck disable=SC2086
-    result=$(PYTHONPATH="." ./run-main --packages $packages --strategy johnson 2>&1)
-    if [ "$result" == "Found $num_cycles import cycles" ]; then
-       continue
+    pkgs_result=$(PYTHONPATH="." ./run-main --packages $packages --strategy johnson 2>&1)
+    if [ "$pkgs_result" != "Found $num_cycles import cycles" ]; then
+        echo "Test '--packages' $project failed (expect $num_cycles cycles, got '$pkgs_result')." >&2
+        echo "Run 'PYTHONPATH=\".\" ./run-main  --packages $packages --strategy johnson'" >&2
+        exit 1
     fi
-    echo "Test $project failed (expect $num_cycles cycles, got '$result')." >&2
-    exit 1
+
+    echo "Test cycles (--files, absolute)..."
+    abs_files=""
+    while read -r line; do
+        for word in $line; do
+            abs_files="$abs_files $REPO_PATH/$project::$word"
+        done
+    done <"$REPO_PATH/$project"/files
+
+    # shellcheck disable=SC2086
+    abs_files_result=$(PYTHONPATH="." ./run-main --files $abs_files --strategy johnson 2>&1)
+    if [ "$abs_files_result" != "Found $num_cycles import cycles" ]; then
+        echo "Test '--files, absolute' $project failed (expect $num_cycles cycles, got '$abs_files_result')." >&2
+        echo "Run 'PYTHONPATH=\".\" ./run-main --files $abs_files --strategy johnson'" >&2
+        exit 1
+    fi
+
+    echo "Test cycles (--files, relative)..."
+    rel_files=""
+    while read -r line; do
+        for word in $line; do
+            rel_files="$rel_files $project::$word"
+        done
+    done <"$REPO_PATH/$project"/files
+
+    # shellcheck disable=SC2086
+    rel_files_result=$(PYTHONPATH="." ./run-main --files $rel_files --strategy johnson 2>&1)
+    if [ "$rel_files_result" != "Found $num_cycles import cycles" ]; then
+        echo "Test '--files, relative' $project failed (expect $num_cycles cycles, got '$rel_files_result')." >&2
+        echo "Run 'PYTHONPATH=\".\" ./run-main --files $rel_files --strategy johnson'" >&2
+        exit 1
+    fi
 done
 
 echo "===== Self test ====="
 echo "Test cycles..."
 
 result=$(PYTHONPATH="." ./run-main --packages "$REPO_PATH/py_import_cycles" --strategy johnson 2>&1)
-if [ "$result" == "Found 0 import cycles" ]; then
-   exit 0
+if [ "$result" != "Found 0 import cycles" ]; then
+    echo "Self test failed (expect 0 cycles, got '$result')." >&2
+    exit 1
 fi
-echo "Self test failed (expect 0 cycles, got '$result')." >&2
-exit 1

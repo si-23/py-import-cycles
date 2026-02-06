@@ -1,0 +1,4 @@
+pkg/__init__.py
+pkg/sub/__init__.py
+pkg/sub/mod.py
+pkg/mod.py
