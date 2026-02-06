@@ -11,7 +11,7 @@ from typing import Literal
 
 from . import __version__
 from .cycles import detect_cycles
-from .files import get_outputs_file_paths, scan_packages
+from .files import get_outputs_file_paths, parse_files, scan_packages
 from .graphs import make_graph
 from .log import logger, setup_logging
 from .modules import PyModule
@@ -70,6 +70,16 @@ def _parse_arguments() -> argparse.Namespace:
         default=[],
     )
     parser.add_argument(
+        "--files",
+        nargs="+",
+        help="""Directly pass files for cycle analysis.
+Note that a given file must match one of the following patterns:
+  - /path/to/repo::pkg/module.py (absolute)
+  - relpath/to/repo::pkg/module.py (relative)
+In the second case the relpath will be extended with the current working directory.""",
+        default=[],
+    )
+    parser.add_argument(
         "--strategy",
         choices=["dfs", "tarjan", "johnson"],
         default="dfs",
@@ -114,6 +124,9 @@ def main() -> int:
 
     logger.info("Scan packages")
     py_modules = list(scan_packages(packages))
+    if args.files:
+        logger.info("Parse files")
+        py_modules.extend(parse_files(args.files))
 
     if args.stats:
         stats["num_of_modules"] = len(py_modules)
