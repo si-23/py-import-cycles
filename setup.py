@@ -27,7 +27,7 @@ README = (HERE / "README.md").read_text()
 
 # This call to setup() does all the work
 setup(
-    name="py-import-cycles",
+    name="py_import_cycles",
     version=get_version(HERE / "py_import_cycles/__init__.py"),
     description="Detect import cycles in Python projects",
     long_description=README,
