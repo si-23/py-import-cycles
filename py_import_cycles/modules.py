@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from enum import auto, Enum
 from pathlib import Path
-from string import ascii_letters, digits
+from string import ascii_letters
 from typing import Final
 
 
@@ -18,8 +18,6 @@ def _parse_part(part: str) -> str:
     # TODO remove "*"; at the moment this is handled later in "make_module_from_name"
     if part[0] not in ascii_letters + "_*":
         raise ValueError(part[0])
-    if not set(part[1:]).issubset(ascii_letters + digits + "_*"):
-        raise ValueError(part[1:])
     return part
 
 
