@@ -2,7 +2,7 @@
 
 import sys
 
-from .cli import main as cli_main
+from py_import_cycles.cli import main as cli_main
 
 
 def main() -> int:
