@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
 import logging
 import sys
 import time
@@ -15,6 +16,7 @@ from .files import get_outputs_file_paths, parse_files, scan_packages
 from .graphs import make_graph
 from .log import logger, setup_logging
 from .modules import PyModule
+from .sarif import make_sarif
 from .visitors import visit_py_module
 
 
@@ -101,6 +103,10 @@ In the second case the relpath will be extended with the current working directo
         action="store_true",
         help="show some statistics",
     )
+    parser.add_argument(
+        "--sarif",
+        help="write SARIF output to the given file, or '-' for stdout",
+    )
 
     return parser.parse_args()
 
@@ -164,6 +170,9 @@ def main() -> int:
 
     sys.stderr.write(f"Found {len(sorted_cycles)} import cycles\n")
     _log_or_show_cycles(args.verbose, sorted_cycles)
+
+    if args.sarif:
+        _write_sarif(args.sarif, sorted_cycles)
 
     if args.graph:
         logger.info("Close cycle and make graph")
@@ -231,6 +240,17 @@ def _show_stats(
     logger.info("Number of found modules: %s", stats["num_of_modules"])
     logger.info("Number of imports: %s", stats["num_of_imports"])
     logger.info("Number of modules with imports: %s", stats["num_of_modules_with_imports"])
+
+
+def _write_sarif(
+    path: str,
+    sorted_cycles: Sequence[tuple[PyModule, ...]],
+) -> None:
+    sarif = json.dumps(make_sarif(sorted_cycles, __version__), indent=2) + "\n"
+    if path == "-":
+        sys.stdout.write(sarif)
+    else:
+        Path(path).write_text(sarif, encoding="utf-8")
 
 
 def _debug() -> bool:
