@@ -18,7 +18,10 @@ def make_sarif(
         locations = [
             {
                 "physicalLocation": {
-                    "artifactLocation": {"uri": os.path.relpath(cycle[0].path)},
+                    "artifactLocation": {
+                        "uri": os.path.relpath(cycle[0].path),
+                        "uriBaseId": "%SRCROOT%",
+                    },
                     "region": {"startLine": 1, "startColumn": 1},
                 },
             },
