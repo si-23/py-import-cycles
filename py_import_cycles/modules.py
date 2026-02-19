@@ -5,19 +5,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from enum import auto, Enum
 from pathlib import Path
-from string import ascii_letters
 from typing import Final
 
 
 def _parse_part(part: str) -> str:
-    # A variable name must start with a letter or the underscore character.
-    # A variable name cannot start with a number.
-    # A variable name can only contain alpha-numeric characters and underscores (A-z, 0-9, and _ )
     if not part:
         raise ValueError(part)
-    # TODO remove "*"; at the moment this is handled later in "make_module_from_name"
-    if part[0] not in ascii_letters + "_*":
-        raise ValueError(part[0])
     return part
 
 

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 
 - Add `uriBaseId` field to SARIF output.  It is required for relative `uri`.
+- Accept utf8 namespaces to modules and file names.
 
 ## [0.5.1]
 
