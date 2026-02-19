@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [NEXT]
+
+### Fixed
+
+- Add `uriBaseId` field to SARIF output.  It is required for relative `uri`.
+- Accept utf8 namespaces to modules and file names.
+
 ## [0.5.1]
 
 ### Fixed
