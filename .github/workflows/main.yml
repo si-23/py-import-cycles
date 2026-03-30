@@ -12,10 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
+      - uses: ./.github/actions/setup-python
         with:
           python-version: '3.12'
-          enable-cache: true
       - name: run bandit
         run: >-
           uv run bandit --recursive --severity-level=medium py_import_cycles/ tests/
@@ -24,10 +23,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
+      - uses: ./.github/actions/setup-python
         with:
           python-version: '3.12'
-          enable-cache: true
       - name: run black
         run: uv run black --check --diff py_import_cycles/ tests/
 
@@ -35,10 +33,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
+      - uses: ./.github/actions/setup-python
         with:
           python-version: '3.12'
-          enable-cache: true
       - name: run isort
         run: uv run isort --check-only --diff py_import_cycles/ tests/
 
@@ -46,10 +43,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
+      - uses: ./.github/actions/setup-python
         with:
           python-version: '3.12'
-          enable-cache: true
       - name: run mypy
         run: uv run mypy py_import_cycles/ tests/
 
@@ -57,10 +53,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
+      - uses: ./.github/actions/setup-python
         with:
           python-version: '3.12'
-          enable-cache: true
       - name: run pylint
         run: uv run pylint --jobs=4 py_import_cycles/ tests/
 
@@ -68,10 +63,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
+      - uses: ./.github/actions/setup-python
         with:
           python-version: '3.12'
-          enable-cache: true
       - name: run pytest
         run: uv run pytest .
 
@@ -79,9 +73,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v7
+      - uses: ./.github/actions/setup-python
         with:
           python-version: '3.12'
-          enable-cache: true
       - name: run e2e tests
         run: ./scripts/run-e2e-tests
