@@ -36,6 +36,9 @@ line_length = 100
 [tool.black]
 line-length = 100
 
+[tool.hatch.build.targets.sdist]
+exclude = ["build", "outputs"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
