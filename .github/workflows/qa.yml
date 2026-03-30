@@ -1,4 +1,4 @@
-name: main
+name: qa
 
 on:
   push:
@@ -58,23 +58,3 @@ jobs:
           python-version: '3.12'
       - name: run pylint
         run: uv run pylint --jobs=4 py_import_cycles/ tests/
-
-  pytest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-python
-        with:
-          python-version: '3.12'
-      - name: run pytest
-        run: uv run pytest .
-
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-python
-        with:
-          python-version: '3.12'
-      - name: run e2e tests
-        run: ./scripts/run-e2e-tests
