@@ -127,72 +127,42 @@ parse_options() {
     readonly RUN_CLEAN RUN_UNIT_TESTS RUN_CHECK_FORMAT RUN_MYPY RUN_PYLINT RUN_BANDIT RUN_E2E RUN_FORMAT RUN_DOCUMENTATION JOBS
 }
 
-run_pipenv() {
-    PIPENV_CACHE_DIR="$(pwd)/.cache" \
-    PIPENV_VENV_IN_PROJECT=true \
-    PIPENV_NOSPIN=true \
-    PIPENV_HIDE_EMOJIS=true \
-    PIPENV_NO_INHERIT=true \
-    PIPENV_PIPFILE="$(pwd)/Pipfile" \
-    PIPENV_IGNORE_VIRTUALENVS=1 \
-        pipenv "$@"
-}
-
-setup_venv() {
-    test "${SETUP_VENV_RAN}" = "yes" && return
-    # --quiet doesn't really work, see https://github.com/pypa/pipenv/issues/5037, but redirecting
-    # stdout is OK, errors go to stderr, and so do the initial venv creation messages.
-    run_pipenv sync --dev >/dev/null
-    run_pipenv clean
-    # poor man's "activate", but without any danger of naming clashes
-    PATH="$(pwd)/.venv/bin:$PATH"
-    hash -r
-    SETUP_VENV_RAN=yes
-}
-
 run_clean() {
     rm -rf .cache .mypy_cache .pytest_cache .venv ./*.egg-info build
     find py_import_cycles tests -type d -name __pycache__ -print0 | xargs --null --no-run-if-empty rm -rf
 }
 
 run_unit_tests() {
-    setup_venv
-    pytest
+    uv run pytest
 }
 
 run_check_format() {
-    setup_venv
-    black --config pyproject.toml --check --diff py_import_cycles tests
-    isort --settings-path pyproject.toml --check-only --diff py_import_cycles tests
+    uv run black --config pyproject.toml --check --diff py_import_cycles tests
+    uv run isort --settings-path pyproject.toml --check-only --diff py_import_cycles tests
 }
 
 run_mypy() {
-    setup_venv
-    mypy py_import_cycles tests
+    uv run mypy py_import_cycles tests
 }
 
 run_pylint() {
-    setup_venv
-    PYTHONPATH=. pylint --jobs="${JOBS}" py_import_cycles tests
+    uv run pylint --jobs="${JOBS}" py_import_cycles tests
 }
 
 run_bandit() {
-    setup_venv
     # We would like to put everything into pyproject.toml, so running just "bandit" would do the
     # right thing. But bandit is totally obscure & complicated regarding configuration, see several
     # issues like https://github.com/PyCQA/bandit/issues/606.  :-/
-    bandit --configfile=pyproject.toml --quiet --recursive --severity-level=medium py_import_cycles tests
+    uv run bandit --configfile=pyproject.toml --quiet --recursive --severity-level=medium py_import_cycles tests
 }
 
 run_e2e() {
-    setup_venv
     ./scripts/run-e2e-tests
 }
 
 run_format() {
-    setup_venv
-    black --config pyproject.toml py_import_cycles tests
-    isort --settings-path pyproject.toml py_import_cycles tests
+    uv run black --config pyproject.toml py_import_cycles tests
+    uv run isort --settings-path pyproject.toml py_import_cycles tests
 }
 
 run_documentation() {
