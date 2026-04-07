@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 
-from py_import_cycles.tarjan import (
-    strongly_connected_components as scc,  # pylint: disable=import-error
-)
+from py_import_cycles.tarjan import tarjan
 
 
 def test_empty() -> None:
-    assert not scc({})
+    assert not list(tarjan({}))
 
 
 def test_tree() -> None:
@@ -19,32 +17,7 @@ def test_tree() -> None:
         2: [21, 22, 23],
         3: [31, 32, 33],
     }
-    assert sorted(scc(graph)) == [
-        (1,),
-        (2,),
-        (3,),
-        (11,),
-        (12,),
-        (13,),
-        (21,),
-        (22,),
-        (23,),
-        (31,),
-        (32,),
-        (33,),
-        (111,),
-        (112,),
-        (113,),
-        (121,),
-        (122,),
-        (123,),
-        (131,),
-        (132,),
-        (133,),
-        (1111,),
-        (1112,),
-        (1113,),
-    ]
+    assert sorted(tarjan(graph)) == []
 
 
 def test_dag() -> None:
@@ -55,18 +28,7 @@ def test_dag() -> None:
         121: [111, 112],
         2: [21, 22],
     }
-    assert sorted(scc(graph)) == [
-        (1,),
-        (2,),
-        (11,),
-        (12,),
-        (21,),
-        (22,),
-        (111,),
-        (112,),
-        (121,),
-        (122,),
-    ]
+    assert sorted(tarjan(graph)) == []
 
 
 def test_graph_with_one_cycles() -> None:
@@ -76,14 +38,8 @@ def test_graph_with_one_cycles() -> None:
         111: [1111, 1112, 1],
         12: [121, 122, 111],
     }
-    assert sorted(scc(graph)) == [
-        (12, 111, 11, 1),
-        (13,),
-        (112,),
-        (121,),
-        (122,),
-        (1111,),
-        (1112,),
+    assert sorted(tarjan(graph)) == [
+        (1, 11, 12, 111),
     ]
 
 
@@ -102,12 +58,8 @@ def test_graph_with_more_cycles() -> None:
         333: [31],
         31: [3],
     }
-    assert sorted(scc(graph)) == [
-        (12,),
-        (21,),
-        (32,),
-        (112, 111, 11, 1),
-        (221,),
-        (223, 222, 22, 2),
-        (333, 33, 31, 3),
+    assert sorted(tarjan(graph)) == [
+        (2, 222, 22, 223),
+        (33, 3, 333, 31),
+        (112, 1, 11, 111),
     ]

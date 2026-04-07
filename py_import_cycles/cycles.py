@@ -6,7 +6,7 @@ from typing import Literal
 from .dfs import depth_first_search
 from .johnson import johnson
 from .modules import PyModule
-from .tarjan import strongly_connected_components
+from .tarjan import tarjan
 
 
 def detect_cycles(
@@ -17,7 +17,7 @@ def detect_cycles(
     if strategy == "dfs":
         return depth_first_search(graph)
     if strategy == "tarjan":
-        return (scc for scc in strongly_connected_components(graph) if len(scc) > 1)
+        return tarjan(graph)
     if strategy == "johnson":
         return johnson(length_bound, graph)
     raise NotImplementedError()
