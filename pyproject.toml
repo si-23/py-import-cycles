@@ -1,3 +1,28 @@
+[project]
+name = "py_import_cycles"
+version = "0.5.2"
+description = "Detect import cycles in Python projects"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Simon Jess", email = "simon86betz@yahoo.de" }]
+requires-python = ">=3.12"
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = ["graphviz", "networkx"]
+
+[project.scripts]
+py_import_cycles = "py_import_cycles.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/si-23/py-import-cycles"
+
+[dependency-groups]
+dev = ["bandit", "black", "isort", "mypy", "pylint", "pytest"]
+
 [tool.isort]
 # configuration options compatible with black
 multi_line_output = 3
@@ -10,3 +35,10 @@ line_length = 100
 
 [tool.black]
 line-length = 100
+
+[tool.hatch.build.targets.sdist]
+exclude = ["build", "outputs"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

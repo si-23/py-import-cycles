@@ -1,0 +1,70 @@
+name: qa
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+
+jobs:
+  bandit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python
+        with:
+          python-version: '3.12'
+      - name: run bandit
+        run: >-
+          uv run bandit --recursive --severity-level=medium py_import_cycles/ tests/
+
+  black:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python
+        with:
+          python-version: '3.12'
+      - name: run black
+        run: uv run black --check --diff py_import_cycles/ tests/
+
+  isort:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python
+        with:
+          python-version: '3.12'
+      - name: run isort
+        run: uv run isort --check-only --diff py_import_cycles/ tests/
+
+  mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python
+        with:
+          python-version: '3.12'
+      - name: run mypy
+        run: uv run mypy py_import_cycles/ tests/
+
+  pylint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python
+        with:
+          python-version: '3.12'
+      - name: run pylint
+        run: uv run pylint --jobs=4 py_import_cycles/ tests/
+
+  all-checks:
+    if: ${{ !cancelled() }}
+    needs: [bandit, black, isort, mypy, pylint]
+    runs-on: ubuntu-latest
+    steps:
+      - if: >-
+          ${{ contains(needs.*.result, 'failure')
+          || contains(needs.*.result, 'cancelled') }}
+        run: exit 1

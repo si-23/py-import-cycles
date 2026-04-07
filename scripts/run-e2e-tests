@@ -16,7 +16,7 @@ for project in ./e2e_test_inputs/*; do
         cat "$REPO_PATH/$project/skip_main"
     else
         echo "Test main..."
-        pipenv run python3 "$project/main.py" 1>/dev/null || { echo "Test $project failed (execution of main)." >&2; exit 1; }
+        uv run python3 "$project/main.py" 1>/dev/null || { echo "Test $project failed (execution of main)." >&2; exit 1; }
     fi
 
     num_cycles="$(cat "$REPO_PATH/$project"/found_cycles)"
