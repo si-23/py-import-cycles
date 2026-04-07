@@ -3,7 +3,7 @@
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Literal
 
-from .dfs import depth_first_search
+from .dfs import dfs
 from .johnson import johnson
 from .modules import PyModule
 from .tarjan import tarjan
@@ -15,7 +15,7 @@ def detect_cycles(
     graph: Mapping[PyModule, Sequence[PyModule]],
 ) -> Iterator[tuple[PyModule, ...]]:
     if strategy == "dfs":
-        return depth_first_search(graph)
+        return dfs(graph)
     if strategy == "tarjan":
         return tarjan(graph)
     if strategy == "johnson":

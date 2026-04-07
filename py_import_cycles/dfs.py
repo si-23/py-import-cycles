@@ -10,7 +10,7 @@ from .type_defs import Comparable
 T = TypeVar("T", bound=Comparable)
 
 
-def depth_first_search(graph: Mapping[T, Sequence[T]]) -> Iterator[tuple[T, ...]]:
+def dfs(graph: Mapping[T, Sequence[T]]) -> Iterator[tuple[T, ...]]:
     known_cycles: Set[tuple[T, ...]] = set()
 
     def _make_cycle(cyclic_edges: Sequence[tuple[T, T, str]]) -> tuple[T, ...]:
@@ -24,7 +24,7 @@ def depth_first_search(graph: Mapping[T, Sequence[T]]) -> Iterator[tuple[T, ...]
         # ]
         return tuple(cyclic_edges[0][:-1] + tuple(ce[1] for ce in cyclic_edges[1:-1]))
 
-    G = DiGraph([(v, w) for v, vertices, in graph.items() for w in vertices])
+    G = DiGraph([(v, w) for v, vertices in graph.items() for w in vertices])
     for vertex in sorted(graph):
         try:
             cyclic_edges = find_cycle(G, source=vertex, orientation="original")
