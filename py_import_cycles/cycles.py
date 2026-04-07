@@ -10,7 +10,7 @@ from .tarjan import tarjan
 
 
 def detect_cycles(
-    strategy: Literal["dfs", "tarjan"],
+    strategy: Literal["dfs", "tarjan", "johnson"],
     length_bound: int | None,
     graph: Mapping[PyModule, Sequence[PyModule]],
 ) -> Iterator[tuple[PyModule, ...]]:
