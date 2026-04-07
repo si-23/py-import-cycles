@@ -10,6 +10,9 @@ from .type_defs import Comparable
 T = TypeVar("T", bound=Comparable)
 
 
-def johnson(graph: Mapping[T, Sequence[T]]) -> Iterator[tuple[T, ...]]:
-    for sc in simple_cycles(DiGraph([(v, w) for v, vertices in graph.items() for w in vertices])):
+def johnson(length_bound: int | None, graph: Mapping[T, Sequence[T]]) -> Iterator[tuple[T, ...]]:
+    for sc in simple_cycles(
+        DiGraph([(v, w) for v, vertices in graph.items() for w in vertices]),
+        length_bound=length_bound,
+    ):
         yield tuple(sc)

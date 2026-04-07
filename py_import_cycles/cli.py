@@ -88,6 +88,11 @@ In the second case the relpath will be extended with the current working directo
         help="path-based strong component algorithm",
     )
     parser.add_argument(
+        "--length-bound",
+        type=int,
+        help="Length bound for cycles when Johnson is used",
+    )
+    parser.add_argument(
         "--threshold",
         type=int,
         default=0,
@@ -163,7 +168,7 @@ def main() -> int:
         )
 
     logger.info("Detect import cycles with strategy %s", args.strategy)
-    unsorted_cycles = set(detect_cycles(args.strategy, imports_by_py_module))
+    unsorted_cycles = set(detect_cycles(args.strategy, args.length_bound, imports_by_py_module))
 
     logger.info("Sort import cycles")
     sorted_cycles = sorted(unsorted_cycles, key=lambda t: (len(t), t[0].name))
