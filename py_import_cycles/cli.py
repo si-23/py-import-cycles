@@ -85,7 +85,10 @@ In the second case the relpath will be extended with the current working directo
         "--strategy",
         choices=["dfs", "tarjan", "johnson"],
         default="dfs",
-        help="path-based strong component algorithm",
+        help="""path-based strong component algorithm:
+- dfs (depth first search): find first cycles
+- tarjan: find all strongly connected components
+- johnson: find all simple cycles""",
     )
     parser.add_argument(
         "--length-bound",
