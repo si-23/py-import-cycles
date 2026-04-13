@@ -19,26 +19,6 @@ jobs:
         run: >-
           uv run bandit --recursive --severity-level=medium py_import_cycles/ tests/
 
-  black:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-python
-        with:
-          python-version: '3.12'
-      - name: run black
-        run: uv run black --check --diff py_import_cycles/ tests/
-
-  isort:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-python
-        with:
-          python-version: '3.12'
-      - name: run isort
-        run: uv run isort --check-only --diff py_import_cycles/ tests/
-
   mypy:
     runs-on: ubuntu-latest
     steps:
@@ -49,19 +29,29 @@ jobs:
       - name: run mypy
         run: uv run mypy py_import_cycles/ tests/
 
-  pylint:
+  ruff-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-python
         with:
           python-version: '3.12'
-      - name: run pylint
-        run: uv run pylint --jobs=4 py_import_cycles/ tests/
+      - name: run ruff check
+        run: uv run ruff check --config pyproject.toml --diff
+
+  ruff-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python
+        with:
+          python-version: '3.12'
+      - name: run ruff format
+        run: uv run ruff format --config pyproject.toml --check --diff
 
   all-checks:
     if: ${{ !cancelled() }}
-    needs: [bandit, black, isort, mypy, pylint]
+    needs: [bandit, mypy, ruff-check, ruff-format]
     runs-on: ubuntu-latest
     steps:
       - if: >-

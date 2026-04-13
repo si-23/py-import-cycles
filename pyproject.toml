@@ -21,20 +21,13 @@ py_import_cycles = "py_import_cycles.__main__:main"
 Homepage = "https://github.com/si-23/py-import-cycles"
 
 [dependency-groups]
-dev = ["bandit", "black", "isort", "mypy", "pylint", "pytest"]
+dev = ["bandit", "mypy", "pytest", "ruff"]
 
-[tool.isort]
-# configuration options compatible with black
-multi_line_output = 3
-include_trailing_comma = "True"
-force_grid_wrap = 0
-use_parentheses = "True"
-ensure_newline_before_comments = "True"
-order_by_type = "False"
-line_length = 100
-
-[tool.black]
+[tool.ruff]
 line-length = 100
+
+[tool.ruff.lint.per-file-ignores]
+"e2e_test_inputs/**/*.py" = ["F401"]
 
 [tool.hatch.build.targets.sdist]
 exclude = ["build", "outputs"]
