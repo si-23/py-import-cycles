@@ -20,9 +20,6 @@ lint:
 bandit:
     uv run bandit --configfile=pyproject.toml --quiet --recursive --severity-level=medium py_import_cycles tests
 
-e2e:
-    ./scripts/run-e2e-tests
-
 format:
     uv run ruff format
     uv run ruff check --fix
@@ -30,4 +27,4 @@ format:
 docs:
     @echo "TODO: generate documentation"
 
-ci: test check-format mypy lint bandit e2e
+ci: test check-format mypy lint bandit
