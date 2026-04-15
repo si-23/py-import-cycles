@@ -1,0 +1,41 @@
+---
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+
+  - repo: https://github.com/instrumentl/pre-commit-just
+    rev: 'v0.1'
+    hooks:
+      - id: format-justfile
+
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: unsupported
+        types: [python]
+
+      - id: ruff
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: unsupported
+        types: [python]
+
+      - id: mypy
+        name: mypy
+        entry: uv run mypy py_import_cycles/ tests/
+        language: unsupported
+        types: [python]
+        pass_filenames: false
+
+      - id: bandit
+        name: bandit
+        entry: >-
+          uv run bandit --configfile=pyproject.toml --quiet --recursive --severity-level=medium
+        language: unsupported
+        types: [python]

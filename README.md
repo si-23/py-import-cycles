@@ -12,7 +12,7 @@ It:
 
 It is conceived for having an indication whether Python packages may have structural weak points.
 
-`py-import-cycles` does not take any Python module finder or loader mechanisms into account. 
+`py-import-cycles` does not take any Python module finder or loader mechanisms into account.
 
 Installation
 ------------

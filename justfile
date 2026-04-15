@@ -1,3 +1,5 @@
+set positional-arguments := true
+
 default:
     @just --list
 
@@ -5,26 +7,20 @@ clean:
     rm -rf .cache .mypy_cache .pytest_cache .venv ./*.egg-info build
     find py_import_cycles tests -type d -name __pycache__ -print0 | xargs --null --no-run-if-empty rm -rf
 
-test:
-    uv run pytest
+test *args:
+    uv run pytest {{ args }}
 
-check-format:
-    uv run ruff format --check --diff
+lint *args:
+    pre-commit run {{ args }}
 
-mypy:
-    uv run mypy py_import_cycles tests
-
-lint:
-    uv run ruff check --diff
-
-bandit:
-    uv run bandit --configfile=pyproject.toml --quiet --recursive --severity-level=medium py_import_cycles tests
-
-format:
-    uv run ruff format
-    uv run ruff check --fix
+lint-all:
+    pre-commit run --all-files
 
 docs:
     @echo "TODO: generate documentation"
 
-ci: test check-format mypy lint bandit
+ci: lint-all test
+
+update:
+    uv sync
+    pre-commit autoupdate

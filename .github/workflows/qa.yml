@@ -8,53 +8,11 @@ on:
 
 
 jobs:
-  bandit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-python
-        with:
-          python-version: '3.12'
-      - name: run bandit
-        run: >-
-          uv run bandit --recursive --severity-level=medium py_import_cycles/ tests/
-
-  mypy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-python
-        with:
-          python-version: '3.12'
-      - name: run mypy
-        run: uv run mypy py_import_cycles/ tests/
-
-  ruff-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-python
-        with:
-          python-version: '3.12'
-      - name: run ruff check
-        run: uv run ruff check --config pyproject.toml --diff
-
-  ruff-format:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-python
-        with:
-          python-version: '3.12'
-      - name: run ruff format
-        run: uv run ruff format --config pyproject.toml --check --diff
-
   all-checks:
-    if: ${{ !cancelled() }}
-    needs: [bandit, mypy, ruff-check, ruff-format]
     runs-on: ubuntu-latest
     steps:
-      - if: >-
-          ${{ contains(needs.*.result, 'failure')
-          || contains(needs.*.result, 'cancelled') }}
-        run: exit 1
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-python
+        with:
+          python-version: '3.12'
+      - uses: pre-commit/action@v3.0.1

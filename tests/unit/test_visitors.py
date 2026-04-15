@@ -8,11 +8,11 @@ import pytest
 
 from py_import_cycles.modules import ModuleName, PyModule  # pylint: disable=import-error
 from py_import_cycles.visitors import (  # pylint: disable=import-error
+    NodeVisitorImports,
     _AbsImportFromStmt,
     _AbsImportStmt,
     _compute_py_module_from_abs_import_from_stmt,
     _RelImportFromStmt,
-    NodeVisitorImports,
 )
 
 
