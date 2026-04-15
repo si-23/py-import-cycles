@@ -1,6 +1,6 @@
 [project]
 name = "py_import_cycles"
-version = "0.6.0"
+version = "0.6.2"
 description = "Detect import cycles in Python projects"
 readme = "README.md"
 license = { text = "MIT" }
