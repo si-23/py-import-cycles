@@ -25,9 +25,8 @@ def _parse_arguments() -> argparse.Namespace:
         description="""description:
   Detect import cycles in Python projects.
 
-  py-import-cycles is conceived for having an indication whether Python packages may have
-  structural weak points and does not take any Python module finder or loader mechanisms into
-  account.
+  It indicates whether Python packages have structural weak points. Python's module finders
+  and loaders are not taken into account.
 
   Single import statements can be ignored via '# py-import-cycles: ignore':
 
@@ -49,71 +48,77 @@ def _parse_arguments() -> argparse.Namespace:
         "-d",
         "--debug",
         action="store_true",
-        help="show additional information for debug purposes",
+        help="log additional information for debugging",
     )
     parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
-        help="show cycles if some are found",
+        help="print the found cycles",
     )
     parser.add_argument(
         "--outputs-folder",
-        help="path to outputs folder. If not set $HOME/.local/py-import-cycles/outputs/ is used",
+        metavar="DIR",
+        help="folder for the log and graph files (default: ~/.local/py-import-cycles/outputs/)",
     )
     parser.add_argument(
         "--outputs-filename",
-        help="outputs filename. If not set the current timestamp is used",
+        metavar="NAME",
+        help="base name of the log and graph files (default: the current Unix timestamp)",
     )
     parser.add_argument(
         "--packages",
         nargs="+",
-        help="collect Python files from top-level packages",
+        metavar="PATH",
+        help="top-level package folders to collect Python modules from",
         default=[],
     )
     parser.add_argument(
         "--files",
         nargs="+",
-        help="""Directly pass files for cycle analysis.
-Note that a given file must match one of the following patterns:
-  - /path/to/repo::pkg/module.py (absolute)
-  - relpath/to/repo::pkg/module.py (relative)
-In the second case the relpath will be extended with the current working directory.""",
+        metavar="REPO::FILE",
+        help="""Python files to analyse, given as REPO::pkg/module.py, e.g.
+  - /path/to/repo::pkg/module.py
+  - relpath/to/repo::pkg/module.py
+a relative REPO is resolved against the current working directory""",
         default=[],
     )
     parser.add_argument(
         "--strategy",
         choices=["dfs", "tarjan", "johnson"],
         default="dfs",
-        help="""path-based strong component algorithm:
-- dfs (depth first search): find first cycles
-- tarjan: find all strongly connected components
-- johnson: find all simple cycles""",
+        help="""cycle detection algorithm (default: %(default)s):
+- dfs: one cycle per start module, found by depth-first search (fast)
+- tarjan: the strongly connected components with more than one module
+- johnson: all simple cycles (may take very long, see --length-bound)""",
     )
     parser.add_argument(
         "--length-bound",
         type=int,
-        help="Length bound for cycles when Johnson is used",
+        metavar="N",
+        help="maximum length of the cycles found by the johnson strategy (default: unbounded)",
     )
     parser.add_argument(
         "--threshold",
         type=int,
         default=0,
-        help="Tolerate a certain number of cycles, ie. an upper threshold.",
+        metavar="N",
+        help="exit with status 1 only if more than N cycles are found (default: %(default)s)",
     )
     parser.add_argument(
         "--graph",
         action="store_true",
-        help="create graphical representation",
+        help="write the cycles as Graphviz file to the outputs folder and open it",
     )
     parser.add_argument(
         "--stats",
         action="store_true",
-        help="show some statistics",
+        help="log the duration and the number of modules and imports",
     )
     parser.add_argument(
         "--sarif",
-        help="write SARIF output to the given file, or '-' for stdout",
+        metavar="FILE",
+        help="write the cycles as SARIF to FILE, or to stdout if FILE is '-'",
     )
 
     return parser.parse_args()
