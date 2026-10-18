@@ -26,42 +26,6 @@ T = TypeVar("T")
 TC = TypeVar("TC", bound=Comparable)
 
 
-def make_graph(filepath: Path, edges: Sequence[ImportEdge]) -> None:
-    sys.stderr.write(f"Write graph data to {filepath}\n")
-
-    if not edges:
-        logger.debug("No such edges for graph")
-        return
-
-    d = Digraph("unix", filename=filepath)
-
-    with d.subgraph() as ds:
-        for edge in edges:
-            ds.node(
-                str(edge.from_py_module.name),
-                shape=_get_shape(edge.from_py_module),
-            )
-
-            ds.node(
-                str(edge.to_py_module.name),
-                shape=_get_shape(edge.to_py_module),
-            )
-
-            ds.attr("edge", color=edge.edge_color)
-
-            if edge.title:
-                ds.edge(
-                    str(edge.from_py_module.name),
-                    str(edge.to_py_module.name),
-                    edge.title,
-                )
-            else:
-                ds.edge(str(edge.from_py_module.name), str(edge.to_py_module.name))
-
-    d.unflatten(stagger=50)
-    d.view()
-
-
 def _get_shape(py_module: PyModule) -> str:
     return "" if py_module.type is PyModuleType.MODULE else "box"
 
@@ -144,3 +108,39 @@ def make_cycle_edges(
             )
             start_py_module = next_py_module
     return sorted(edges)
+
+
+def make_graph(filepath: Path, edges: Sequence[ImportEdge]) -> None:
+    sys.stderr.write(f"Write graph data to {filepath}\n")
+
+    if not edges:
+        logger.debug("No such edges for graph")
+        return
+
+    d = Digraph("unix", filename=filepath)
+
+    with d.subgraph() as ds:
+        for edge in edges:
+            ds.node(
+                str(edge.from_py_module.name),
+                shape=_get_shape(edge.from_py_module),
+            )
+
+            ds.node(
+                str(edge.to_py_module.name),
+                shape=_get_shape(edge.to_py_module),
+            )
+
+            ds.attr("edge", color=edge.edge_color)
+
+            if edge.title:
+                ds.edge(
+                    str(edge.from_py_module.name),
+                    str(edge.to_py_module.name),
+                    edge.title,
+                )
+            else:
+                ds.edge(str(edge.from_py_module.name), str(edge.to_py_module.name))
+
+    d.unflatten(stagger=50)
+    d.view()
