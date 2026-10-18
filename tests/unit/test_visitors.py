@@ -257,6 +257,17 @@ def test_ignore_comment_in_last_line_keeps_import_in_first_line(tmp_path: Path) 
     assert _visit(tmp_path / "pkg", files, "pkg.a") == ["pkg.b"]
 
 
+def test_skip_file_that_cannot_be_read(tmp_path: Path) -> None:
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "a.py").write_text("import pkg.b\n")
+    (package / "b.py").touch()
+    py_modules_by_name = make_py_modules_by_name(scan_packages([package]))
+    (package / "a.py").unlink()
+
+    assert list(visit_py_module(py_modules_by_name, py_modules_by_name[ModuleName("pkg.a")])) == []
+
+
 def test_honour_coding_declaration(tmp_path: Path) -> None:
     code = "# -*- coding: latin-1 -*-\nimport pkg.b\ns = '\u00e9'\n"
     package = tmp_path / "pkg"
