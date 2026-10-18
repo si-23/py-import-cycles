@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import ast
+import itertools
 import sys
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -215,45 +216,59 @@ def _is_valid(base_py_module: PyModule, import_py_module: PyModule) -> bool:
     )
 
 
+def _visit_imports(path: Path) -> NodeVisitorImports | None:
+    try:
+        with open(path, encoding="utf-8") as f:
+            code = f.read()
+    except UnicodeDecodeError as e:
+        logger.debug("Cannot read python file %s: %s", path, e)
+        return None
+
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        logger.debug("Cannot visit python file %s: %s", path, e)
+        return None
+
+    visitor = NodeVisitorImports(code)
+    visitor.visit(tree)
+    return visitor
+
+
+def _compute_imported_py_modules(
+    py_modules_by_name: Mapping[ModuleName, PyModule],
+    base_py_module: PyModule,
+    visitor: NodeVisitorImports,
+) -> Iterator[PyModule]:
+    return itertools.chain(
+        *(
+            _compute_py_module_from_abs_import_stmt(py_modules_by_name, s)
+            for s in visitor.abs_import_stmts
+        ),
+        *(
+            _compute_py_module_from_abs_import_from_stmt(py_modules_by_name, s)
+            for s in visitor.abs_import_from_stmts
+        ),
+        *(
+            _compute_py_modules_from_rel_import_from_stmt(base_py_module, s)
+            for s in visitor.rel_import_from_stmts
+        ),
+    )
+
+
 def visit_py_module(
     py_modules_by_name: Mapping[ModuleName, PyModule], base_py_module: PyModule
 ) -> Iterator[PyModule]:
     if base_py_module.type is PyModuleType.NAMESPACE_PACKAGE:
         return
 
-    try:
-        with open(base_py_module.path, encoding="utf-8") as f:
-            code = f.read()
-    except UnicodeDecodeError as e:
-        logger.debug("Cannot read python file %s: %s", base_py_module.path, e)
+    if (visitor := _visit_imports(base_py_module.path)) is None:
         return
 
-    try:
-        tree = ast.parse(code)
-    except SyntaxError as e:
-        logger.debug("Cannot visit python file %s: %s", base_py_module.path, e)
-        return
-
-    visitor = NodeVisitorImports(code)
-    visitor.visit(tree)
-
-    for abs_import_stmt in visitor.abs_import_stmts:
-        for import_py_module in _compute_py_module_from_abs_import_stmt(
-            py_modules_by_name, abs_import_stmt
-        ):
-            if _is_valid(base_py_module, import_py_module):
-                yield import_py_module
-
-    for abs_import_from_stmt in visitor.abs_import_from_stmts:
-        for import_py_module in _compute_py_module_from_abs_import_from_stmt(
-            py_modules_by_name, abs_import_from_stmt
-        ):
-            if _is_valid(base_py_module, import_py_module):
-                yield import_py_module
-
-    for rel_import_from_stmt in visitor.rel_import_from_stmts:
-        for import_py_module in _compute_py_modules_from_rel_import_from_stmt(
-            base_py_module, rel_import_from_stmt
-        ):
-            if _is_valid(base_py_module, import_py_module):
-                yield import_py_module
+    yield from (
+        import_py_module
+        for import_py_module in _compute_imported_py_modules(
+            py_modules_by_name, base_py_module, visitor
+        )
+        if _is_valid(base_py_module, import_py_module)
+    )
