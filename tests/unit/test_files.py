@@ -4,7 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from py_import_cycles.files import parse_files, scan_packages
+from py_import_cycles.files import (
+    OutputsFilePaths,
+    get_outputs_file_paths,
+    parse_files,
+    scan_packages,
+)
 from py_import_cycles.modules import ModuleName, PyModule, PyModuleType
 
 
@@ -119,3 +124,24 @@ def test_parse_files_resolves_relative_root_against_cwd(root: Path) -> None:
     assert [m.path for m in parse_files(["repo::pkg/mod.py"], root)] == [
         root / "repo" / "pkg" / "mod.py"
     ]
+
+
+def test_skip_hidden_folders(root: Path) -> None:
+    projdir = root / "p"
+    setup_py_module(projdir / "p1.py")
+    setup_py_module(projdir / ".hidden" / "sub" / "p2.py")
+
+    assert [m.path for m in scan_packages([projdir]) if ".hidden" in m.path.parts] == []
+
+
+def test_outputs_file_paths(root: Path) -> None:
+    assert get_outputs_file_paths(root / "out", "run") == OutputsFilePaths(
+        log=root / "out" / "run.log",
+        graph=root / "out" / "run.gv",
+    )
+
+
+def test_outputs_folder_is_created(root: Path) -> None:
+    get_outputs_file_paths(root / "out", "run")
+
+    assert (root / "out").is_dir()
