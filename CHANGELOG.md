@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Resolve imports of scanned packages named like a standard library module.
 - Keep an import in the first line when the last line is an ignore comment.
 - Honour the ignore comment on multi-line imports of several names.
+- Prefer a regular package to a module of the same name in relative imports.
 
 ## [0.6.0]
 

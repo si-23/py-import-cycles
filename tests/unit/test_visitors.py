@@ -17,8 +17,7 @@ def _visit(package: Path, files: Mapping[str, str], module: str) -> Sequence[str
         (package / name).write_text(code)
     py_modules_by_name = {m.name: m for m in scan_packages([package])}
     return [
-        str(m.name)
-        for m in visit_py_module(py_modules_by_name, py_modules_by_name[ModuleName(module)])
+        str(m) for m in visit_py_module(py_modules_by_name, py_modules_by_name[ModuleName(module)])
     ]
 
 
@@ -41,7 +40,15 @@ def test_import_from_module_and_object(tmp_path: Path) -> None:
         "a/b/c.py": "",
         "mod.py": "from package.a.b import c, d\n",
     }
-    assert _visit(tmp_path / "package", files, "package.mod") == ["package.a.b.c", "package.a.b"]
+    assert _visit(tmp_path / "package", files, "package.mod") == [
+        "package.a.b.c",
+        "package.a.b.__init__",
+    ]
+
+
+def test_relative_import_prefers_package_to_module(tmp_path: Path) -> None:
+    files = {"x.py": "", "x/__init__.py": "", "a.py": "from . import x\n"}
+    assert _visit(tmp_path / "pkg", files, "pkg.a") == ["pkg.x.__init__"]
 
 
 def test_import_package_named_like_stdlib_module(tmp_path: Path) -> None:
