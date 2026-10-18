@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Model the imports Python executes, so every circular import Python raises at import time is
+  reported: an import adds edges to the parent packages it runs, a module's own parent package
+  counts when the module reads a name from it or imports it plainly, and relative imports
+  resolve like their absolute spelling. Namespace packages are no longer edges.
+
 ### Fixed
 
 - Skip `__pycache__` folders instead of reporting them as namespace packages.
