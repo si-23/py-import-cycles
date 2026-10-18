@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Honour the ignore comment on multi-line imports of several names.
 - Prefer a regular package to a module of the same name in relative imports.
 - Read source files in the encoding their coding declaration names.
+- Resolve relative imports of level two or more in a package's `__init__.py`.
 
 ## [0.6.0]
 
