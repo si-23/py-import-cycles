@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Keep an import in the first line when the last line is an ignore comment.
 - Honour the ignore comment on multi-line imports of several names.
 - Prefer a regular package to a module of the same name in relative imports.
+- Read source files in the encoding their coding declaration names.
 
 ## [0.6.0]
 

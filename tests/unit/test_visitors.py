@@ -11,14 +11,18 @@ from py_import_cycles.modules import ModuleName, PyModule
 from py_import_cycles.visitors import visit_py_module
 
 
-def _visit(package: Path, files: Mapping[str, str], module: str) -> Sequence[str]:
-    for name, code in files.items():
-        (package / name).parent.mkdir(parents=True, exist_ok=True)
-        (package / name).write_text(code)
+def _imports(package: Path, module: str) -> Sequence[str]:
     py_modules_by_name = {m.name: m for m in scan_packages([package])}
     return [
         str(m) for m in visit_py_module(py_modules_by_name, py_modules_by_name[ModuleName(module)])
     ]
+
+
+def _visit(package: Path, files: Mapping[str, str], module: str) -> Sequence[str]:
+    for name, code in files.items():
+        (package / name).parent.mkdir(parents=True, exist_ok=True)
+        (package / name).write_text(code)
+    return _imports(package, module)
 
 
 def test_import_from_modules(tmp_path: Path) -> None:
@@ -138,6 +142,15 @@ def test_ignore_comment_on_multiline_import_of_several_names(tmp_path: Path) -> 
 def test_ignore_comment_in_last_line_keeps_import_in_first_line(tmp_path: Path) -> None:
     files = {"b.py": "", "a.py": "import pkg.b\nx = 1\n# py-import-cycles: ignore"}
     assert _visit(tmp_path / "pkg", files, "pkg.a") == ["pkg.b"]
+
+
+def test_honour_coding_declaration(tmp_path: Path) -> None:
+    code = "# -*- coding: latin-1 -*-\nimport pkg.b\ns = '\u00e9'\n"
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "b.py").touch()
+    (package / "a.py").write_bytes(code.encode("latin-1"))
+    assert _imports(package, "pkg.a") == ["pkg.b"]
 
 
 def test_log_unresolvable_relative_import(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
