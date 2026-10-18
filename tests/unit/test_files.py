@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from py_import_cycles.files import scan_packages
-from py_import_cycles.modules import PyModule, PyModuleType
+from py_import_cycles.files import parse_files, scan_packages
+from py_import_cycles.modules import ModuleName, PyModule, PyModuleType
 
 
 @pytest.fixture(name="root")
@@ -94,3 +94,19 @@ def test_recurse_dirs(root: Path) -> None:
             if f.type is not PyModuleType.NAMESPACE_PACKAGE
         ]
     ) == {PyModule(package=p.parents[-7], path=p) for p in proj}
+
+
+def test_parse_files_with_absolute_root(root: Path) -> None:
+    setup_py_module(root / "repo" / "pkg" / "mod.py")
+
+    assert [m.name for m in parse_files([f"{root / 'repo'}::pkg/mod.py"], Path("/elsewhere"))] == [
+        ModuleName("pkg.mod")
+    ]
+
+
+def test_parse_files_resolves_relative_root_against_cwd(root: Path) -> None:
+    setup_py_module(root / "repo" / "pkg" / "mod.py")
+
+    assert [m.path for m in parse_files(["repo::pkg/mod.py"], root)] == [
+        root / "repo" / "pkg" / "mod.py"
+    ]
