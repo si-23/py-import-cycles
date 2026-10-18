@@ -4,7 +4,7 @@ import itertools
 import random
 import sys
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Literal, NamedTuple, TypeVar
 
@@ -70,16 +70,10 @@ def _get_shape(py_module: PyModule) -> str:
     return "" if py_module.type is PyModuleType.MODULE else "box"
 
 
-def pairwise(iterable: Iterable[T]) -> Iterator[tuple[T, T]]:
-    a, b = itertools.tee(iterable)
-    next(b, None)
-    return zip(a, b)
-
-
 def dedup_edges(cycles: Iterable[tuple[TC, ...]]) -> Sequence[tuple[TC, TC]]:
     edges: set[tuple[TC, TC]] = set()
     for cycle in cycles:
-        edges |= frozenset(pairwise(cycle))
+        edges |= frozenset(itertools.pairwise(cycle))
     return list(edges)
 
 
