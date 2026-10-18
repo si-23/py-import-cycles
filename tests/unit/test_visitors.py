@@ -246,6 +246,20 @@ def test_ignore_comment(tmp_path: Path, code: str) -> None:
     assert _visit(tmp_path / "pkg", files, "pkg.mod") == ["pkg.foo", "pkg.bar"]
 
 
+@pytest.mark.parametrize(
+    "comment, expected",
+    [
+        pytest.param("# py-import-cycles:ignore", [], id="no-space"),
+        pytest.param("#  py-import-cycles:   ignore", [], id="extra-spaces"),
+        pytest.param("# py-import-cycles: ignore because of the plugin API", [], id="reason"),
+        pytest.param("# py-import-cycles: ignored", ["pkg.b"], id="other-word"),
+    ],
+)
+def test_ignore_comment_spelling(tmp_path: Path, comment: str, expected: Sequence[str]) -> None:
+    files = {"b.py": "", "a.py": f"import pkg.b  {comment}\n"}
+    assert _visit(tmp_path / "pkg", files, "pkg.a") == expected
+
+
 def test_ignore_comment_on_multiline_import_of_several_names(tmp_path: Path) -> None:
     code = "from pkg import (  # py-import-cycles: ignore\n    b,\n    c,\n)\n"
     files = {"b.py": "", "c.py": "", "a.py": code}
