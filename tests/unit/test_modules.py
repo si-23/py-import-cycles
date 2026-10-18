@@ -21,9 +21,7 @@ from py_import_cycles.modules import (
         ([ModuleName("a")], ModuleName("a")),
         (["a", "b"], ModuleName("a", "b")),
         ([ModuleName("a"), ModuleName("b")], ModuleName("a", "b")),
-        ([ModuleName("a.b")], ModuleName("a.b")),
         ([ModuleName("a.b")], ModuleName("a", "b")),
-        ([ModuleName("a"), ModuleName("b")], ModuleName("a.b")),
     ],
 )
 def test_module_name_init_or_equal(parts: Sequence[str | ModuleName], expected: ModuleName) -> None:

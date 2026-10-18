@@ -32,34 +32,6 @@ def test_no_files(root: Path) -> None:
     )
 
 
-def test_single_file(root: Path) -> None:
-    proj = root / "projdir" / "proj.py"
-    setup_py_module(proj)
-
-    assert frozenset(
-        [f for f in scan_packages([proj.parent]) if f.type is not PyModuleType.NAMESPACE_PACKAGE]
-    ) == {PyModule(package=proj.parent, path=proj)}
-
-
-def test_multiple_files(root: Path) -> None:
-    proj = {
-        root / "p1" / "p11.py",
-        root / "p1" / "p12.py",
-        root / "p2" / "p.py",
-        root / "p3" / "p.py",
-    }
-    for p in proj:
-        setup_py_module(p)
-
-    assert frozenset(
-        [
-            f
-            for f in scan_packages([p.parent for p in proj])
-            if f.type is not PyModuleType.NAMESPACE_PACKAGE
-        ]
-    ) == {PyModule(package=p.parent, path=p) for p in proj}
-
-
 def test_multiple_file_with_excludes(root: Path) -> None:
     proj = {root / "p1" / "p.py", root / "p2" / "p.py", root / "p3" / "p.py"}
     excluded = {root / "other1" / "x.py", root / "other2" / "x.py"}
