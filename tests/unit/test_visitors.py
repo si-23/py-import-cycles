@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
+import logging
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
 
 from py_import_cycles.files import scan_packages
-from py_import_cycles.modules import ModuleName
+from py_import_cycles.modules import ModuleName, PyModule
 from py_import_cycles.visitors import visit_py_module
 
 
@@ -114,3 +115,14 @@ def test_ignore_comment(tmp_path: Path, code: str) -> None:
         "mod.py": code,
     }
     assert _visit(tmp_path / "pkg", files, "pkg.mod") == ["pkg.foo", "pkg.bar"]
+
+
+def test_log_unresolvable_relative_import(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    package = tmp_path / "package"
+    package.mkdir()
+    (package / "module.py").write_text("from . import missing\n")
+    caplog.set_level(logging.DEBUG, logger="py_import_cycles.log")
+
+    list(visit_py_module({}, PyModule(package, package / "module.py")))
+
+    assert str(package / "missing") in caplog.text

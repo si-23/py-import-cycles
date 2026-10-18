@@ -195,12 +195,11 @@ def _compute_py_modules_from_rel_import_from_stmt(
             logger.debug("Cannot make py module from %s", ref_path)
 
     for name in rel_import_from_stmt.names:
+        name_path = ref_path.joinpath(name)
         try:
-            yield _compute_py_module_from_rel_import_from_stmt(
-                base_py_module, ref_path.joinpath(name)
-            )
+            yield _compute_py_module_from_rel_import_from_stmt(base_py_module, name_path)
         except ValueError:
-            logger.debug("Cannot make py module from %s", ref_path)
+            logger.debug("Cannot make py module from %s", name_path)
 
 
 def _imports_own_package_init(base_py_module: PyModule, import_py_module: PyModule) -> bool:
