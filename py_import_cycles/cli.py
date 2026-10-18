@@ -14,7 +14,7 @@ from .cycles import make_strategies
 from .files import get_outputs_file_paths, parse_files, scan_packages
 from .graphs import make_graph
 from .log import logger, setup_logging
-from .modules import PyModule
+from .modules import PyModule, make_py_modules_by_name
 from .sarif import make_sarif
 from .visitors import visit_py_module
 
@@ -188,7 +188,7 @@ def _compute_imports(
     py_modules: Sequence[PyModule],
 ) -> Mapping[PyModule, Sequence[PyModule]]:
     logger.info("Visit and compute imports of py modules")
-    py_modules_by_name = {p.name: p for p in py_modules}
+    py_modules_by_name = make_py_modules_by_name(py_modules)
     return {
         py_module: imports
         for py_module in py_modules

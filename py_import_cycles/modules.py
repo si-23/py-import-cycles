@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import total_ordering
@@ -105,3 +105,14 @@ def make_py_module(package: Path, path: Path) -> PyModule:
         path=path,
         type=py_module_type,
     )
+
+
+_PRECEDENCE = {
+    PyModuleType.NAMESPACE_PACKAGE: 0,
+    PyModuleType.MODULE: 1,
+    PyModuleType.REGULAR_PACKAGE: 2,
+}
+
+
+def make_py_modules_by_name(py_modules: Iterable[PyModule]) -> Mapping[ModuleName, PyModule]:
+    return {m.name: m for m in sorted(py_modules, key=lambda m: _PRECEDENCE[m.type])}

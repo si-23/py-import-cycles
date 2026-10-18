@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 
 from py_import_cycles.files import scan_packages
-from py_import_cycles.modules import ModuleName, make_py_module
+from py_import_cycles.modules import ModuleName, make_py_module, make_py_modules_by_name
 from py_import_cycles.visitors import visit_py_module
 
 
 def _imports(package: Path, module: str) -> Sequence[str]:
-    py_modules_by_name = {m.name: m for m in scan_packages([package])}
+    py_modules_by_name = make_py_modules_by_name(scan_packages([package]))
     return [
         str(m) for m in visit_py_module(py_modules_by_name, py_modules_by_name[ModuleName(module)])
     ]
@@ -239,7 +239,7 @@ def test_skip_file_that_cannot_be_read(tmp_path: Path) -> None:
     package.mkdir()
     (package / "a.py").write_text("import pkg.b\n")
     (package / "b.py").touch()
-    py_modules_by_name = {m.name: m for m in scan_packages([package])}
+    py_modules_by_name = make_py_modules_by_name(scan_packages([package]))
     (package / "a.py").unlink()
 
     assert list(visit_py_module(py_modules_by_name, py_modules_by_name[ModuleName("pkg.a")])) == []
