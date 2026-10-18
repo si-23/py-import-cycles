@@ -9,7 +9,6 @@ def _repo_path() -> str:
 
 
 def _add_python_paths() -> None:
-    # make the repo directory available
     sys.path.insert(0, _repo_path())
 
 

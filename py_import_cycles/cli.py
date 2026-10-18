@@ -201,16 +201,6 @@ def main() -> int:
     return len(unsorted_cycles) > args.threshold
 
 
-#   .--helper--------------------------------------------------------------.
-#   |                    _          _                                      |
-#   |                   | |__   ___| |_ __   ___ _ __                      |
-#   |                   | '_ \ / _ \ | '_ \ / _ \ '__|                     |
-#   |                   | | | |  __/ | |_) |  __/ |                        |
-#   |                   |_| |_|\___|_| .__/ \___|_|                        |
-#   |                                |_|                                   |
-#   '----------------------------------------------------------------------'
-
-
 def _make_readable_imports_by_py_module(
     imports_by_py_module: Mapping[PyModule, Sequence[PyModule]],
 ) -> Iterator[str]:

@@ -33,8 +33,6 @@ def test_no_files(root: Path) -> None:
 
 
 def test_single_file(root: Path) -> None:
-    # The code requires at least an extra directory under the project
-    # root.  This is probably a bug.
     proj = root / "projdir" / "proj.py"
     setup_py_module(proj)
 
@@ -78,7 +76,6 @@ def test_multiple_file_with_excludes(root: Path) -> None:
 
 
 def test_ignore_files_without_py_extention(root: Path) -> None:
-    # Identifying the file by its extension only may be too naive.
     projdir = root / "p"
     proj = {projdir / "p1.py", projdir / "p2.py", projdir / "p3.py"}
     nopy = {projdir / "f1", projdir / "f2", projdir / "f3"}

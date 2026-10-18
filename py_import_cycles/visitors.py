@@ -10,7 +10,6 @@ from .log import logger
 from .modules import ModuleName, PyModule, PyModuleType
 
 STDLIB_OR_BUILTIN = sys.stdlib_module_names.union(sys.builtin_module_names)
-ImportSTMT = ast.Import | ast.ImportFrom
 
 
 @dataclass(frozen=True)
@@ -38,7 +37,6 @@ class _RelImportFromStmt:
 
 
 def _is_import_stmt(import_stmt: str, raw_node: str) -> bool:
-    # Either the args are the same or 'from a import (' vs 'from a import b'
     import_stmt_parts = [i.strip() for i in import_stmt.split()]
     raw_node_parts = [n.strip() for n in raw_node.split()]
     return import_stmt_parts == raw_node_parts or import_stmt_parts[:-1] == raw_node_parts[:-1]
@@ -49,14 +47,6 @@ def _has_ignore_comment(comments: Sequence[str]) -> bool:
 
 
 def _ignore(code_lines: Sequence[str], raw_node: str, lineno: int) -> bool:
-    # === 1 ===
-    # import foo.bar # linter-1: ... # py-import-cycles: ignore # linter-2: ...
-    # === 2 ===
-    # from foo (  # linter-1: ... # py-import-cycles: ignore # linter-2: ...
-    #     bar,
-    #     baz,
-    #     ...
-    # )
     try:
         import_stmt, *comments = code_lines[lineno - 1].split("#")
     except IndexError:
@@ -67,9 +57,6 @@ def _ignore(code_lines: Sequence[str], raw_node: str, lineno: int) -> bool:
         logger.debug("(same line) Found ignore statment for %r", raw_node)
         return True
 
-    # === 3 ===
-    # # linter-1: ... # py-import-cycles: ignore # linter-2: ...
-    # import foo.bar
     try:
         comment_line = code_lines[lineno - 2]
         import_stmt = code_lines[lineno - 1]
@@ -143,11 +130,6 @@ def _compute_py_module_from_module_name(
         return
 
     if module_name.parts[-1] == "*":
-        # Note:
-        # from a.b import *
-        # - If a.b is a pkg everything from a.b.__init__.py is loaded
-        # - If a.b is a mod everything from a.b.py is loaded
-        # -> Getting the "right" filepath is already handled below
         module_name = module_name.parent
 
     if import_py_module := py_modules_by_name.get(module_name):
@@ -157,10 +139,6 @@ def _compute_py_module_from_module_name(
 def _compute_py_module_from_abs_import_stmt(
     py_modules_by_name: Mapping[ModuleName, PyModule], abs_import_stmt: _AbsImportStmt
 ) -> Iterator[PyModule]:
-    # https://docs.python.org/3/reference/simple_stmts.html#import
-    # import foo                 # foo imported and bound locally
-    # import foo.bar.baz         # foo, foo.bar, and foo.bar.baz imported, foo bound locally
-    # import foo.bar.baz as fbb  # foo, foo.bar, and foo.bar.baz imported, foo.bar.baz bound as fbb
     for name in abs_import_stmt.names:
         yield from _compute_py_module_from_module_name(py_modules_by_name, ModuleName(name))
 
@@ -169,9 +147,6 @@ def _compute_py_module_from_abs_import_from_stmt(
     py_modules_by_name: Mapping[ModuleName, PyModule],
     abs_import_from_stmt: _AbsImportFromStmt,
 ) -> Iterator[PyModule]:
-    # https://docs.python.org/3/reference/simple_stmts.html#import
-    # from foo.bar import baz    # foo, foo.bar, and foo.bar.baz imported, foo.bar.baz bound as baz
-    # from foo import attr       # foo imported and foo.attr bound as attr
     anchor = ModuleName(abs_import_from_stmt.module)
     import_py_modules = [
         import_py_module
@@ -183,19 +158,14 @@ def _compute_py_module_from_abs_import_from_stmt(
     yield from import_py_modules
 
     if len(import_py_modules) != len(abs_import_from_stmt.names):
-        # from a.b import c, d
-        # Check if c and d are modules or objects. If c or d is not a module then we have to
-        # collect 'a.b'
         yield from _compute_py_module_from_module_name(py_modules_by_name, anchor)
 
 
 def _compute_ref_path_from_rel_import_from_stmt(
     base_py_module: PyModule, rel_import_from_stmt: _RelImportFromStmt
 ) -> Path:
-    # Note: PyModuleType.NAMESPACE_PACKAGE are already excluded when calling 'visit_py_module'
     if base_py_module.type is PyModuleType.MODULE:
         return base_py_module.path.parents[rel_import_from_stmt.level - 1]
-    # PyModuleType.REGULAR_PACKAGE
     if rel_import_from_stmt.level == 1:
         return base_py_module.path.parent
     return base_py_module.path.parents[rel_import_from_stmt.level - 2]
@@ -232,17 +202,18 @@ def _compute_py_modules_from_rel_import_from_stmt(
             logger.debug("Cannot make py module from %s", ref_path)
 
 
-def _is_valid(base_py_module: PyModule, import_py_module: PyModule) -> bool:
-    if base_py_module == import_py_module:
-        return False
-    if (
+def _imports_own_package_init(base_py_module: PyModule, import_py_module: PyModule) -> bool:
+    return (
         base_py_module.type is PyModuleType.MODULE
         and import_py_module.type is PyModuleType.REGULAR_PACKAGE
         and base_py_module.path.parent == import_py_module.path.parent
-    ):
-        # Do not take 'foo.bar.baz imports foo.bar.__init__' into account
-        return False
-    return True
+    )
+
+
+def _is_valid(base_py_module: PyModule, import_py_module: PyModule) -> bool:
+    return base_py_module != import_py_module and not _imports_own_package_init(
+        base_py_module, import_py_module
+    )
 
 
 def visit_py_module(

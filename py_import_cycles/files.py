@@ -23,14 +23,12 @@ def scan_packages(packages: Sequence[Path]) -> Iterator[PyModule]:
                 continue
 
             for file in files:
-                # May be a regular package or a module
                 file_path = root_path / file
                 try:
                     yield PyModule(package=package_path, path=file_path)
                 except ValueError:
                     pass
 
-            # May be a namespace package
             try:
                 yield PyModule(package=package_path, path=root_path)
             except ValueError:
