@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "main.py", line 3, in <module>
+    import pkg
+  File "pkg/__init__.py", line 3, in <module>
+    from pkg.mod import f
+  File "pkg/mod.py", line 3, in <module>
+    from pkg import HELPER
+ImportError: cannot import name 'HELPER' from partially initialized module 'pkg' (most likely due to a circular import) (pkg/__init__.py)

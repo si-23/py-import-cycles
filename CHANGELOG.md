@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 
 - Accept any whitespace after the colon of the ignore comment and a reason after it.
+- Model the imports Python executes, so every circular import Python raises at import time is
+  reported: an import adds edges to the parent packages it runs, a module's own parent package
+  counts when the module reads a name from it or imports it plainly, and relative imports
+  resolve like their absolute spelling. Namespace packages are no longer edges.
 
 ### Fixed
 

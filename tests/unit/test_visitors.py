@@ -33,6 +33,7 @@ def test_import_from_modules(tmp_path: Path) -> None:
         "mod.py": "from package.a.b import c, d\n",
     }
     assert _visit(tmp_path / "package", files, "package.mod") == [
+        "package.a.b.__init__",
         "package.a.b.c",
         "package.a.b.d",
     ]
@@ -45,8 +46,8 @@ def test_import_from_module_and_object(tmp_path: Path) -> None:
         "mod.py": "from package.a.b import c, d\n",
     }
     assert _visit(tmp_path / "package", files, "package.mod") == [
-        "package.a.b.c",
         "package.a.b.__init__",
+        "package.a.b.c",
     ]
 
 
@@ -80,8 +81,8 @@ def test_import_from_module_and_object(tmp_path: Path) -> None:
         pytest.param(
             {"ns/m.py": "", "a.py": "from . import ns\n"},
             "pkg.a",
-            ["pkg.ns/"],
-            id="relative-import-of-namespace-package",
+            [],
+            id="namespace-package-is-no-edge",
         ),
         pytest.param(
             {"a.py": "import os\nimport requests\n"},
@@ -119,6 +120,42 @@ def test_imports(
     tmp_path: Path, files: Mapping[str, str], module: str, expected: Sequence[str]
 ) -> None:
     assert _visit(tmp_path / "pkg", files, module) == expected
+
+
+@pytest.mark.parametrize(
+    "code, expected",
+    [
+        pytest.param("from pkg import HELPER\n", ["pkg.__init__"], id="read-name-from-own-package"),
+        pytest.param("from . import HELPER\n", ["pkg.__init__"], id="read-name-relative"),
+        pytest.param("from pkg import *\n", ["pkg.__init__"], id="star-import-own-package"),
+        pytest.param("import pkg\n", ["pkg.__init__"], id="import-own-package"),
+        pytest.param("from . import sib\n", ["pkg.sib"], id="import-sibling-relative"),
+        pytest.param("from pkg import sib\n", ["pkg.sib"], id="import-sibling-from-package"),
+        pytest.param("import pkg.sib\n", ["pkg.sib"], id="import-sibling"),
+        pytest.param(
+            "import pkg.a.b.c\n",
+            ["pkg.a.__init__", "pkg.a.b.__init__", "pkg.a.b.c"],
+            id="parent-packages-of-other-package",
+        ),
+        pytest.param(
+            "from pkg.a.b import c\n",
+            ["pkg.a.__init__", "pkg.a.b.__init__", "pkg.a.b.c"],
+            id="parent-packages-of-from-import",
+        ),
+    ],
+)
+def test_edges_of_module_in_regular_package(
+    tmp_path: Path, code: str, expected: Sequence[str]
+) -> None:
+    files = {
+        "__init__.py": "",
+        "sib.py": "",
+        "a/__init__.py": "",
+        "a/b/__init__.py": "",
+        "a/b/c.py": "",
+        "mod.py": code,
+    }
+    assert _visit(tmp_path / "pkg", files, "pkg.mod") == expected
 
 
 def test_relative_import_from_parent_in_package_init(tmp_path: Path) -> None:
