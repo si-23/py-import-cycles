@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from typing import Iterator, Mapping, Sequence, Set, TypeVar
+from collections.abc import Iterator, Mapping, Sequence
+from typing import TypeVar
 
 from networkx import DiGraph, find_cycle
 from networkx.exception import NetworkXNoCycle
@@ -19,7 +20,7 @@ def _make_cyclic_rotations(cycle: tuple[T, ...]) -> Sequence[tuple[T, ...]]:
 
 
 def dfs(graph: Mapping[T, Sequence[T]]) -> Iterator[tuple[T, ...]]:
-    known_cycles: Set[tuple[T, ...]] = set()
+    known_cycles: set[tuple[T, ...]] = set()
 
     G = DiGraph([(v, w) for v, vertices in graph.items() for w in vertices])
     for vertex in sorted(graph):

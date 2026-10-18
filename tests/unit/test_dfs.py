@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import Mapping, Sequence, Tuple
+from collections.abc import Mapping, Sequence
 
 import pytest
 
@@ -69,6 +69,6 @@ from py_import_cycles.dfs import dfs
 )
 def test_cycles_str(
     graph: Mapping[str, Sequence[str]],
-    cycles: Sequence[Tuple[str, ...]],
+    cycles: Sequence[tuple[str, ...]],
 ) -> None:
     assert list(dfs(graph)) == cycles
