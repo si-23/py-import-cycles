@@ -53,10 +53,6 @@ def badness(edges: Sequence[tuple[T, T]]) -> Mapping[tuple[T, T], float]:
 def normalize(value: float, lower: float, higher: float) -> float:
     if not lower <= value < higher:
         raise ValueError(f"{value} is not within bounds")
-    if higher < lower:
-        raise ValueError("bounds are reverted")
-    if higher == lower:
-        raise ValueError("must use different bounds")
     return (value - lower) / (higher - lower)
 
 
