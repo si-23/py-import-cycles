@@ -2,6 +2,7 @@
 
 import ast
 import itertools
+import re
 import tokenize
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -35,8 +36,11 @@ class _RelImportFromStmt:
         assert self.level >= 1
 
 
+IGNORE_COMMENT = re.compile(r"py-import-cycles:\s*ignore\b")
+
+
 def _has_ignore_comment(line: str) -> bool:
-    return "py-import-cycles: ignore" in [c.strip() for c in line.split("#")[1:]]
+    return any(IGNORE_COMMENT.match(c.strip()) for c in line.split("#")[1:])
 
 
 def _ignore(code_lines: Sequence[str], lineno: int) -> bool:

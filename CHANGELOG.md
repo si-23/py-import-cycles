@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Accept any whitespace after the colon of the ignore comment and a reason after it.
+
 ### Fixed
 
 - Skip `__pycache__` folders instead of reporting them as namespace packages.
