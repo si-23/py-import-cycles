@@ -139,7 +139,9 @@ def main() -> int:
         args.outputs_filename or "",
     )
 
-    setup_logging(outputs_filepaths.log, args.debug)
+    setup_logging(outputs_filepaths.log, logging.DEBUG if args.debug else logging.INFO)
+    if args.debug:
+        sys.stderr.write(f"Write log to {outputs_filepaths.log}\n")
 
     logger.info("Scan packages")
     py_modules = list(scan_packages(packages))
