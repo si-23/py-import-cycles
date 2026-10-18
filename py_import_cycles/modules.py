@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from enum import Enum, auto
+from functools import total_ordering
 from pathlib import Path
 from typing import Final
 
@@ -14,6 +15,7 @@ def _parse_part(part: str) -> str:
     return part
 
 
+@total_ordering
 class ModuleName:
     def __init__(self, *parts: str | ModuleName) -> None:
         self._parts: Final[tuple[str, ...]] = tuple(
@@ -37,17 +39,6 @@ class ModuleName:
         if not isinstance(other, ModuleName):
             return NotImplemented
         return self._parts < other._parts
-
-    def __gt__(self, other: object) -> bool:
-        if not isinstance(other, ModuleName):
-            return NotImplemented
-        return self._parts > other._parts
-
-    def __le__(self, other: object) -> bool:
-        return self < other or self == other
-
-    def __ge__(self, other: object) -> bool:
-        return self > other or self == other
 
     @property
     def parts(self) -> Sequence[str]:
@@ -88,6 +79,7 @@ def _compute_py_module_name(package: Path, path: Path, py_module_type: PyModuleT
     return module_name.joinname(*rel_path.with_suffix("").parts)
 
 
+@total_ordering
 class PyModule:
     def __init__(self, package: Path, path: Path) -> None:
         self.package: Final[Path] = package
@@ -116,14 +108,3 @@ class PyModule:
         if not isinstance(other, PyModule):
             return NotImplemented
         return self.name < other.name
-
-    def __gt__(self, other: object) -> bool:
-        if not isinstance(other, PyModule):
-            return NotImplemented
-        return self.name > other.name
-
-    def __le__(self, other: object) -> bool:
-        return self < other or self == other
-
-    def __ge__(self, other: object) -> bool:
-        return self > other or self == other
