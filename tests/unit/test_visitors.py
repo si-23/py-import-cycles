@@ -50,6 +50,77 @@ def test_import_from_module_and_object(tmp_path: Path) -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    "files, module, expected",
+    [
+        pytest.param(
+            {"b.py": "", "c.py": "", "a.py": "import pkg.b, pkg.c\n"},
+            "pkg.a",
+            ["pkg.b", "pkg.c"],
+            id="import-several-names",
+        ),
+        pytest.param(
+            {"sub/__init__.py": "", "a.py": "from pkg.sub import *\n"},
+            "pkg.a",
+            ["pkg.sub.__init__"],
+            id="star-import",
+        ),
+        pytest.param(
+            {"b.py": "", "a.py": "from .b import f\n"},
+            "pkg.a",
+            ["pkg.b"],
+            id="relative-import-of-object",
+        ),
+        pytest.param(
+            {"sub/__init__.py": "from . import m\n", "sub/m.py": ""},
+            "pkg.sub",
+            ["pkg.sub.m"],
+            id="relative-import-in-package-init",
+        ),
+        pytest.param(
+            {"ns/m.py": "", "a.py": "from . import ns\n"},
+            "pkg.a",
+            ["pkg.ns/"],
+            id="relative-import-of-namespace-package",
+        ),
+        pytest.param(
+            {"a.py": "import os\nimport requests\n"},
+            "pkg.a",
+            [],
+            id="unscanned-modules",
+        ),
+        pytest.param(
+            {"a.py": "import pkg.a\n"},
+            "pkg.a",
+            [],
+            id="self-import",
+        ),
+        pytest.param(
+            {"ns/m.py": "import pkg.b\n", "b.py": ""},
+            "pkg.ns",
+            [],
+            id="namespace-package-has-no-imports",
+        ),
+        pytest.param(
+            {"b.py": "", "a.py": "import pkg.b\ndef (:\n"},
+            "pkg.a",
+            [],
+            id="syntax-error",
+        ),
+        pytest.param(
+            {"b.py": "", "a.py": "# -*- coding: no-such-codec -*-\nimport pkg.b\n"},
+            "pkg.a",
+            [],
+            id="unknown-coding",
+        ),
+    ],
+)
+def test_imports(
+    tmp_path: Path, files: Mapping[str, str], module: str, expected: Sequence[str]
+) -> None:
+    assert _visit(tmp_path / "pkg", files, module) == expected
+
+
 def test_relative_import_from_parent_in_package_init(tmp_path: Path) -> None:
     files = {"sub/__init__.py": "from .. import b\n", "b.py": ""}
     assert _visit(tmp_path / "pkg", files, "pkg.sub") == ["pkg.b"]
