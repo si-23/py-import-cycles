@@ -3,6 +3,7 @@
 import ast
 import itertools
 import sys
+import tokenize
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -199,9 +200,9 @@ def _is_valid(base_py_module: PyModule, import_py_module: PyModule) -> bool:
 
 def _visit_imports(path: Path) -> NodeVisitorImports | None:
     try:
-        with open(path, encoding="utf-8") as f:
+        with tokenize.open(path) as f:
             code = f.read()
-    except UnicodeDecodeError as e:
+    except (SyntaxError, UnicodeDecodeError) as e:
         logger.debug("Cannot read python file %s: %s", path, e)
         return None
 
