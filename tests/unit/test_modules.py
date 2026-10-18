@@ -137,3 +137,14 @@ def test_py_module_str(
     tmp_path: Path, make_py_module: Callable[[Path], PyModule], expected: str
 ) -> None:
     assert str(make_py_module(tmp_path)) == expected
+
+
+def test_equal_py_modules_collapse_in_set(tmp_path: Path) -> None:
+    roots = [tmp_path / "root1", tmp_path / "root2"]
+    for root in roots:
+        (root / "package").mkdir(parents=True)
+        (root / "package" / "module.py").touch()
+
+    assert (
+        len({PyModule(package=r / "package", path=r / "package" / "module.py") for r in roots}) == 1
+    )
