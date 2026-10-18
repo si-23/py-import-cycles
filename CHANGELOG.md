@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Keep an import in the first line when the last line is an ignore comment.
 - Honour the ignore comment on multi-line imports of several names.
 - Read source files in the encoding their coding declaration names.
+- Skip files that cannot be read instead of aborting the run.
 
 ## [0.6.0]
 

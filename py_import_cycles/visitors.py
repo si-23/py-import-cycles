@@ -202,7 +202,7 @@ def _visit_imports(path: Path) -> NodeVisitorImports | None:
     try:
         with tokenize.open(path) as f:
             code = f.read()
-    except (SyntaxError, UnicodeDecodeError) as e:
+    except (OSError, SyntaxError, UnicodeDecodeError) as e:
         logger.debug("Cannot read python file %s: %s", path, e)
         return None
 
