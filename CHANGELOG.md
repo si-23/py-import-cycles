@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Skip `__pycache__` folders instead of reporting them as namespace packages.
 - Log at level INFO without `--debug`, so `--stats` reaches the log file.
 - Keep an import in the first line when the last line is an ignore comment.
+- Honour the ignore comment on multi-line imports of several names.
 
 ## [0.6.0]
 

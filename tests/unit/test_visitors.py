@@ -117,6 +117,12 @@ def test_ignore_comment(tmp_path: Path, code: str) -> None:
     assert _visit(tmp_path / "pkg", files, "pkg.mod") == ["pkg.foo", "pkg.bar"]
 
 
+def test_ignore_comment_on_multiline_import_of_several_names(tmp_path: Path) -> None:
+    code = "from pkg import (  # py-import-cycles: ignore\n    b,\n    c,\n)\n"
+    files = {"b.py": "", "c.py": "", "a.py": code}
+    assert _visit(tmp_path / "pkg", files, "pkg.a") == []
+
+
 def test_ignore_comment_in_last_line_keeps_import_in_first_line(tmp_path: Path) -> None:
     files = {"b.py": "", "a.py": "import pkg.b\nx = 1\n# py-import-cycles: ignore"}
     assert _visit(tmp_path / "pkg", files, "pkg.a") == ["pkg.b"]
