@@ -44,6 +44,11 @@ def test_import_from_module_and_object(tmp_path: Path) -> None:
     assert _visit(tmp_path / "package", files, "package.mod") == ["package.a.b.c", "package.a.b"]
 
 
+def test_import_package_named_like_stdlib_module(tmp_path: Path) -> None:
+    files = {"a.py": "import email.b\n", "b.py": ""}
+    assert _visit(tmp_path / "email", files, "email.a") == ["email.b"]
+
+
 @pytest.mark.parametrize(
     "code",
     [

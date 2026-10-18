@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - Skip `__pycache__` folders instead of reporting them as namespace packages.
 - Log at level INFO without `--debug`, so `--stats` reaches the log file.
+- Resolve imports of scanned packages named like a standard library module.
 
 ## [0.6.0]
 

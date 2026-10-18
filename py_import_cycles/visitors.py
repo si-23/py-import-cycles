@@ -2,15 +2,12 @@
 
 import ast
 import itertools
-import sys
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from .log import logger
 from .modules import ModuleName, PyModule, PyModuleType
-
-STDLIB_OR_BUILTIN = sys.stdlib_module_names.union(sys.builtin_module_names)
 
 
 @dataclass(frozen=True)
@@ -127,7 +124,7 @@ class NodeVisitorImports(ast.NodeVisitor):
 def _compute_py_module_from_module_name(
     py_modules_by_name: Mapping[ModuleName, PyModule], module_name: ModuleName
 ) -> Iterator[PyModule]:
-    if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
+    if not module_name.parts:
         return
 
     if module_name.parts[-1] == "*":
