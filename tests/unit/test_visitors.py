@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from py_import_cycles.modules import ModuleName, PyModule  # pylint: disable=import-error
-from py_import_cycles.visitors import (  # pylint: disable=import-error
+from py_import_cycles.modules import ModuleName, PyModule
+from py_import_cycles.visitors import (
     NodeVisitorImports,
     _AbsImportFromStmt,
     _AbsImportStmt,

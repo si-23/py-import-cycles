@@ -51,7 +51,6 @@ def make_sarif(
 
     return {
         "$schema": (
-            # pylint: disable=line-too-long
             "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json"
         ),
         "version": "2.1.0",
