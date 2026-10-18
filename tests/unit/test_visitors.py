@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from py_import_cycles.files import scan_packages
-from py_import_cycles.modules import ModuleName, PyModule, make_py_modules_by_name
+from py_import_cycles.modules import ModuleName, make_py_modules_by_name
 from py_import_cycles.visitors import visit_py_module
 
 
@@ -229,12 +229,11 @@ def test_honour_coding_declaration(tmp_path: Path) -> None:
     assert _imports(package, "pkg.a") == ["pkg.b"]
 
 
-def test_log_unresolvable_relative_import(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    package = tmp_path / "package"
-    package.mkdir()
-    (package / "module.py").write_text("from . import missing\n")
+def test_log_relative_import_beyond_top_level_package(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     caplog.set_level(logging.DEBUG, logger="py_import_cycles.log")
 
-    list(visit_py_module({}, PyModule(package, package / "module.py")))
+    _visit(tmp_path / "pkg", {"a.py": "from ... import x\n"}, "pkg.a")
 
-    assert str(package / "missing") in caplog.text
+    assert "Cannot resolve relative import of level 3 in pkg.a" in caplog.text
