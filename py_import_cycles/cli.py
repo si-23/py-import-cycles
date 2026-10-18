@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import __version__
-from .cycles import detect_cycles
+from .cycles import make_strategies
 from .files import get_outputs_file_paths, parse_files, scan_packages
 from .graphs import make_graph
 from .log import logger, setup_logging
@@ -81,7 +81,7 @@ In the second case the relpath will be extended with the current working directo
     )
     parser.add_argument(
         "--strategy",
-        choices=["dfs", "tarjan", "johnson"],
+        choices=list(make_strategies(None)),
         default="dfs",
         help="""path-based strong component algorithm:
 - dfs (depth first search): find first cycles
@@ -208,7 +208,8 @@ def main() -> int:
     )
 
     logger.info("Detect import cycles with strategy %s", args.strategy)
-    unsorted_cycles = set(detect_cycles(args.strategy, args.length_bound, imports_by_py_module))
+    strategy = make_strategies(args.length_bound)[args.strategy]
+    unsorted_cycles = set(strategy.detect_cycles(imports_by_py_module))
 
     logger.info("Sort import cycles")
     sorted_cycles = sorted(unsorted_cycles, key=lambda t: (len(t), t[0].name))
@@ -225,8 +226,7 @@ def main() -> int:
         logger.info("Close cycle and make graph")
         make_graph(
             outputs_filepaths.graph,
-            args.strategy,
-            [((cycle[-1],) + cycle) for cycle in sorted_cycles],
+            strategy.make_edges([((cycle[-1],) + cycle) for cycle in sorted_cycles]),
         )
 
     if args.stats:

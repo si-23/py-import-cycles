@@ -6,7 +6,7 @@ import sys
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Literal, NamedTuple, TypeVar
+from typing import NamedTuple, TypeVar
 
 from graphviz import Digraph
 
@@ -26,14 +26,10 @@ T = TypeVar("T")
 TC = TypeVar("TC", bound=Comparable)
 
 
-def make_graph(
-    filepath: Path,
-    opt_strategy: Literal["dfs", "tarjan"],
-    import_cycles: Sequence[tuple[PyModule, ...]],
-) -> None:
+def make_graph(filepath: Path, edges: Sequence[ImportEdge]) -> None:
     sys.stderr.write(f"Write graph data to {filepath}\n")
 
-    if not (edges := _make_edges(opt_strategy, import_cycles)):
+    if not edges:
         logger.debug("No such edges for graph")
         return
 
@@ -104,16 +100,7 @@ def _rgb(red: int, green: int, blue: int) -> str:
     return f"#{red:02x}{green:02x}{blue:02x}"
 
 
-def _make_edges(
-    opt_strategy: Literal["dfs", "tarjan"],
-    import_cycles: Sequence[tuple[PyModule, ...]],
-) -> Sequence[ImportEdge]:
-    if opt_strategy == "dfs":
-        return _make_dfs_import_edges(import_cycles)
-    return _make_only_cycles_edges(import_cycles)
-
-
-def _make_dfs_import_edges(
+def make_dfs_edges(
     cycles: Sequence[tuple[PyModule, ...]],
 ) -> Sequence[ImportEdge]:
     edges = badness(dedup_edges(cycles))
@@ -134,7 +121,7 @@ def _make_dfs_import_edges(
     return out
 
 
-def _make_only_cycles_edges(
+def make_cycle_edges(
     import_cycles: Sequence[tuple[PyModule, ...]],
 ) -> Sequence[ImportEdge]:
     edges: set[ImportEdge] = set()
