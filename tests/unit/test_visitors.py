@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import ast
+import logging
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from py_import_cycles.visitors import (
     _AbsImportStmt,
     _compute_py_module_from_abs_import_from_stmt,
     _RelImportFromStmt,
+    visit_py_module,
 )
 
 
@@ -136,3 +138,14 @@ def test_linter_statement(code: str) -> None:
     assert visitor.abs_import_stmts == [_AbsImportStmt(names=("foo",))]
     assert not visitor.abs_import_from_stmts
     assert visitor.rel_import_from_stmts == [_RelImportFromStmt(level=1, module="", names=("bar",))]
+
+
+def test_log_unresolvable_relative_import(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    package = tmp_path / "package"
+    package.mkdir()
+    (package / "module.py").write_text("from . import missing\n")
+    caplog.set_level(logging.DEBUG, logger="py_import_cycles.log")
+
+    list(visit_py_module({}, PyModule(package, package / "module.py")))
+
+    assert str(package / "missing") in caplog.text
