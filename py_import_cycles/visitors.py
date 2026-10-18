@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .log import logger
-from .modules import ModuleName, PyModule, PyModuleType, make_py_module
+from .modules import ModuleName, PyModule, PyModuleType
 
 
 @dataclass(frozen=True)
@@ -145,40 +145,27 @@ def _compute_py_module_from_abs_import_from_stmt(
         yield from _compute_py_module_from_module_name(py_modules_by_name, anchor)
 
 
-def _compute_ref_path_from_rel_import_from_stmt(
+def _package_name(py_module: PyModule) -> ModuleName:
+    if py_module.type is PyModuleType.REGULAR_PACKAGE:
+        return py_module.name
+    return py_module.name.parent
+
+
+def _make_abs_import_from_stmt(
     base_py_module: PyModule, rel_import_from_stmt: _RelImportFromStmt
-) -> Path:
-    return base_py_module.path.parents[rel_import_from_stmt.level - 1]
+) -> _AbsImportFromStmt | None:
+    package_parts = _package_name(base_py_module).parts
+    if rel_import_from_stmt.level > len(package_parts):
+        logger.debug(
+            "Cannot resolve relative import of level %s in %s",
+            rel_import_from_stmt.level,
+            base_py_module.name,
+        )
+        return None
 
-
-def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path: Path) -> PyModule:
-    if (init_file_path := path / "__init__.py").exists():
-        return make_py_module(base_py_module.package, init_file_path)
-    if (module_file_path := path.with_suffix(".py")).exists():
-        return make_py_module(base_py_module.package, module_file_path)
-    if path.is_dir():
-        return make_py_module(base_py_module.package, path)
-    raise ValueError(path)
-
-
-def _compute_py_modules_from_rel_import_from_stmt(
-    base_py_module: PyModule, rel_import_from_stmt: _RelImportFromStmt
-) -> Iterator[PyModule]:
-    ref_path = _compute_ref_path_from_rel_import_from_stmt(base_py_module, rel_import_from_stmt)
-
-    if rel_import_from_stmt.module:
-        ref_path = ref_path.joinpath(*ModuleName(rel_import_from_stmt.module).parts)
-        try:
-            yield _compute_py_module_from_rel_import_from_stmt(base_py_module, ref_path)
-        except ValueError:
-            logger.debug("Cannot make py module from %s", ref_path)
-
-    for name in rel_import_from_stmt.names:
-        name_path = ref_path.joinpath(name)
-        try:
-            yield _compute_py_module_from_rel_import_from_stmt(base_py_module, name_path)
-        except ValueError:
-            logger.debug("Cannot make py module from %s", name_path)
+    anchor = ModuleName(*package_parts[: len(package_parts) - rel_import_from_stmt.level + 1])
+    module = anchor.joinname(rel_import_from_stmt.module) if rel_import_from_stmt.module else anchor
+    return _AbsImportFromStmt(str(module), rel_import_from_stmt.names)
 
 
 def _imports_own_package_init(base_py_module: PyModule, import_py_module: PyModule) -> bool:
@@ -229,8 +216,9 @@ def _compute_imported_py_modules(
             for s in visitor.abs_import_from_stmts
         ),
         *(
-            _compute_py_modules_from_rel_import_from_stmt(base_py_module, s)
+            _compute_py_module_from_abs_import_from_stmt(py_modules_by_name, abs_stmt)
             for s in visitor.rel_import_from_stmts
+            if (abs_stmt := _make_abs_import_from_stmt(base_py_module, s))
         ),
     )
 
