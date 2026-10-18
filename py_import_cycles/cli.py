@@ -167,30 +167,21 @@ def _write_sarif(
         Path(path).write_text(sarif, encoding="utf-8")
 
 
-def main() -> int:
-    now = time.time()
-
-    args = _parse_arguments()
-
-    packages = [pp for p in args.packages if (pp := Path(p)).is_dir()]
-
-    outputs_filepaths = get_outputs_file_paths(
-        Path(args.outputs_folder) if args.outputs_folder else None,
-        args.outputs_filename or "",
-    )
-
-    setup_logging(outputs_filepaths.log, args.debug)
-
+def _collect_py_modules(packages: Sequence[str], files: Sequence[str]) -> Sequence[PyModule]:
     logger.info("Scan packages")
-    py_modules = list(scan_packages(packages))
-    if args.files:
+    py_modules = list(scan_packages([pp for p in packages if (pp := Path(p)).is_dir()]))
+    if files:
         logger.info("Parse files")
-        py_modules.extend(parse_files(args.files))
+        py_modules.extend(parse_files(files))
+    return py_modules
 
+
+def _compute_imports(
+    py_modules: Sequence[PyModule],
+) -> Mapping[PyModule, Sequence[PyModule]]:
     logger.info("Visit and compute imports of py modules")
     py_modules_by_name = {p.name: p for p in py_modules}
-
-    imports_by_py_module = {
+    return {
         py_module: imports
         for py_module in py_modules
         if (
@@ -201,6 +192,22 @@ def main() -> int:
             )
         )
     }
+
+
+def main() -> int:
+    now = time.time()
+
+    args = _parse_arguments()
+
+    outputs_filepaths = get_outputs_file_paths(
+        Path(args.outputs_folder) if args.outputs_folder else None,
+        args.outputs_filename or "",
+    )
+
+    setup_logging(outputs_filepaths.log, args.debug)
+
+    py_modules = _collect_py_modules(args.packages, args.files)
+    imports_by_py_module = _compute_imports(py_modules)
 
     logger.debug(
         "Imports of py modules:\n%s",
