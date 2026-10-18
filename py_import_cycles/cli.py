@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import sys
 import time
 from collections.abc import Iterator, Mapping, Sequence
@@ -209,7 +210,9 @@ def main() -> int:
         args.outputs_filename or "",
     )
 
-    setup_logging(outputs_filepaths.log, args.debug)
+    setup_logging(outputs_filepaths.log, logging.DEBUG if args.debug else logging.INFO)
+    if args.debug:
+        sys.stderr.write(f"Write log to {outputs_filepaths.log}\n")
 
     py_modules = _collect_py_modules(args.packages, args.files)
     imports_by_py_module = _compute_imports(py_modules)

@@ -63,3 +63,15 @@ def test_self(tmp_path: Path) -> None:
         run_tool(tmp_path, "--packages", str(REPO / "py_import_cycles"), "--strategy", "johnson")
         == "Found 0 import cycles"
     )
+
+
+def test_stats_are_logged(tmp_path: Path) -> None:
+    run_tool(
+        tmp_path,
+        "--packages",
+        str(REPO / "py_import_cycles"),
+        "--stats",
+        "--outputs-filename",
+        "run",
+    )
+    assert "Number of found modules" in (tmp_path / "run.log").read_text()
