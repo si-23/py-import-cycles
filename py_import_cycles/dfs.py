@@ -11,14 +11,6 @@ T = TypeVar("T", bound=Comparable)
 
 
 def _make_cycle(cyclic_edges: Sequence[tuple[T, T, str]]) -> tuple[T, ...]:
-    # find_cycle returns:
-    # [
-    #     (e0, e1, ORIENTATION),
-    #     (e1, e2, ORIENTATION),
-    #     ...
-    #     (eX-1, eX, ORIENTATION),
-    #     (eX, e0, ORIENTATION),
-    # ]
     return tuple(cyclic_edges[0][:-1] + tuple(ce[1] for ce in cyclic_edges[1:-1]))
 
 

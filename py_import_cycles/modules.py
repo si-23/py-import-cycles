@@ -15,8 +15,6 @@ def _parse_part(part: str) -> str:
 
 
 class ModuleName:
-    """This class is inspired by pathlib.Path"""
-
     def __init__(self, *parts: str | ModuleName) -> None:
         self._parts: Final[tuple[str, ...]] = tuple(
             _parse_part(entry)

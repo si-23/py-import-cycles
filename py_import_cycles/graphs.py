@@ -71,7 +71,6 @@ def _get_shape(py_module: PyModule) -> str:
 
 
 def pairwise(iterable: Iterable[T]) -> Iterator[tuple[T, T]]:
-    # pairwise('ABCDEFG') --> AB BC CD DE EF FG
     a, b = itertools.tee(iterable)
     next(b, None)
     return zip(a, b)
@@ -93,8 +92,6 @@ def count_degree(edges: Sequence[tuple[T, T]]) -> Mapping[T, int]:
 
 
 def badness(edges: Sequence[tuple[T, T]]) -> Mapping[tuple[T, T], float]:
-    # Get some idea of the badness of an edge by computing
-    # the average of the degrees of its vertices.
     degree = count_degree(edges)
     return {edge: 0.5 * (degree[edge[0]] + degree[edge[1]]) for edge in edges}
 
