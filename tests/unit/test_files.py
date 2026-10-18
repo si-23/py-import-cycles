@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from py_import_cycles.files import scan_packages
+from py_import_cycles.files import parse_files, scan_packages
 from py_import_cycles.modules import ModuleName, PyModule, PyModuleType
 
 
@@ -103,3 +103,19 @@ def test_ignore_pycache(root: Path) -> None:
     (projdir / "__pycache__" / "p1.cpython-312.pyc").touch()
 
     assert ModuleName("p", "__pycache__") not in {m.name for m in scan_packages([projdir])}
+
+
+def test_parse_files_with_absolute_root(root: Path) -> None:
+    setup_py_module(root / "repo" / "pkg" / "mod.py")
+
+    assert [m.name for m in parse_files([f"{root / 'repo'}::pkg/mod.py"], Path("/elsewhere"))] == [
+        ModuleName("pkg.mod")
+    ]
+
+
+def test_parse_files_resolves_relative_root_against_cwd(root: Path) -> None:
+    setup_py_module(root / "repo" / "pkg" / "mod.py")
+
+    assert [m.path for m in parse_files(["repo::pkg/mod.py"], root)] == [
+        root / "repo" / "pkg" / "mod.py"
+    ]

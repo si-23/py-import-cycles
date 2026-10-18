@@ -178,7 +178,7 @@ def _collect_py_modules(packages: Sequence[str], files: Sequence[str]) -> Sequen
     py_modules = list(scan_packages([pp for p in packages if (pp := Path(p)).is_dir()]))
     if files:
         logger.info("Parse files")
-        py_modules.extend(parse_files(files))
+        py_modules.extend(parse_files(files, Path.cwd()))
     return py_modules
 
 

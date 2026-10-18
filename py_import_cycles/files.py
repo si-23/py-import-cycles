@@ -35,8 +35,7 @@ def scan_packages(packages: Sequence[Path]) -> Iterator[PyModule]:
                 pass
 
 
-def parse_files(files: Sequence[str]) -> Iterator[PyModule]:
-    cwd = Path.cwd()
+def parse_files(files: Sequence[str], cwd: Path) -> Iterator[PyModule]:
     for file in files:
         raw_root_path, raw_rel_file_path = file.split("::", 1)
 
