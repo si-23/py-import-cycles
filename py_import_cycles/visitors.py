@@ -34,42 +34,19 @@ class _RelImportFromStmt:
         assert self.level >= 1
 
 
-def _is_import_stmt(import_stmt: str, raw_node: str) -> bool:
-    import_stmt_parts = [i.strip() for i in import_stmt.split()]
-    raw_node_parts = [n.strip() for n in raw_node.split()]
-    return import_stmt_parts == raw_node_parts or import_stmt_parts[:-1] == raw_node_parts[:-1]
+def _has_ignore_comment(line: str) -> bool:
+    return "py-import-cycles: ignore" in [c.strip() for c in line.split("#")[1:]]
 
 
-def _has_ignore_comment(comments: Sequence[str]) -> bool:
-    return "py-import-cycles: ignore" in [c.strip() for c in comments]
-
-
-def _ignore(code_lines: Sequence[str], raw_node: str, lineno: int) -> bool:
-    try:
-        import_stmt, *comments = code_lines[lineno - 1].split("#")
-    except IndexError:
-        import_stmt = ""
-        comments = []
-
-    if _is_import_stmt(import_stmt, raw_node) and _has_ignore_comment(comments):
-        logger.debug("(same line) Found ignore statment for %r", raw_node)
+def _ignore(code_lines: Sequence[str], lineno: int) -> bool:
+    if _has_ignore_comment(code_lines[lineno - 1]):
         return True
 
     if lineno < 2:
         return False
 
     comment_line = code_lines[lineno - 2]
-    import_stmt = code_lines[lineno - 1]
-
-    if (
-        _is_import_stmt(import_stmt, raw_node)
-        and comment_line.strip().startswith("#")
-        and _has_ignore_comment(comment_line.split("#")[1:])
-    ):
-        logger.debug("(above line) Found ignore statment for %r", raw_node)
-        return True
-
-    return False
+    return comment_line.strip().startswith("#") and _has_ignore_comment(comment_line)
 
 
 class NodeVisitorImports(ast.NodeVisitor):
@@ -91,8 +68,13 @@ class NodeVisitorImports(ast.NodeVisitor):
     def rel_import_from_stmts(self) -> Sequence[_RelImportFromStmt]:
         return self._rel_import_from_stmts
 
+    def _is_ignored(self, node: ast.Import | ast.ImportFrom) -> bool:
+        if ignored := _ignore(self._code_lines, node.lineno):
+            logger.debug("Found ignore comment for %r", ast.unparse(node))
+        return ignored
+
     def visit_Import(self, node: ast.Import) -> None:
-        if _ignore(self._code_lines, ast.unparse(node), node.lineno):
+        if self._is_ignored(node):
             return
         self._abs_import_stmts.append(
             _AbsImportStmt(
@@ -101,7 +83,7 @@ class NodeVisitorImports(ast.NodeVisitor):
         )
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        if _ignore(self._code_lines, ast.unparse(node), node.lineno):
+        if self._is_ignored(node):
             return
         if node.level >= 1:
             self._rel_import_from_stmts.append(

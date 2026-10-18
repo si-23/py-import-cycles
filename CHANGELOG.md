@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Log at level INFO without `--debug`, so `--stats` reaches the log file.
 - Resolve imports of scanned packages named like a standard library module.
 - Keep an import in the first line when the last line is an ignore comment.
+- Honour the ignore comment on multi-line imports of several names.
 
 ## [0.6.0]
 
