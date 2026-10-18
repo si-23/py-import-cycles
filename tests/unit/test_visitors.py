@@ -1,71 +1,46 @@
 #!/usr/bin/env python3
 
-import ast
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
 
-from py_import_cycles.modules import ModuleName, PyModule
-from py_import_cycles.visitors import (
-    NodeVisitorImports,
-    _AbsImportFromStmt,
-    _AbsImportStmt,
-    _compute_py_module_from_abs_import_from_stmt,
-    _RelImportFromStmt,
-)
+from py_import_cycles.files import scan_packages
+from py_import_cycles.modules import ModuleName
+from py_import_cycles.visitors import visit_py_module
 
 
-def test__compute_py_module_from_abs_import_from_stmt_all_modules(
-    tmp_path: Path,
-) -> None:
-    path = tmp_path / "path/to/package/a/b"
-    path.mkdir(parents=True, exist_ok=True)
-    (path / "__init__.py").touch()
-    (path / "c.py").touch()
-    (path / "d.py").touch()
-
-    py_modules_by_name: Mapping[ModuleName, PyModule] = {
-        m.name: m
-        for m in [
-            PyModule(tmp_path / "path/to/package", path / "__init__.py"),
-            PyModule(tmp_path / "path/to/package", path / "c.py"),
-            PyModule(tmp_path / "path/to/package", path / "d.py"),
-        ]
-    }
-    assert list(
-        _compute_py_module_from_abs_import_from_stmt(
-            py_modules_by_name, _AbsImportFromStmt("package.a.b", ("c", "d"))
-        )
-    ) == [
-        PyModule(tmp_path / "path/to/package", path / "c.py"),
-        PyModule(tmp_path / "path/to/package", path / "d.py"),
+def _visit(package: Path, files: Mapping[str, str], module: str) -> Sequence[str]:
+    for name, code in files.items():
+        (package / name).parent.mkdir(parents=True, exist_ok=True)
+        (package / name).write_text(code)
+    py_modules_by_name = {m.name: m for m in scan_packages([package])}
+    return [
+        str(m.name)
+        for m in visit_py_module(py_modules_by_name, py_modules_by_name[ModuleName(module)])
     ]
 
 
-def test__compute_py_module_from_abs_import_from_stmt_not_all_modules(
-    tmp_path: Path,
-) -> None:
-    path = tmp_path / "path/to/package/a/b"
-    path.mkdir(parents=True, exist_ok=True)
-    (path / "__init__.py").touch()
-    (path / "c.py").touch()
-
-    py_modules_by_name: Mapping[ModuleName, PyModule] = {
-        m.name: m
-        for m in [
-            PyModule(tmp_path / "path/to/package", path / "__init__.py"),
-            PyModule(tmp_path / "path/to/package", path / "c.py"),
-        ]
+def test_import_from_modules(tmp_path: Path) -> None:
+    files = {
+        "a/b/__init__.py": "",
+        "a/b/c.py": "",
+        "a/b/d.py": "",
+        "mod.py": "from package.a.b import c, d\n",
     }
-    assert list(
-        _compute_py_module_from_abs_import_from_stmt(
-            py_modules_by_name, _AbsImportFromStmt("package.a.b", ("c", "d"))
-        )
-    ) == [
-        PyModule(tmp_path / "path/to/package", path / "c.py"),
-        PyModule(tmp_path / "path/to/package", path / "__init__.py"),
+    assert _visit(tmp_path / "package", files, "package.mod") == [
+        "package.a.b.c",
+        "package.a.b.d",
     ]
+
+
+def test_import_from_module_and_object(tmp_path: Path) -> None:
+    files = {
+        "a/b/__init__.py": "",
+        "a/b/c.py": "",
+        "mod.py": "from package.a.b import c, d\n",
+    }
+    assert _visit(tmp_path / "package", files, "package.mod") == ["package.a.b.c", "package.a.b"]
 
 
 @pytest.mark.parametrize(
@@ -73,25 +48,25 @@ def test__compute_py_module_from_abs_import_from_stmt_not_all_modules(
     [
         pytest.param(
             """
-import foo
-import a.b  # linter-1: ... # py-import-cycles: ignore # linter-2: ...
+import pkg.foo
+import pkg.a.b  # linter-1: ... # py-import-cycles: ignore # linter-2: ...
 from . import bar
 """,
             id="same-line",
         ),
         pytest.param(
             """
-import foo
+import pkg.foo
 # linter-1: ... # py-import-cycles: ignore # linter-2: ...
-import a.b
+import pkg.a.b
 from . import bar
 """,
             id="line-above",
         ),
         pytest.param(
             """
-import foo
-from a import (  # linter-1: ... # py-import-cycles: ignore # linter-2: ...
+import pkg.foo
+from pkg.a import (  # linter-1: ... # py-import-cycles: ignore # linter-2: ...
     b
 )
 from . import bar
@@ -101,8 +76,8 @@ from . import bar
         pytest.param(
             """
 def func():
-    import foo
-    import a.b  # linter-1: ... # py-import-cycles: ignore # linter-2: ...
+    import pkg.foo
+    import pkg.a.b  # linter-1: ... # py-import-cycles: ignore # linter-2: ...
     from . import bar
 """,
             id="nested-same-line",
@@ -110,9 +85,9 @@ def func():
         pytest.param(
             """
 def func():
-    import foo
+    import pkg.foo
     # linter-1: ... # py-import-cycles: ignore # linter-2: ...
-    import a.b
+    import pkg.a.b
     from . import bar
 """,
             id="nested-line-above",
@@ -120,8 +95,8 @@ def func():
         pytest.param(
             """
 def func():
-    import foo
-    from a import (  # linter-1: ... # py-import-cycles: ignore # linter-2: ...
+    import pkg.foo
+    from pkg.a import (  # linter-1: ... # py-import-cycles: ignore # linter-2: ...
         b
     )
     from . import bar
@@ -130,9 +105,12 @@ def func():
         ),
     ],
 )
-def test_linter_statement(code: str) -> None:
-    visitor = NodeVisitorImports(code)
-    visitor.visit(ast.parse(code))
-    assert visitor.abs_import_stmts == [_AbsImportStmt(names=("foo",))]
-    assert not visitor.abs_import_from_stmts
-    assert visitor.rel_import_from_stmts == [_RelImportFromStmt(level=1, module="", names=("bar",))]
+def test_ignore_comment(tmp_path: Path, code: str) -> None:
+    files = {
+        "foo.py": "",
+        "bar.py": "",
+        "a/__init__.py": "",
+        "a/b.py": "",
+        "mod.py": code,
+    }
+    assert _visit(tmp_path / "pkg", files, "pkg.mod") == ["pkg.foo", "pkg.bar"]
