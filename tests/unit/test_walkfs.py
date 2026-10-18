@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from py_import_cycles.files import scan_packages
-from py_import_cycles.modules import PyModule, PyModuleType
+from py_import_cycles.modules import ModuleName, PyModule, PyModuleType
 
 
 @pytest.fixture(name="root")
@@ -122,3 +122,12 @@ def test_recurse_dirs(root: Path) -> None:
             if f.type is not PyModuleType.NAMESPACE_PACKAGE
         ]
     ) == {PyModule(package=p.parents[-7], path=p) for p in proj}
+
+
+def test_ignore_pycache(root: Path) -> None:
+    projdir = root / "p"
+    setup_py_module(projdir / "p1.py")
+    (projdir / "__pycache__").mkdir()
+    (projdir / "__pycache__" / "p1.cpython-312.pyc").touch()
+
+    assert ModuleName("p", "__pycache__") not in {m.name for m in scan_packages([projdir])}

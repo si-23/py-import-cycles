@@ -15,7 +15,7 @@ def scan_packages(packages: Sequence[Path]) -> Iterator[PyModule]:
         for root, _dirs, files in os.walk(package_path):
             root_path = Path(root)
 
-            if root_path.name.startswith(".") or root_path.name == "__pycache_":
+            if root_path.name.startswith(".") or root_path.name == "__pycache__":
                 paths_to_ignore.add(root_path)
                 continue
 
