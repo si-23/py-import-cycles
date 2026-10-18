@@ -117,6 +117,11 @@ def test_ignore_comment(tmp_path: Path, code: str) -> None:
     assert _visit(tmp_path / "pkg", files, "pkg.mod") == ["pkg.foo", "pkg.bar"]
 
 
+def test_ignore_comment_in_last_line_keeps_import_in_first_line(tmp_path: Path) -> None:
+    files = {"b.py": "", "a.py": "import pkg.b\nx = 1\n# py-import-cycles: ignore"}
+    assert _visit(tmp_path / "pkg", files, "pkg.a") == ["pkg.b"]
+
+
 def test_log_unresolvable_relative_import(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     package = tmp_path / "package"
     package.mkdir()
