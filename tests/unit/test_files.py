@@ -96,6 +96,15 @@ def test_recurse_dirs(root: Path) -> None:
     ) == {PyModule(package=p.parents[-7], path=p) for p in proj}
 
 
+def test_ignore_pycache(root: Path) -> None:
+    projdir = root / "p"
+    setup_py_module(projdir / "p1.py")
+    (projdir / "__pycache__").mkdir()
+    (projdir / "__pycache__" / "p1.cpython-312.pyc").touch()
+
+    assert ModuleName("p", "__pycache__") not in {m.name for m in scan_packages([projdir])}
+
+
 def test_parse_files_with_absolute_root(root: Path) -> None:
     setup_py_module(root / "repo" / "pkg" / "mod.py")
 
