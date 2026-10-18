@@ -4,9 +4,9 @@ import itertools
 import random
 import sys
 from collections import defaultdict
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import DefaultDict, Iterable, Literal, NamedTuple, TypeVar
+from typing import Literal, NamedTuple, TypeVar
 
 from graphviz import Digraph
 
@@ -84,7 +84,7 @@ def dedup_edges(cycles: Iterable[tuple[TC, ...]]) -> Sequence[tuple[TC, TC]]:
 
 
 def count_degree(edges: Sequence[tuple[T, T]]) -> Mapping[T, int]:
-    degrees: DefaultDict[T, int] = defaultdict(int)
+    degrees: defaultdict[T, int] = defaultdict(int)
     for edge in edges:
         degrees[edge[0]] -= 1
         degrees[edge[1]] += 1
