@@ -143,19 +143,9 @@ def _make_readable_cycles(
             yield from (f"    > {str(i)} " for i in ic[1:])
 
 
-def _log_or_show_cycles(
-    verbose: bool,
-    sorted_cycles: Sequence[tuple[PyModule, ...]],
-) -> None:
-    if verbose:
-        for line in _make_readable_cycles(sorted_cycles):
-            sys.stderr.write(f"{line}\n")
-
-    if _debug():
-        logger.debug(
-            "Import cycles:\n%s",
-            "\n".join(_make_readable_cycles(sorted_cycles)),
-        )
+def _show_cycles(sorted_cycles: Sequence[tuple[PyModule, ...]]) -> None:
+    for line in _make_readable_cycles(sorted_cycles):
+        sys.stderr.write(f"{line}\n")
 
 
 def _show_stats(
@@ -177,10 +167,6 @@ def _write_sarif(
         sys.stdout.write(sarif)
     else:
         Path(path).write_text(sarif, encoding="utf-8")
-
-
-def _debug() -> bool:
-    return logger.level == logging.DEBUG
 
 
 def main() -> int:
@@ -230,11 +216,10 @@ def main() -> int:
         stats["num_of_imports"] = sum(len(ims) for ims in imports_by_py_module.values())
         stats["num_of_modules_with_imports"] = len(imports_by_py_module)
 
-    if _debug():
-        logger.debug(
-            "Imports of py modules:\n%s",
-            "\n".join(_make_readable_imports_by_py_module(imports_by_py_module)),
-        )
+    logger.debug(
+        "Imports of py modules:\n%s",
+        "\n".join(_make_readable_imports_by_py_module(imports_by_py_module)),
+    )
 
     logger.info("Detect import cycles with strategy %s", args.strategy)
     unsorted_cycles = set(detect_cycles(args.strategy, args.length_bound, imports_by_py_module))
@@ -243,7 +228,9 @@ def main() -> int:
     sorted_cycles = sorted(unsorted_cycles, key=lambda t: (len(t), t[0].name))
 
     sys.stderr.write(f"Found {len(sorted_cycles)} import cycles\n")
-    _log_or_show_cycles(args.verbose, sorted_cycles)
+    if args.verbose:
+        _show_cycles(sorted_cycles)
+    logger.debug("Import cycles:\n%s", "\n".join(_make_readable_cycles(sorted_cycles)))
 
     if args.sarif:
         _write_sarif(args.sarif, sorted_cycles)
