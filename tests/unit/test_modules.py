@@ -9,6 +9,7 @@ from py_import_cycles.modules import (
     ModuleName,
     PyModule,
     PyModuleType,
+    make_py_modules_by_name,
 )
 
 
@@ -153,3 +154,26 @@ def test_equal_py_modules_collapse_in_set(tmp_path: Path) -> None:
     assert (
         len({PyModule(package=r / "package", path=r / "package" / "module.py") for r in roots}) == 1
     )
+
+
+@pytest.mark.parametrize(
+    "shadowed_path, expected",
+    [
+        pytest.param("x/__init__.py", PyModuleType.REGULAR_PACKAGE, id="package-beats-module"),
+        pytest.param("x", PyModuleType.MODULE, id="module-beats-namespace-package"),
+    ],
+)
+def test_py_modules_by_name_precedence(
+    tmp_path: Path, shadowed_path: str, expected: PyModuleType
+) -> None:
+    package = tmp_path / "pkg"
+    (package / "x").mkdir(parents=True)
+    (package / "x.py").touch()
+    if shadowed_path.endswith(".py"):
+        (package / shadowed_path).touch()
+    py_modules = [PyModule(package, package / "x.py"), PyModule(package, package / shadowed_path)]
+
+    assert {
+        make_py_modules_by_name(order)[ModuleName("pkg.x")].type
+        for order in (py_modules, py_modules[::-1])
+    } == {expected}
