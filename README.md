@@ -27,6 +27,21 @@ Usage
 
 `python3 -m py_import_cycles` works as well.
 
+### What counts as an import
+
+py-import-cycles is a strict linter: it reports every circular import Python raises at import
+time, as well as import cycles that only work because of the order of statements.
+
+* Every import statement counts, including imports inside functions and under
+  `if TYPE_CHECKING:`.
+* `import a.b.c` and `from a.b import c` depend on `a/__init__.py` and `a/b/__init__.py`, which
+  Python runs first, and on `a.b.c` if it is a module.
+* A module's own parent packages are already imported when it runs. They count only when the
+  module reads a name from them (`from . import NAME`, `from pkg import *`) or imports them
+  plainly (`import pkg`).
+* A relative import counts like its absolute spelling.
+* Namespace packages contain no code and never take part in a cycle.
+
 ### Strategies
 
 Choose the cycle detection algorithm with `--strategy`:
@@ -46,6 +61,8 @@ import a  # py-import-cycles: ignore
 # py-import-cycles: ignore
 import b
 ```
+
+A reason may follow the keyword, e.g. `# py-import-cycles: ignore - plugin API`.
 
 ### Outputs
 
