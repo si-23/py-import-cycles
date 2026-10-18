@@ -55,12 +55,11 @@ def _ignore(code_lines: Sequence[str], raw_node: str, lineno: int) -> bool:
         logger.debug("(same line) Found ignore statment for %r", raw_node)
         return True
 
-    try:
-        comment_line = code_lines[lineno - 2]
-        import_stmt = code_lines[lineno - 1]
-    except IndexError:
-        comment_line = ""
-        import_stmt = ""
+    if lineno < 2:
+        return False
+
+    comment_line = code_lines[lineno - 2]
+    import_stmt = code_lines[lineno - 1]
 
     if (
         _is_import_stmt(import_stmt, raw_node)
