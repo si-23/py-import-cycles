@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Skip files that cannot be read instead of aborting the run.
 - Prefer a regular package to a module of the same name in relative imports.
 - Resolve relative imports of level two or more in a package's `__init__.py`.
+- Resolve imports of scanned packages named like a standard library module.
 
 ## [0.6.0]
 
