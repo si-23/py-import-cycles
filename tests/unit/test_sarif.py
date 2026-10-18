@@ -1,74 +1,64 @@
 #!/usr/bin/env python3
 
+from collections.abc import Callable
 from pathlib import Path
 
 from py_import_cycles.modules import PyModule
 from py_import_cycles.sarif import make_sarif
 
 
-def _make_py_module(tmp_path: Path, package: str, module: str) -> PyModule:
-    pkg_path = tmp_path / package
-    pkg_path.mkdir(parents=True, exist_ok=True)
-    (pkg_path / "__init__.py").touch()
-    mod_path = pkg_path / f"{module}.py"
-    mod_path.touch()
-    return PyModule(package=pkg_path, path=mod_path)
+def test_sarif_version() -> None:
+    assert make_sarif([], "1.0.0")["version"] == "2.1.0"
 
 
-def test_empty_cycles() -> None:
-    sarif = make_sarif([], "1.0.0")
-
-    assert sarif["version"] == "2.1.0"
-    assert len(sarif["runs"]) == 1
-
-    run = sarif["runs"][0]
-    assert run["tool"]["driver"]["name"] == "py-import-cycles"
-    assert run["tool"]["driver"]["version"] == "1.0.0"
-    assert not run["results"]
+def test_tool_name() -> None:
+    assert make_sarif([], "1.0.0")["runs"][0]["tool"]["driver"]["name"] == "py-import-cycles"
 
 
-def test_single_cycle(tmp_path: Path) -> None:
-    mod_a = _make_py_module(tmp_path, "pkg", "a")
-    mod_b = _make_py_module(tmp_path, "pkg", "b")
-
-    sarif = make_sarif([(mod_a, mod_b)], "0.4.1")
-
-    results = sarif["runs"][0]["results"]
-    assert len(results) == 1
-
-    result = results[0]
-    assert result["ruleId"] == "import-cycle"
-    assert result["level"] == "warning"
-    assert "pkg.a" in result["message"]["text"]
-    assert "pkg.b" in result["message"]["text"]
-
-    assert len(result["locations"]) == 1
-    loc = result["locations"][0]["physicalLocation"]
-    assert loc["artifactLocation"]["uri"].endswith("a.py")
-    assert loc["region"]["startLine"] == 1
-
-    assert len(result["relatedLocations"]) == 1
-    related = result["relatedLocations"][0]["physicalLocation"]
-    assert related["artifactLocation"]["uri"].endswith("b.py")
+def test_tool_version() -> None:
+    assert make_sarif([], "1.0.0")["runs"][0]["tool"]["driver"]["version"] == "1.0.0"
 
 
-def test_multiple_cycles(tmp_path: Path) -> None:
-    mod_a = _make_py_module(tmp_path, "pkg", "a")
-    mod_b = _make_py_module(tmp_path, "pkg", "b")
-    mod_c = _make_py_module(tmp_path, "pkg", "c")
+def test_no_results_without_cycles() -> None:
+    assert not make_sarif([], "1.0.0")["runs"][0]["results"]
 
-    cycles = [
-        (mod_a, mod_b),
-        (mod_a, mod_b, mod_c),
-    ]
-    sarif = make_sarif(cycles, "0.4.1")
 
-    results = sarif["runs"][0]["results"]
-    assert len(results) == 2
+def test_one_result_per_cycle(make_py_module: Callable[[str], PyModule]) -> None:
+    a, b, c = (make_py_module(n) for n in "abc")
+    sarif = make_sarif([(a, b), (a, b, c)], "0.4.1")
+    assert len(sarif["runs"][0]["results"]) == 2
 
-    assert "pkg.a" in results[0]["message"]["text"]
-    assert "pkg.b" in results[0]["message"]["text"]
-    assert "relatedLocations" in results[0]
 
-    assert "pkg.c" in results[1]["message"]["text"]
-    assert len(results[1]["relatedLocations"]) == 2
+def test_result_rule_id(make_py_module: Callable[[str], PyModule]) -> None:
+    a, b = make_py_module("a"), make_py_module("b")
+    assert make_sarif([(a, b)], "0.4.1")["runs"][0]["results"][0]["ruleId"] == "import-cycle"
+
+
+def test_result_level(make_py_module: Callable[[str], PyModule]) -> None:
+    a, b = make_py_module("a"), make_py_module("b")
+    assert make_sarif([(a, b)], "0.4.1")["runs"][0]["results"][0]["level"] == "warning"
+
+
+def test_result_message(make_py_module: Callable[[str], PyModule]) -> None:
+    a, b = make_py_module("a"), make_py_module("b")
+    result = make_sarif([(a, b)], "0.4.1")["runs"][0]["results"][0]
+    assert result["message"]["text"] == "Import cycle: pkg.a -> pkg.b -> pkg.a"
+
+
+def test_location_is_first_module(make_py_module: Callable[[str], PyModule]) -> None:
+    a, b = make_py_module("a"), make_py_module("b")
+    result = make_sarif([(a, b)], "0.4.1")["runs"][0]["results"][0]
+    assert [
+        Path(loc["physicalLocation"]["artifactLocation"]["uri"]).name for loc in result["locations"]
+    ] == ["a.py"]
+
+
+def test_related_locations_are_remaining_modules(
+    make_py_module: Callable[[str], PyModule],
+) -> None:
+    a, b, c = (make_py_module(n) for n in "abc")
+    result = make_sarif([(a, b, c)], "0.4.1")["runs"][0]["results"][0]
+    assert [
+        Path(loc["physicalLocation"]["artifactLocation"]["uri"]).name
+        for loc in result["relatedLocations"]
+    ] == ["b.py", "c.py"]

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
@@ -79,42 +79,66 @@ def test_module_name_joinname(module_names: Sequence[ModuleName], expected: Modu
     assert ModuleName().joinname(*module_names) == expected
 
 
-def test_namespace_package(tmp_path: Path) -> None:
+def _make_namespace_package(tmp_path: Path) -> PyModule:
     path = tmp_path / "path/to/package"
-    path.mkdir(parents=True, exist_ok=True)
-    py_module = PyModule(
-        package=tmp_path / "path/to/package",
-        path=tmp_path / "path/to/package",
-    )
-    assert py_module.type is PyModuleType.NAMESPACE_PACKAGE
-    assert py_module.name == ModuleName("package")
-    assert str(py_module) == "package/"
+    path.mkdir(parents=True)
+    return PyModule(package=path, path=path)
 
 
-def test_regular_package(tmp_path: Path) -> None:
+def _make_regular_package(tmp_path: Path) -> PyModule:
     path = tmp_path / "path/to/package"
-    path.mkdir(parents=True, exist_ok=True)
+    path.mkdir(parents=True)
     (path / "__init__.py").touch()
-    py_module = PyModule(
-        package=tmp_path / "path/to/package",
-        path=tmp_path / "path/to/package/__init__.py",
-    )
-    assert py_module.type is PyModuleType.REGULAR_PACKAGE
-    assert py_module.name == ModuleName("package")
-    assert str(py_module) == "package.__init__"
+    return PyModule(package=path, path=path / "__init__.py")
 
 
-def test_py_module(tmp_path: Path) -> None:
+def _make_module(tmp_path: Path) -> PyModule:
     path = tmp_path / "path/to/package"
-    path.mkdir(parents=True, exist_ok=True)
+    path.mkdir(parents=True)
     (path / "module.py").touch()
-    py_module = PyModule(
-        package=tmp_path / "path/to/package",
-        path=tmp_path / "path/to/package/module.py",
-    )
-    assert py_module.type is PyModuleType.MODULE
-    assert py_module.name == ModuleName("package.module")
-    assert str(py_module) == "package.module"
+    return PyModule(package=path, path=path / "module.py")
+
+
+@pytest.mark.parametrize(
+    "make_py_module, expected",
+    [
+        (_make_namespace_package, PyModuleType.NAMESPACE_PACKAGE),
+        (_make_regular_package, PyModuleType.REGULAR_PACKAGE),
+        (_make_module, PyModuleType.MODULE),
+    ],
+)
+def test_py_module_type(
+    tmp_path: Path, make_py_module: Callable[[Path], PyModule], expected: PyModuleType
+) -> None:
+    assert make_py_module(tmp_path).type is expected
+
+
+@pytest.mark.parametrize(
+    "make_py_module, expected",
+    [
+        (_make_namespace_package, ModuleName("package")),
+        (_make_regular_package, ModuleName("package")),
+        (_make_module, ModuleName("package.module")),
+    ],
+)
+def test_py_module_name(
+    tmp_path: Path, make_py_module: Callable[[Path], PyModule], expected: ModuleName
+) -> None:
+    assert make_py_module(tmp_path).name == expected
+
+
+@pytest.mark.parametrize(
+    "make_py_module, expected",
+    [
+        (_make_namespace_package, "package/"),
+        (_make_regular_package, "package.__init__"),
+        (_make_module, "package.module"),
+    ],
+)
+def test_py_module_str(
+    tmp_path: Path, make_py_module: Callable[[Path], PyModule], expected: str
+) -> None:
+    assert str(make_py_module(tmp_path)) == expected
 
 
 def test_equal_py_modules_collapse_in_set(tmp_path: Path) -> None:
