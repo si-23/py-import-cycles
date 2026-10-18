@@ -50,6 +50,11 @@ def test_import_from_module_and_object(tmp_path: Path) -> None:
     ]
 
 
+def test_relative_import_from_parent_in_package_init(tmp_path: Path) -> None:
+    files = {"sub/__init__.py": "from .. import b\n", "b.py": ""}
+    assert _visit(tmp_path / "pkg", files, "pkg.sub") == ["pkg.b"]
+
+
 def test_relative_import_prefers_package_to_module(tmp_path: Path) -> None:
     files = {"x.py": "", "x/__init__.py": "", "a.py": "from . import x\n"}
     assert _visit(tmp_path / "pkg", files, "pkg.a") == ["pkg.x.__init__"]

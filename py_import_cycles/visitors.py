@@ -147,11 +147,7 @@ def _compute_py_module_from_abs_import_from_stmt(
 def _compute_ref_path_from_rel_import_from_stmt(
     base_py_module: PyModule, rel_import_from_stmt: _RelImportFromStmt
 ) -> Path:
-    if base_py_module.type is PyModuleType.MODULE:
-        return base_py_module.path.parents[rel_import_from_stmt.level - 1]
-    if rel_import_from_stmt.level == 1:
-        return base_py_module.path.parent
-    return base_py_module.path.parents[rel_import_from_stmt.level - 2]
+    return base_py_module.path.parents[rel_import_from_stmt.level - 1]
 
 
 def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path: Path) -> PyModule:
