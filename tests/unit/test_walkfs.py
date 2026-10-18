@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from py_import_cycles.files import scan_packages  # pylint: disable=import-error
-from py_import_cycles.modules import PyModule, PyModuleType  # pylint: disable=import-error
+from py_import_cycles.files import scan_packages
+from py_import_cycles.modules import PyModule, PyModuleType
 
 
 @pytest.fixture(name="root")

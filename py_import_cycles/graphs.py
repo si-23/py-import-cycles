@@ -109,6 +109,10 @@ def normalize(value: float, lower: float, higher: float) -> float:
     return (value - lower) / (higher - lower)
 
 
+def _rgb(red: int, green: int, blue: int) -> str:
+    return f"#{red:02x}{green:02x}{blue:02x}"
+
+
 def _make_edges(
     opt_strategy: Literal["dfs", "tarjan"],
     import_cycles: Sequence[tuple[PyModule, ...]],
@@ -132,13 +136,9 @@ def _make_dfs_import_edges(
         nn = int(255 * normalize(value, -bound, bound + 1))
         assert 0 <= nn < 256
         if value < 0:
-            color = "#{:02x}{:02x}{:02x}".format(  # pylint: disable=consider-using-f-string
-                0, 255 - nn, nn
-            )
+            color = _rgb(0, 255 - nn, nn)
         else:
-            color = "#{:02x}{:02x}{:02x}".format(  # pylint: disable=consider-using-f-string
-                nn, 0, 255 - nn
-            )
+            color = _rgb(nn, 0, 255 - nn)
         out.append(ImportEdge(str(value), edge[0], edge[1], color))
     return out
 
@@ -148,7 +148,7 @@ def _make_only_cycles_edges(
 ) -> Sequence[ImportEdge]:
     edges: set[ImportEdge] = set()
     for nr, import_cycle in enumerate(import_cycles, start=1):
-        color = "#{:02x}{:02x}{:02x}".format(  # pylint: disable=consider-using-f-string
+        color = _rgb(
             random.randint(50, 200),
             random.randint(50, 200),
             random.randint(50, 200),

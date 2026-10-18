@@ -5,7 +5,7 @@ from typing import Sequence
 
 import pytest
 
-from py_import_cycles.modules import (  # pylint: disable=import-error
+from py_import_cycles.modules import (
     ModuleName,
     PyModule,
     PyModuleType,
