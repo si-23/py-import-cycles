@@ -124,6 +124,65 @@ a relative REPO is resolved against the current working directory""",
     return parser.parse_args()
 
 
+def _make_readable_imports_by_py_module(
+    imports_by_py_module: Mapping[PyModule, Sequence[PyModule]],
+) -> Iterator[str]:
+    for ibm, ms in imports_by_py_module.items():
+        if ms:
+            yield f"  {str(ibm)} imports:"
+            yield from (f"    {str(m)}" for m in ms)
+
+
+def _make_readable_cycles(
+    sorted_cycles: Sequence[tuple[PyModule, ...]],
+) -> Iterator[str]:
+    for nr, ic in enumerate(sorted_cycles, start=1):
+        if ic:
+            yield f"  Cycle {nr}:"
+            yield f"    {str(ic[0])}"
+            yield from (f"    > {str(i)} " for i in ic[1:])
+
+
+def _log_or_show_cycles(
+    verbose: bool,
+    sorted_cycles: Sequence[tuple[PyModule, ...]],
+) -> None:
+    if verbose:
+        for line in _make_readable_cycles(sorted_cycles):
+            sys.stderr.write(f"{line}\n")
+
+    if _debug():
+        logger.debug(
+            "Import cycles:\n%s",
+            "\n".join(_make_readable_cycles(sorted_cycles)),
+        )
+
+
+def _show_stats(
+    duration: float,
+    stats: Counter[Literal["num_of_modules", "num_of_modules_with_imports", "num_of_imports"]],
+) -> None:
+    logger.info("Duration: %ss", f"{duration:.2f}")
+    logger.info("Number of found modules: %s", stats["num_of_modules"])
+    logger.info("Number of imports: %s", stats["num_of_imports"])
+    logger.info("Number of modules with imports: %s", stats["num_of_modules_with_imports"])
+
+
+def _write_sarif(
+    path: str,
+    sorted_cycles: Sequence[tuple[PyModule, ...]],
+) -> None:
+    sarif = json.dumps(make_sarif(sorted_cycles, __version__), indent=2) + "\n"
+    if path == "-":
+        sys.stdout.write(sarif)
+    else:
+        Path(path).write_text(sarif, encoding="utf-8")
+
+
+def _debug() -> bool:
+    return logger.level == logging.DEBUG
+
+
 def main() -> int:
     now = time.time()
     stats: Counter[Literal["num_of_modules", "num_of_modules_with_imports", "num_of_imports"]] = (
@@ -201,62 +260,3 @@ def main() -> int:
         _show_stats(time.time() - now, stats)
 
     return len(unsorted_cycles) > args.threshold
-
-
-def _make_readable_imports_by_py_module(
-    imports_by_py_module: Mapping[PyModule, Sequence[PyModule]],
-) -> Iterator[str]:
-    for ibm, ms in imports_by_py_module.items():
-        if ms:
-            yield f"  {str(ibm)} imports:"
-            yield from (f"    {str(m)}" for m in ms)
-
-
-def _make_readable_cycles(
-    sorted_cycles: Sequence[tuple[PyModule, ...]],
-) -> Iterator[str]:
-    for nr, ic in enumerate(sorted_cycles, start=1):
-        if ic:
-            yield f"  Cycle {nr}:"
-            yield f"    {str(ic[0])}"
-            yield from (f"    > {str(i)} " for i in ic[1:])
-
-
-def _log_or_show_cycles(
-    verbose: bool,
-    sorted_cycles: Sequence[tuple[PyModule, ...]],
-) -> None:
-    if verbose:
-        for line in _make_readable_cycles(sorted_cycles):
-            sys.stderr.write(f"{line}\n")
-
-    if _debug():
-        logger.debug(
-            "Import cycles:\n%s",
-            "\n".join(_make_readable_cycles(sorted_cycles)),
-        )
-
-
-def _show_stats(
-    duration: float,
-    stats: Counter[Literal["num_of_modules", "num_of_modules_with_imports", "num_of_imports"]],
-) -> None:
-    logger.info("Duration: %ss", f"{duration:.2f}")
-    logger.info("Number of found modules: %s", stats["num_of_modules"])
-    logger.info("Number of imports: %s", stats["num_of_imports"])
-    logger.info("Number of modules with imports: %s", stats["num_of_modules_with_imports"])
-
-
-def _write_sarif(
-    path: str,
-    sorted_cycles: Sequence[tuple[PyModule, ...]],
-) -> None:
-    sarif = json.dumps(make_sarif(sorted_cycles, __version__), indent=2) + "\n"
-    if path == "-":
-        sys.stdout.write(sarif)
-    else:
-        Path(path).write_text(sarif, encoding="utf-8")
-
-
-def _debug() -> bool:
-    return logger.level == logging.DEBUG
