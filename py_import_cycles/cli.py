@@ -5,10 +5,9 @@ import json
 import logging
 import sys
 import time
-from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
 from . import __version__
 from .cycles import detect_cycles
@@ -148,14 +147,19 @@ def _show_cycles(sorted_cycles: Sequence[tuple[PyModule, ...]]) -> None:
         sys.stderr.write(f"{line}\n")
 
 
-def _show_stats(
-    duration: float,
-    stats: Counter[Literal["num_of_modules", "num_of_modules_with_imports", "num_of_imports"]],
-) -> None:
-    logger.info("Duration: %ss", f"{duration:.2f}")
-    logger.info("Number of found modules: %s", stats["num_of_modules"])
-    logger.info("Number of imports: %s", stats["num_of_imports"])
-    logger.info("Number of modules with imports: %s", stats["num_of_modules_with_imports"])
+@dataclass(frozen=True, kw_only=True)
+class Stats:
+    duration: float
+    num_of_modules: int
+    num_of_imports: int
+    num_of_modules_with_imports: int
+
+
+def _log_stats(stats: Stats) -> None:
+    logger.info("Duration: %ss", f"{stats.duration:.2f}")
+    logger.info("Number of found modules: %s", stats.num_of_modules)
+    logger.info("Number of imports: %s", stats.num_of_imports)
+    logger.info("Number of modules with imports: %s", stats.num_of_modules_with_imports)
 
 
 def _write_sarif(
@@ -171,9 +175,6 @@ def _write_sarif(
 
 def main() -> int:
     now = time.time()
-    stats: Counter[Literal["num_of_modules", "num_of_modules_with_imports", "num_of_imports"]] = (
-        Counter()
-    )
 
     args = _parse_arguments()
 
@@ -194,9 +195,6 @@ def main() -> int:
         logger.info("Parse files")
         py_modules.extend(parse_files(args.files))
 
-    if args.stats:
-        stats["num_of_modules"] = len(py_modules)
-
     logger.info("Visit and compute imports of py modules")
     py_modules_by_name = {p.name: p for p in py_modules}
 
@@ -211,10 +209,6 @@ def main() -> int:
             )
         )
     }
-
-    if args.stats:
-        stats["num_of_imports"] = sum(len(ims) for ims in imports_by_py_module.values())
-        stats["num_of_modules_with_imports"] = len(imports_by_py_module)
 
     logger.debug(
         "Imports of py modules:\n%s",
@@ -244,6 +238,13 @@ def main() -> int:
         )
 
     if args.stats:
-        _show_stats(time.time() - now, stats)
+        _log_stats(
+            Stats(
+                duration=time.time() - now,
+                num_of_modules=len(py_modules),
+                num_of_imports=sum(len(ims) for ims in imports_by_py_module.values()),
+                num_of_modules_with_imports=len(imports_by_py_module),
+            )
+        )
 
     return len(unsorted_cycles) > args.threshold
