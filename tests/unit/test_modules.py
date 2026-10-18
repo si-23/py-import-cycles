@@ -28,6 +28,11 @@ def test_module_name_init_or_equal(parts: Sequence[str | ModuleName], expected: 
     assert ModuleName(*parts) == expected
 
 
+def test_module_name_rejects_empty_part() -> None:
+    with pytest.raises(ValueError):
+        ModuleName("a..b")
+
+
 @pytest.mark.parametrize(
     "module_name, expected",
     [
