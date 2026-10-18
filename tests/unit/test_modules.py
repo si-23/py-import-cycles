@@ -115,3 +115,14 @@ def test_py_module(tmp_path: Path) -> None:
     assert py_module.type is PyModuleType.MODULE
     assert py_module.name == ModuleName("package.module")
     assert str(py_module) == "package.module"
+
+
+def test_equal_py_modules_collapse_in_set(tmp_path: Path) -> None:
+    roots = [tmp_path / "root1", tmp_path / "root2"]
+    for root in roots:
+        (root / "package").mkdir(parents=True)
+        (root / "package" / "module.py").touch()
+
+    assert (
+        len({PyModule(package=r / "package", path=r / "package" / "module.py") for r in roots}) == 1
+    )
