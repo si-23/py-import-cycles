@@ -1,3 +1,4 @@
+import json
 import shutil
 import subprocess
 from collections.abc import Sequence
@@ -10,14 +11,17 @@ E2E_DIR = REPO / "e2e_test_inputs"
 PROJECTS = sorted(p for p in E2E_DIR.iterdir() if p.is_dir())
 
 
-def run_tool(outputs_folder: Path, *args: str) -> str:
-    result = subprocess.run(
+def run_cli(outputs_folder: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
         ["uv", "run", "-m", "py_import_cycles", "--outputs-folder", str(outputs_folder), *args],
         capture_output=True,
         text=True,
         cwd=REPO,
     )
-    return result.stderr.strip()
+
+
+def run_tool(outputs_folder: Path, *args: str) -> str:
+    return run_cli(outputs_folder, *args).stderr.strip()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -75,3 +79,25 @@ def test_stats_are_logged(tmp_path: Path) -> None:
         "run",
     )
     assert "Number of found modules" in (tmp_path / "run.log").read_text()
+
+
+def _run_on_project1(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    package = str(E2E_DIR / "project1" / "pkg")
+    return run_cli(tmp_path, "--packages", package, *args)
+
+
+def test_exit_status_when_cycles_exceed_threshold(tmp_path: Path) -> None:
+    assert _run_on_project1(tmp_path).returncode == 1
+
+
+def test_exit_status_when_cycles_within_threshold(tmp_path: Path) -> None:
+    assert _run_on_project1(tmp_path, "--threshold", "1").returncode == 0
+
+
+def test_verbose_prints_cycles(tmp_path: Path) -> None:
+    assert "Cycle 1:" in _run_on_project1(tmp_path, "--verbose").stderr
+
+
+def test_sarif_to_stdout(tmp_path: Path) -> None:
+    sarif = json.loads(_run_on_project1(tmp_path, "--sarif", "-").stdout)
+    assert len(sarif["runs"][0]["results"]) == 1
