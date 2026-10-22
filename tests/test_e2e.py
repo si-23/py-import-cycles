@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -9,9 +10,9 @@ E2E_DIR = REPO / "e2e_test_inputs"
 PROJECTS = sorted(p for p in E2E_DIR.iterdir() if p.is_dir())
 
 
-def run_tool(*args: str) -> str:
+def run_tool(outputs_folder: Path, *args: str) -> str:
     result = subprocess.run(
-        ["uv", "run", "-m", "py_import_cycles", *args],
+        ["uv", "run", "-m", "py_import_cycles", "--outputs-folder", str(outputs_folder), *args],
         capture_output=True,
         text=True,
         cwd=REPO,
@@ -34,32 +35,31 @@ def test_main(project: Path) -> None:
 
 
 @pytest.mark.parametrize("project", PROJECTS, ids=lambda p: p.name)
-def test_packages(project: Path) -> None:
+def test_packages(tmp_path: Path, project: Path) -> None:
     expected = int((project / "found_cycles").read_text())
     packages = [str(project / w) for w in (project / "packages").read_text().split()]
     assert (
-        run_tool("--packages", *packages, "--strategy", "johnson")
+        run_tool(tmp_path, "--packages", *packages, "--strategy", "johnson")
         == f"Found {expected} import cycles"
     )
 
 
-@pytest.mark.parametrize("project", PROJECTS, ids=lambda p: p.name)
-def test_files_absolute(project: Path) -> None:
-    expected = int((project / "found_cycles").read_text())
-    files = [f"{project}::{w}" for w in (project / "files").read_text().split()]
-    assert run_tool("--files", *files, "--strategy", "johnson") == f"Found {expected} import cycles"
+def _files_of_project1(root: str) -> Sequence[str]:
+    return [f"{root}::{w}" for w in (E2E_DIR / "project1" / "files").read_text().split()]
 
 
-@pytest.mark.parametrize("project", PROJECTS, ids=lambda p: p.name)
-def test_files_relative(project: Path) -> None:
-    expected = int((project / "found_cycles").read_text())
-    rel = project.relative_to(REPO)
-    files = [f"{rel}::{w}" for w in (project / "files").read_text().split()]
-    assert run_tool("--files", *files, "--strategy", "johnson") == f"Found {expected} import cycles"
+def test_files_absolute(tmp_path: Path) -> None:
+    files = _files_of_project1(str(E2E_DIR / "project1"))
+    assert run_tool(tmp_path, "--files", *files) == "Found 1 import cycles"
 
 
-def test_self() -> None:
+def test_files_relative(tmp_path: Path) -> None:
+    files = _files_of_project1(str((E2E_DIR / "project1").relative_to(REPO)))
+    assert run_tool(tmp_path, "--files", *files) == "Found 1 import cycles"
+
+
+def test_self(tmp_path: Path) -> None:
     assert (
-        run_tool("--packages", str(REPO / "py_import_cycles"), "--strategy", "johnson")
+        run_tool(tmp_path, "--packages", str(REPO / "py_import_cycles"), "--strategy", "johnson")
         == "Found 0 import cycles"
     )

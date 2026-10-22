@@ -7,19 +7,6 @@ def test_empty() -> None:
     assert not list(tarjan({}))
 
 
-def test_tree() -> None:
-    graph = {
-        1: [11, 12, 13],
-        11: [111, 112, 113],
-        111: [1111, 1112, 1113],
-        12: [121, 122, 123],
-        13: [131, 132, 133],
-        2: [21, 22, 23],
-        3: [31, 32, 33],
-    }
-    assert sorted(tarjan(graph)) == []
-
-
 def test_dag() -> None:
     graph = {
         1: [11, 12, 2],

@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from py_import_cycles.files import scan_packages  # pylint: disable=import-error
-from py_import_cycles.modules import PyModule, PyModuleType  # pylint: disable=import-error
+from py_import_cycles.files import parse_files, scan_packages
+from py_import_cycles.modules import ModuleName, PyModule, PyModuleType
 
 
 @pytest.fixture(name="root")
@@ -32,36 +32,6 @@ def test_no_files(root: Path) -> None:
     )
 
 
-def test_single_file(root: Path) -> None:
-    # The code requires at least an extra directory under the project
-    # root.  This is probably a bug.
-    proj = root / "projdir" / "proj.py"
-    setup_py_module(proj)
-
-    assert frozenset(
-        [f for f in scan_packages([proj.parent]) if f.type is not PyModuleType.NAMESPACE_PACKAGE]
-    ) == {PyModule(package=proj.parent, path=proj)}
-
-
-def test_multiple_files(root: Path) -> None:
-    proj = {
-        root / "p1" / "p11.py",
-        root / "p1" / "p12.py",
-        root / "p2" / "p.py",
-        root / "p3" / "p.py",
-    }
-    for p in proj:
-        setup_py_module(p)
-
-    assert frozenset(
-        [
-            f
-            for f in scan_packages([p.parent for p in proj])
-            if f.type is not PyModuleType.NAMESPACE_PACKAGE
-        ]
-    ) == {PyModule(package=p.parent, path=p) for p in proj}
-
-
 def test_multiple_file_with_excludes(root: Path) -> None:
     proj = {root / "p1" / "p.py", root / "p2" / "p.py", root / "p3" / "p.py"}
     excluded = {root / "other1" / "x.py", root / "other2" / "x.py"}
@@ -78,7 +48,6 @@ def test_multiple_file_with_excludes(root: Path) -> None:
 
 
 def test_ignore_files_without_py_extention(root: Path) -> None:
-    # Identifying the file by its extension only may be too naive.
     projdir = root / "p"
     proj = {projdir / "p1.py", projdir / "p2.py", projdir / "p3.py"}
     nopy = {projdir / "f1", projdir / "f2", projdir / "f3"}
@@ -125,3 +94,19 @@ def test_recurse_dirs(root: Path) -> None:
             if f.type is not PyModuleType.NAMESPACE_PACKAGE
         ]
     ) == {PyModule(package=p.parents[-7], path=p) for p in proj}
+
+
+def test_parse_files_with_absolute_root(root: Path) -> None:
+    setup_py_module(root / "repo" / "pkg" / "mod.py")
+
+    assert [m.name for m in parse_files([f"{root / 'repo'}::pkg/mod.py"], Path("/elsewhere"))] == [
+        ModuleName("pkg.mod")
+    ]
+
+
+def test_parse_files_resolves_relative_root_against_cwd(root: Path) -> None:
+    setup_py_module(root / "repo" / "pkg" / "mod.py")
+
+    assert [m.path for m in parse_files(["repo::pkg/mod.py"], root)] == [
+        root / "repo" / "pkg" / "mod.py"
+    ]

@@ -2,16 +2,14 @@
 
 import argparse
 import json
-import logging
 import sys
 import time
-from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
 from . import __version__
-from .cycles import detect_cycles
+from .cycles import make_strategies
 from .files import get_outputs_file_paths, parse_files, scan_packages
 from .graphs import make_graph
 from .log import logger, setup_logging
@@ -83,7 +81,7 @@ In the second case the relpath will be extended with the current working directo
     )
     parser.add_argument(
         "--strategy",
-        choices=["dfs", "tarjan", "johnson"],
+        choices=list(make_strategies(None)),
         default="dfs",
         help="""path-based strong component algorithm:
 - dfs (depth first search): find first cycles
@@ -119,93 +117,6 @@ In the second case the relpath will be extended with the current working directo
     return parser.parse_args()
 
 
-def main() -> int:
-    now = time.time()
-    stats: Counter[Literal["num_of_modules", "num_of_modules_with_imports", "num_of_imports"]] = (
-        Counter()
-    )
-
-    args = _parse_arguments()
-
-    packages = [pp for p in args.packages if (pp := Path(p)).is_dir()]
-
-    outputs_filepaths = get_outputs_file_paths(
-        Path(args.outputs_folder) if args.outputs_folder else None,
-        args.outputs_filename or "",
-    )
-
-    setup_logging(outputs_filepaths.log, args.debug)
-
-    logger.info("Scan packages")
-    py_modules = list(scan_packages(packages))
-    if args.files:
-        logger.info("Parse files")
-        py_modules.extend(parse_files(args.files))
-
-    if args.stats:
-        stats["num_of_modules"] = len(py_modules)
-
-    logger.info("Visit and compute imports of py modules")
-    py_modules_by_name = {p.name: p for p in py_modules}
-
-    imports_by_py_module = {
-        py_module: imports
-        for py_module in py_modules
-        if (
-            imports := sorted(
-                frozenset(visit_py_module(py_modules_by_name, py_module)),
-                key=lambda m: tuple(m.name.parts),
-                reverse=True,
-            )
-        )
-    }
-
-    if args.stats:
-        stats["num_of_imports"] = sum(len(ims) for ims in imports_by_py_module.values())
-        stats["num_of_modules_with_imports"] = len(imports_by_py_module)
-
-    if _debug():
-        logger.debug(
-            "Imports of py modules:\n%s",
-            "\n".join(_make_readable_imports_by_py_module(imports_by_py_module)),
-        )
-
-    logger.info("Detect import cycles with strategy %s", args.strategy)
-    unsorted_cycles = set(detect_cycles(args.strategy, args.length_bound, imports_by_py_module))
-
-    logger.info("Sort import cycles")
-    sorted_cycles = sorted(unsorted_cycles, key=lambda t: (len(t), t[0].name))
-
-    sys.stderr.write(f"Found {len(sorted_cycles)} import cycles\n")
-    _log_or_show_cycles(args.verbose, sorted_cycles)
-
-    if args.sarif:
-        _write_sarif(args.sarif, sorted_cycles)
-
-    if args.graph:
-        logger.info("Close cycle and make graph")
-        make_graph(
-            outputs_filepaths.graph,
-            args.strategy,
-            [((cycle[-1],) + cycle) for cycle in sorted_cycles],
-        )
-
-    if args.stats:
-        _show_stats(time.time() - now, stats)
-
-    return len(unsorted_cycles) > args.threshold
-
-
-#   .--helper--------------------------------------------------------------.
-#   |                    _          _                                      |
-#   |                   | |__   ___| |_ __   ___ _ __                      |
-#   |                   | '_ \ / _ \ | '_ \ / _ \ '__|                     |
-#   |                   | | | |  __/ | |_) |  __/ |                        |
-#   |                   |_| |_|\___|_| .__/ \___|_|                        |
-#   |                                |_|                                   |
-#   '----------------------------------------------------------------------'
-
-
 def _make_readable_imports_by_py_module(
     imports_by_py_module: Mapping[PyModule, Sequence[PyModule]],
 ) -> Iterator[str]:
@@ -225,29 +136,24 @@ def _make_readable_cycles(
             yield from (f"    > {str(i)} " for i in ic[1:])
 
 
-def _log_or_show_cycles(
-    verbose: bool,
-    sorted_cycles: Sequence[tuple[PyModule, ...]],
-) -> None:
-    if verbose:
-        for line in _make_readable_cycles(sorted_cycles):
-            sys.stderr.write(f"{line}\n")
-
-    if _debug():
-        logger.debug(
-            "Import cycles:\n%s",
-            "\n".join(_make_readable_cycles(sorted_cycles)),
-        )
+def _show_cycles(sorted_cycles: Sequence[tuple[PyModule, ...]]) -> None:
+    for line in _make_readable_cycles(sorted_cycles):
+        sys.stderr.write(f"{line}\n")
 
 
-def _show_stats(
-    duration: float,
-    stats: Counter[Literal["num_of_modules", "num_of_modules_with_imports", "num_of_imports"]],
-) -> None:
-    logger.info("Duration: %ss", f"{duration:.2f}")
-    logger.info("Number of found modules: %s", stats["num_of_modules"])
-    logger.info("Number of imports: %s", stats["num_of_imports"])
-    logger.info("Number of modules with imports: %s", stats["num_of_modules_with_imports"])
+@dataclass(frozen=True, kw_only=True)
+class Stats:
+    duration: float
+    num_of_modules: int
+    num_of_imports: int
+    num_of_modules_with_imports: int
+
+
+def _log_stats(stats: Stats) -> None:
+    logger.info("Duration: %ss", f"{stats.duration:.2f}")
+    logger.info("Number of found modules: %s", stats.num_of_modules)
+    logger.info("Number of imports: %s", stats.num_of_imports)
+    logger.info("Number of modules with imports: %s", stats.num_of_modules_with_imports)
 
 
 def _write_sarif(
@@ -261,5 +167,83 @@ def _write_sarif(
         Path(path).write_text(sarif, encoding="utf-8")
 
 
-def _debug() -> bool:
-    return logger.level == logging.DEBUG
+def _collect_py_modules(packages: Sequence[str], files: Sequence[str]) -> Sequence[PyModule]:
+    logger.info("Scan packages")
+    py_modules = list(scan_packages([pp for p in packages if (pp := Path(p)).is_dir()]))
+    if files:
+        logger.info("Parse files")
+        py_modules.extend(parse_files(files, Path.cwd()))
+    return py_modules
+
+
+def _compute_imports(
+    py_modules: Sequence[PyModule],
+) -> Mapping[PyModule, Sequence[PyModule]]:
+    logger.info("Visit and compute imports of py modules")
+    py_modules_by_name = {p.name: p for p in py_modules}
+    return {
+        py_module: imports
+        for py_module in py_modules
+        if (
+            imports := sorted(
+                frozenset(visit_py_module(py_modules_by_name, py_module)),
+                key=lambda m: tuple(m.name.parts),
+                reverse=True,
+            )
+        )
+    }
+
+
+def main() -> int:
+    now = time.time()
+
+    args = _parse_arguments()
+
+    outputs_filepaths = get_outputs_file_paths(
+        Path(args.outputs_folder) if args.outputs_folder else None,
+        args.outputs_filename or "",
+    )
+
+    setup_logging(outputs_filepaths.log, args.debug)
+
+    py_modules = _collect_py_modules(args.packages, args.files)
+    imports_by_py_module = _compute_imports(py_modules)
+
+    logger.debug(
+        "Imports of py modules:\n%s",
+        "\n".join(_make_readable_imports_by_py_module(imports_by_py_module)),
+    )
+
+    logger.info("Detect import cycles with strategy %s", args.strategy)
+    strategy = make_strategies(args.length_bound)[args.strategy]
+    unsorted_cycles = set(strategy.detect_cycles(imports_by_py_module))
+
+    logger.info("Sort import cycles")
+    sorted_cycles = sorted(unsorted_cycles, key=lambda t: (len(t), t[0].name))
+
+    sys.stderr.write(f"Found {len(sorted_cycles)} import cycles\n")
+    if args.verbose:
+        _show_cycles(sorted_cycles)
+    logger.debug("Import cycles:\n%s", "\n".join(_make_readable_cycles(sorted_cycles)))
+
+    if args.sarif:
+        _write_sarif(args.sarif, sorted_cycles)
+
+    if args.graph:
+        logger.info("Close cycle and make graph")
+        make_graph(
+            outputs_filepaths.graph,
+            strategy.make_edges([((cycle[-1],) + cycle) for cycle in sorted_cycles]),
+        )
+
+    if args.stats:
+        _log_stats(
+            Stats(
+                duration=time.time() - now,
+                num_of_modules=len(py_modules),
+                num_of_imports=sum(len(ims) for ims in imports_by_py_module.values()),
+                num_of_modules_with_imports=len(imports_by_py_module),
+            )
+        )
+
+    return len(unsorted_cycles) > args.threshold
