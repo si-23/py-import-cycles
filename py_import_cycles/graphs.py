@@ -30,14 +30,14 @@ def _get_shape(py_module: PyModule) -> str:
     return "" if py_module.type is PyModuleType.MODULE else "box"
 
 
-def dedup_edges(cycles: Iterable[tuple[TC, ...]]) -> Sequence[tuple[TC, TC]]:
+def _dedup_edges(cycles: Iterable[tuple[TC, ...]]) -> Sequence[tuple[TC, TC]]:
     edges: set[tuple[TC, TC]] = set()
     for cycle in cycles:
         edges |= frozenset(itertools.pairwise(cycle))
     return list(edges)
 
 
-def count_degree(edges: Sequence[tuple[T, T]]) -> Mapping[T, int]:
+def _count_degree(edges: Sequence[tuple[T, T]]) -> Mapping[T, int]:
     degrees: defaultdict[T, int] = defaultdict(int)
     for edge in edges:
         degrees[edge[0]] -= 1
@@ -45,12 +45,12 @@ def count_degree(edges: Sequence[tuple[T, T]]) -> Mapping[T, int]:
     return degrees
 
 
-def badness(edges: Sequence[tuple[T, T]]) -> Mapping[tuple[T, T], float]:
-    degree = count_degree(edges)
+def _badness(edges: Sequence[tuple[T, T]]) -> Mapping[tuple[T, T], float]:
+    degree = _count_degree(edges)
     return {edge: 0.5 * (degree[edge[0]] + degree[edge[1]]) for edge in edges}
 
 
-def normalize(value: float, lower: float, higher: float) -> float:
+def _normalize(value: float, lower: float, higher: float) -> float:
     if not lower <= value < higher:
         raise ValueError(f"{value} is not within bounds")
     return (value - lower) / (higher - lower)
@@ -63,7 +63,7 @@ def _rgb(red: int, green: int, blue: int) -> str:
 def make_dfs_edges(
     cycles: Sequence[tuple[PyModule, ...]],
 ) -> Sequence[ImportEdge]:
-    edges = badness(dedup_edges(cycles))
+    edges = _badness(_dedup_edges(cycles))
     if not (edges_values := edges.values()):
         return []
 
@@ -71,7 +71,7 @@ def make_dfs_edges(
 
     out = []
     for edge, value in edges.items():
-        nn = int(255 * normalize(value, -bound, bound + 1))
+        nn = int(255 * _normalize(value, -bound, bound + 1))
         assert 0 <= nn < 256
         if value < 0:
             color = _rgb(0, 255 - nn, nn)

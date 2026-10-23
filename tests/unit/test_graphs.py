@@ -7,11 +7,11 @@ import pytest
 
 from py_import_cycles.graphs import (
     ImportEdge,
+    _badness,
     _make_cycle_digraph,
-    badness,
+    _normalize,
     make_cycle_edges,
     make_dfs_edges,
-    normalize,
 )
 from py_import_cycles.modules import PyModule
 
@@ -49,17 +49,17 @@ def test_make_dfs_edges_without_cycles() -> None:
 
 
 def test_badness_is_mean_degree_of_edge_vertices() -> None:
-    assert badness([("a", "b"), ("b", "c")]) == {("a", "b"): -0.5, ("b", "c"): 0.5}
+    assert _badness([("a", "b"), ("b", "c")]) == {("a", "b"): -0.5, ("b", "c"): 0.5}
 
 
 def test_normalize() -> None:
-    assert normalize(0, -1, 1) == 0.5
+    assert _normalize(0, -1, 1) == 0.5
 
 
 @pytest.mark.parametrize("value, lower, higher", [(1, -1, 1), (-2, -1, 1), (0, 1, -1), (0, 0, 0)])
 def test_normalize_rejects_value_outside_bounds(value: float, lower: float, higher: float) -> None:
     with pytest.raises(ValueError):
-        normalize(value, lower, higher)
+        _normalize(value, lower, higher)
 
 
 def test_cycle_digraph_edge_carries_title_and_colour(
