@@ -4,7 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from py_import_cycles.files import parse_files, scan_packages
+from py_import_cycles.files import (
+    OutputsFilePaths,
+    get_outputs_file_paths,
+    parse_files,
+    scan_packages,
+)
 from py_import_cycles.modules import ModuleName, PyModule, PyModuleType
 
 
@@ -96,6 +101,15 @@ def test_recurse_dirs(root: Path) -> None:
     ) == {PyModule(package=p.parents[-7], path=p) for p in proj}
 
 
+def test_ignore_pycache(root: Path) -> None:
+    projdir = root / "p"
+    setup_py_module(projdir / "p1.py")
+    (projdir / "__pycache__").mkdir()
+    (projdir / "__pycache__" / "p1.cpython-312.pyc").touch()
+
+    assert ModuleName("p", "__pycache__") not in {m.name for m in scan_packages([projdir])}
+
+
 def test_parse_files_with_absolute_root(root: Path) -> None:
     setup_py_module(root / "repo" / "pkg" / "mod.py")
 
@@ -110,3 +124,24 @@ def test_parse_files_resolves_relative_root_against_cwd(root: Path) -> None:
     assert [m.path for m in parse_files(["repo::pkg/mod.py"], root)] == [
         root / "repo" / "pkg" / "mod.py"
     ]
+
+
+def test_skip_hidden_folders(root: Path) -> None:
+    projdir = root / "p"
+    setup_py_module(projdir / "p1.py")
+    setup_py_module(projdir / ".hidden" / "sub" / "p2.py")
+
+    assert [m.path for m in scan_packages([projdir]) if ".hidden" in m.path.parts] == []
+
+
+def test_outputs_file_paths(root: Path) -> None:
+    assert get_outputs_file_paths(root / "out", "run") == OutputsFilePaths(
+        log=root / "out" / "run.log",
+        graph=root / "out" / "run.gv",
+    )
+
+
+def test_outputs_folder_is_created(root: Path) -> None:
+    get_outputs_file_paths(root / "out", "run")
+
+    assert (root / "out").is_dir()

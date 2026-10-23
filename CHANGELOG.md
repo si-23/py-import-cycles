@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Skip `__pycache__` folders instead of reporting them as namespace packages.
+- Log at level INFO without `--debug`, so `--stats` reaches the log file.
+- Keep an import in the first line when the last line is an ignore comment.
+- Honour the ignore comment on multi-line imports of several names.
+- Read source files in the encoding their coding declaration names.
+- Skip files that cannot be read instead of aborting the run.
+- Prefer a regular package to a module of the same name in relative imports.
+- Resolve relative imports of level two or more in a package's `__init__.py`.
+- Resolve imports of scanned packages named like a standard library module.
+
 ## [0.6.0]
 
 ### Added

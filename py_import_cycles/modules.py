@@ -97,7 +97,7 @@ class PyModule:
                 return f"{self.name}"
 
     def __hash__(self) -> int:
-        return hash(self.path)
+        return hash(self.name)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, PyModule):

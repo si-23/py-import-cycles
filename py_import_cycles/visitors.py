@@ -2,15 +2,13 @@
 
 import ast
 import itertools
-import sys
+import tokenize
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from .log import logger
 from .modules import ModuleName, PyModule, PyModuleType
-
-STDLIB_OR_BUILTIN = sys.stdlib_module_names.union(sys.builtin_module_names)
 
 
 @dataclass(frozen=True)
@@ -37,43 +35,19 @@ class _RelImportFromStmt:
         assert self.level >= 1
 
 
-def _is_import_stmt(import_stmt: str, raw_node: str) -> bool:
-    import_stmt_parts = [i.strip() for i in import_stmt.split()]
-    raw_node_parts = [n.strip() for n in raw_node.split()]
-    return import_stmt_parts == raw_node_parts or import_stmt_parts[:-1] == raw_node_parts[:-1]
+def _has_ignore_comment(line: str) -> bool:
+    return "py-import-cycles: ignore" in [c.strip() for c in line.split("#")[1:]]
 
 
-def _has_ignore_comment(comments: Sequence[str]) -> bool:
-    return "py-import-cycles: ignore" in [c.strip() for c in comments]
-
-
-def _ignore(code_lines: Sequence[str], raw_node: str, lineno: int) -> bool:
-    try:
-        import_stmt, *comments = code_lines[lineno - 1].split("#")
-    except IndexError:
-        import_stmt = ""
-        comments = []
-
-    if _is_import_stmt(import_stmt, raw_node) and _has_ignore_comment(comments):
-        logger.debug("(same line) Found ignore statment for %r", raw_node)
+def _ignore(code_lines: Sequence[str], lineno: int) -> bool:
+    if _has_ignore_comment(code_lines[lineno - 1]):
         return True
 
-    try:
-        comment_line = code_lines[lineno - 2]
-        import_stmt = code_lines[lineno - 1]
-    except IndexError:
-        comment_line = ""
-        import_stmt = ""
+    if lineno < 2:
+        return False
 
-    if (
-        _is_import_stmt(import_stmt, raw_node)
-        and comment_line.strip().startswith("#")
-        and _has_ignore_comment(comment_line.split("#")[1:])
-    ):
-        logger.debug("(above line) Found ignore statment for %r", raw_node)
-        return True
-
-    return False
+    comment_line = code_lines[lineno - 2]
+    return comment_line.strip().startswith("#") and _has_ignore_comment(comment_line)
 
 
 class NodeVisitorImports(ast.NodeVisitor):
@@ -95,8 +69,13 @@ class NodeVisitorImports(ast.NodeVisitor):
     def rel_import_from_stmts(self) -> Sequence[_RelImportFromStmt]:
         return self._rel_import_from_stmts
 
+    def _is_ignored(self, node: ast.Import | ast.ImportFrom) -> bool:
+        if ignored := _ignore(self._code_lines, node.lineno):
+            logger.debug("Found ignore comment for %r", ast.unparse(node))
+        return ignored
+
     def visit_Import(self, node: ast.Import) -> None:
-        if _ignore(self._code_lines, ast.unparse(node), node.lineno):
+        if self._is_ignored(node):
             return
         self._abs_import_stmts.append(
             _AbsImportStmt(
@@ -105,7 +84,7 @@ class NodeVisitorImports(ast.NodeVisitor):
         )
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        if _ignore(self._code_lines, ast.unparse(node), node.lineno):
+        if self._is_ignored(node):
             return
         if node.level >= 1:
             self._rel_import_from_stmts.append(
@@ -127,7 +106,7 @@ class NodeVisitorImports(ast.NodeVisitor):
 def _compute_py_module_from_module_name(
     py_modules_by_name: Mapping[ModuleName, PyModule], module_name: ModuleName
 ) -> Iterator[PyModule]:
-    if not module_name.parts or module_name.parts[0] in STDLIB_OR_BUILTIN:
+    if not module_name.parts:
         return
 
     if module_name.parts[-1] == "*":
@@ -165,18 +144,14 @@ def _compute_py_module_from_abs_import_from_stmt(
 def _compute_ref_path_from_rel_import_from_stmt(
     base_py_module: PyModule, rel_import_from_stmt: _RelImportFromStmt
 ) -> Path:
-    if base_py_module.type is PyModuleType.MODULE:
-        return base_py_module.path.parents[rel_import_from_stmt.level - 1]
-    if rel_import_from_stmt.level == 1:
-        return base_py_module.path.parent
-    return base_py_module.path.parents[rel_import_from_stmt.level - 2]
+    return base_py_module.path.parents[rel_import_from_stmt.level - 1]
 
 
 def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path: Path) -> PyModule:
-    if (module_file_path := path.with_suffix(".py")).exists():
-        return PyModule(package=base_py_module.package, path=module_file_path)
     if (init_file_path := path / "__init__.py").exists():
         return PyModule(package=base_py_module.package, path=init_file_path)
+    if (module_file_path := path.with_suffix(".py")).exists():
+        return PyModule(package=base_py_module.package, path=module_file_path)
     if path.is_dir():
         return PyModule(package=base_py_module.package, path=path)
     raise ValueError(path)
@@ -195,12 +170,11 @@ def _compute_py_modules_from_rel_import_from_stmt(
             logger.debug("Cannot make py module from %s", ref_path)
 
     for name in rel_import_from_stmt.names:
+        name_path = ref_path.joinpath(name)
         try:
-            yield _compute_py_module_from_rel_import_from_stmt(
-                base_py_module, ref_path.joinpath(name)
-            )
+            yield _compute_py_module_from_rel_import_from_stmt(base_py_module, name_path)
         except ValueError:
-            logger.debug("Cannot make py module from %s", ref_path)
+            logger.debug("Cannot make py module from %s", name_path)
 
 
 def _imports_own_package_init(base_py_module: PyModule, import_py_module: PyModule) -> bool:
@@ -219,9 +193,9 @@ def _is_valid(base_py_module: PyModule, import_py_module: PyModule) -> bool:
 
 def _visit_imports(path: Path) -> NodeVisitorImports | None:
     try:
-        with open(path, encoding="utf-8") as f:
+        with tokenize.open(path) as f:
             code = f.read()
-    except UnicodeDecodeError as e:
+    except (OSError, SyntaxError, UnicodeDecodeError) as e:
         logger.debug("Cannot read python file %s: %s", path, e)
         return None
 
