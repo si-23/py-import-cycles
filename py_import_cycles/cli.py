@@ -126,20 +126,18 @@ a relative REPO is resolved against the current working directory""",
 def _make_readable_imports_by_py_module(
     imports_by_py_module: Mapping[PyModule, Sequence[PyModule]],
 ) -> Iterator[str]:
-    for ibm, ms in imports_by_py_module.items():
-        if ms:
-            yield f"  {str(ibm)} imports:"
-            yield from (f"    {str(m)}" for m in ms)
+    for py_module, imported_py_modules in imports_by_py_module.items():
+        yield f"  {py_module} imports:"
+        yield from (f"    {imported_py_module}" for imported_py_module in imported_py_modules)
 
 
 def _make_readable_cycles(
     sorted_cycles: Sequence[tuple[PyModule, ...]],
 ) -> Iterator[str]:
-    for nr, ic in enumerate(sorted_cycles, start=1):
-        if ic:
-            yield f"  Cycle {nr}:"
-            yield f"    {str(ic[0])}"
-            yield from (f"    > {str(i)} " for i in ic[1:])
+    for number, cycle in enumerate(sorted_cycles, start=1):
+        yield f"  Cycle {number}:"
+        yield f"    {cycle[0]}"
+        yield from (f"    > {py_module} " for py_module in cycle[1:])
 
 
 def _show_cycles(sorted_cycles: Sequence[tuple[PyModule, ...]]) -> None:
@@ -192,9 +190,7 @@ def _compute_imports(
         for py_module in py_modules
         if (
             imports := sorted(
-                frozenset(visit_py_module(py_modules_by_name, py_module)),
-                key=lambda m: tuple(m.name.parts),
-                reverse=True,
+                frozenset(visit_py_module(py_modules_by_name, py_module)), reverse=True
             )
         )
     }
