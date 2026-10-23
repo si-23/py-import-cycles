@@ -10,6 +10,8 @@ from pathlib import Path
 from .log import logger
 from .modules import ModuleName, PyModule, PyModuleType, make_py_module
 
+STATEMENT_CONTAINERS = (ast.stmt, ast.excepthandler, ast.match_case)
+
 
 @dataclass(frozen=True)
 class _AbsImportStmt:
@@ -50,6 +52,12 @@ def _ignore(code_lines: Sequence[str], lineno: int) -> bool:
     return comment_line.strip().startswith("#") and _has_ignore_comment(comment_line)
 
 
+def _statement_children(node: ast.AST) -> Iterator[ast.AST]:
+    for _field, value in ast.iter_fields(node):
+        if isinstance(value, list):
+            yield from (child for child in value if isinstance(child, STATEMENT_CONTAINERS))
+
+
 class NodeVisitorImports(ast.NodeVisitor):
     def __init__(self, code: str) -> None:
         self._code_lines = code.split("\n")
@@ -73,6 +81,10 @@ class NodeVisitorImports(ast.NodeVisitor):
         if ignored := _ignore(self._code_lines, node.lineno):
             logger.debug("Found ignore comment for %r", ast.unparse(node))
         return ignored
+
+    def generic_visit(self, node: ast.AST) -> None:
+        for child in _statement_children(node):
+            self.visit(child)
 
     def visit_Import(self, node: ast.Import) -> None:
         if self._is_ignored(node):
