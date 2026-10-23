@@ -76,3 +76,7 @@ def test_cycles_str(
 
 def test_self_import_is_a_cycle_of_one_module() -> None:
     assert list(dfs({"a": ["a"]})) == [("a",)]
+
+
+def test_cycle_reached_through_a_self_import() -> None:
+    assert list(dfs({"m": ["a"], "a": ["a"]})) == [("a",)]
