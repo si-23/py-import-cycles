@@ -6,7 +6,7 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from .modules import PyModule
+from .modules import PyModule, make_py_module
 
 
 def _is_ignored_folder(name: str) -> bool:
@@ -25,12 +25,12 @@ def scan_packages(packages: Sequence[Path]) -> Iterator[PyModule]:
             for file in files:
                 file_path = root_path / file
                 try:
-                    yield PyModule(package=package_path, path=file_path)
+                    yield make_py_module(package_path, file_path)
                 except ValueError:
                     pass
 
             try:
-                yield PyModule(package=package_path, path=root_path)
+                yield make_py_module(package_path, root_path)
             except ValueError:
                 pass
 
@@ -44,10 +44,7 @@ def parse_files(files: Sequence[str], cwd: Path) -> Iterator[PyModule]:
             root_path = cwd / raw_root_path
 
         rel_file_path = Path(raw_rel_file_path)
-        yield PyModule(
-            package=root_path / rel_file_path.parts[0],
-            path=root_path / rel_file_path,
-        )
+        yield make_py_module(root_path / rel_file_path.parts[0], root_path / rel_file_path)
 
 
 @dataclass(frozen=True, kw_only=True)

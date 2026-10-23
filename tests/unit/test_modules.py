@@ -9,6 +9,7 @@ from py_import_cycles.modules import (
     ModuleName,
     PyModule,
     PyModuleType,
+    make_py_module,
 )
 
 
@@ -85,21 +86,21 @@ def test_module_name_joinname(module_names: Sequence[ModuleName], expected: Modu
 def _make_namespace_package(tmp_path: Path) -> PyModule:
     path = tmp_path / "path/to/package"
     path.mkdir(parents=True)
-    return PyModule(package=path, path=path)
+    return make_py_module(path, path)
 
 
 def _make_regular_package(tmp_path: Path) -> PyModule:
     path = tmp_path / "path/to/package"
     path.mkdir(parents=True)
     (path / "__init__.py").touch()
-    return PyModule(package=path, path=path / "__init__.py")
+    return make_py_module(path, path / "__init__.py")
 
 
 def _make_module(tmp_path: Path) -> PyModule:
     path = tmp_path / "path/to/package"
     path.mkdir(parents=True)
     (path / "module.py").touch()
-    return PyModule(package=path, path=path / "module.py")
+    return make_py_module(path, path / "module.py")
 
 
 @pytest.mark.parametrize(
@@ -150,6 +151,4 @@ def test_equal_py_modules_collapse_in_set(tmp_path: Path) -> None:
         (root / "package").mkdir(parents=True)
         (root / "package" / "module.py").touch()
 
-    assert (
-        len({PyModule(package=r / "package", path=r / "package" / "module.py") for r in roots}) == 1
-    )
+    assert len({make_py_module(r / "package", r / "package" / "module.py") for r in roots}) == 1

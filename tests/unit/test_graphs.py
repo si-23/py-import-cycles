@@ -13,7 +13,7 @@ from py_import_cycles.graphs import (
     make_cycle_edges,
     make_dfs_edges,
 )
-from py_import_cycles.modules import PyModule
+from py_import_cycles.modules import ModuleName, PyModule, PyModuleType
 
 
 def test_make_cycle_edges(make_py_module: Callable[[str], PyModule]) -> None:
@@ -72,6 +72,8 @@ def test_cycle_digraph_edge_carries_title_and_colour(
 
 def test_cycle_digraph_draws_a_package_as_box(make_py_module: Callable[[str], PyModule]) -> None:
     a = make_py_module("a")
-    package = PyModule(package=a.package, path=a.package / "__init__.py")
+    package = PyModule(
+        ModuleName("pkg"), a.package, a.package / "__init__.py", PyModuleType.REGULAR_PACKAGE
+    )
     digraph = _make_cycle_digraph(Path("cycles.gv"), [ImportEdge("1 (2)", a, package, "#123456")])
     assert "\tpkg [shape=box]" in digraph.source.splitlines()
