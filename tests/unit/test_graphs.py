@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
-from py_import_cycles.graphs import badness, make_cycle_edges, make_dfs_edges, normalize
+from py_import_cycles.graphs import (
+    ImportEdge,
+    _make_cycle_digraph,
+    badness,
+    make_cycle_edges,
+    make_dfs_edges,
+    normalize,
+)
 from py_import_cycles.modules import PyModule
 
 
@@ -52,3 +60,18 @@ def test_normalize() -> None:
 def test_normalize_rejects_value_outside_bounds(value: float, lower: float, higher: float) -> None:
     with pytest.raises(ValueError):
         normalize(value, lower, higher)
+
+
+def test_cycle_digraph_edge_carries_title_and_colour(
+    make_py_module: Callable[[str], PyModule],
+) -> None:
+    a, b = make_py_module("a"), make_py_module("b")
+    digraph = _make_cycle_digraph(Path("cycles.gv"), [ImportEdge("1 (2)", a, b, "#123456")])
+    assert '\t"pkg.a" -> "pkg.b" [label="1 (2)" color="#123456"]' in digraph.source.splitlines()
+
+
+def test_cycle_digraph_draws_a_package_as_box(make_py_module: Callable[[str], PyModule]) -> None:
+    a = make_py_module("a")
+    package = PyModule(package=a.package, path=a.package / "__init__.py")
+    digraph = _make_cycle_digraph(Path("cycles.gv"), [ImportEdge("1 (2)", a, package, "#123456")])
+    assert "\tpkg [shape=box]" in digraph.source.splitlines()

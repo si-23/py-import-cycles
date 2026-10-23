@@ -106,6 +106,16 @@ def make_cycle_edges(
     return sorted(edges)
 
 
+def _make_cycle_digraph(filepath: Path, edges: Sequence[ImportEdge]) -> Digraph:
+    digraph = Digraph("unix", filename=filepath)
+    for edge in edges:
+        tail, head = str(edge.from_py_module.name), str(edge.to_py_module.name)
+        digraph.node(tail, shape=_get_shape(edge.from_py_module))
+        digraph.node(head, shape=_get_shape(edge.to_py_module))
+        digraph.edge(tail, head, edge.title, color=edge.edge_color)
+    return digraph
+
+
 def make_graph(filepath: Path, edges: Sequence[ImportEdge]) -> None:
     sys.stderr.write(f"Write graph data to {filepath}\n")
 
@@ -113,30 +123,6 @@ def make_graph(filepath: Path, edges: Sequence[ImportEdge]) -> None:
         logger.debug("No such edges for graph")
         return
 
-    d = Digraph("unix", filename=filepath)
-
-    with d.subgraph() as ds:
-        for edge in edges:
-            ds.node(
-                str(edge.from_py_module.name),
-                shape=_get_shape(edge.from_py_module),
-            )
-
-            ds.node(
-                str(edge.to_py_module.name),
-                shape=_get_shape(edge.to_py_module),
-            )
-
-            ds.attr("edge", color=edge.edge_color)
-
-            if edge.title:
-                ds.edge(
-                    str(edge.from_py_module.name),
-                    str(edge.to_py_module.name),
-                    edge.title,
-                )
-            else:
-                ds.edge(str(edge.from_py_module.name), str(edge.to_py_module.name))
-
-    d.unflatten(stagger=50)
-    d.view()
+    digraph = _make_cycle_digraph(filepath, edges)
+    digraph.unflatten(stagger=50)
+    digraph.view()
