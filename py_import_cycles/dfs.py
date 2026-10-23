@@ -12,8 +12,8 @@ from .type_defs import Comparable
 T = TypeVar("T", bound=Comparable)
 
 
-def _make_cycle(cyclic_edges: Sequence[tuple[T, T, str]]) -> tuple[T, ...]:
-    return tuple(cyclic_edges[0][:-1] + tuple(ce[1] for ce in cyclic_edges[1:-1]))
+def _make_cycle(cyclic_edges: Sequence[tuple[T, T]]) -> tuple[T, ...]:
+    return tuple(source for source, _target in cyclic_edges)
 
 
 def _make_cyclic_rotations(cycle: tuple[T, ...]) -> Sequence[tuple[T, ...]]:
@@ -26,7 +26,7 @@ def dfs(graph: Mapping[T, Sequence[T]]) -> Iterator[tuple[T, ...]]:
     G = make_digraph(graph)
     for vertex in sorted(graph):
         try:
-            cyclic_edges = find_cycle(G, source=vertex, orientation="original")
+            cyclic_edges = find_cycle(G, source=vertex)
         except NetworkXNoCycle:
             continue
 
