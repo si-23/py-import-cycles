@@ -50,6 +50,36 @@ def test_import_from_module_and_object(tmp_path: Path) -> None:
     ]
 
 
+NESTED_IMPORTS = """
+class C:
+    import pkg.m1
+try:
+    import pkg.m2
+except ImportError:
+    import pkg.m3
+else:
+    import pkg.m4
+finally:
+    import pkg.m5
+with open("f") as f:
+    import pkg.m6
+match f:
+    case None:
+        import pkg.m7
+for _ in []:
+    import pkg.m8
+while False:
+    import pkg.m9
+async def g():
+    import pkg.m10
+"""
+
+
+def test_imports_nested_in_blocks(tmp_path: Path) -> None:
+    files = {f"m{i}.py": "" for i in range(1, 11)} | {"a.py": NESTED_IMPORTS}
+    assert _visit(tmp_path / "pkg", files, "pkg.a") == [f"pkg.m{i}" for i in range(1, 11)]
+
+
 @pytest.mark.parametrize(
     "files, module, expected",
     [
