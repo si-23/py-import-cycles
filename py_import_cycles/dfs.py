@@ -3,9 +3,10 @@
 from collections.abc import Iterator, Mapping, Sequence
 from typing import TypeVar
 
-from networkx import DiGraph, find_cycle
+from networkx import find_cycle
 from networkx.exception import NetworkXNoCycle
 
+from .digraph import make_digraph
 from .type_defs import Comparable
 
 T = TypeVar("T", bound=Comparable)
@@ -22,7 +23,7 @@ def _make_cyclic_rotations(cycle: tuple[T, ...]) -> Sequence[tuple[T, ...]]:
 def dfs(graph: Mapping[T, Sequence[T]]) -> Iterator[tuple[T, ...]]:
     known_cycles: set[tuple[T, ...]] = set()
 
-    G = DiGraph([(v, w) for v, vertices in graph.items() for w in vertices])
+    G = make_digraph(graph)
     for vertex in sorted(graph):
         try:
             cyclic_edges = find_cycle(G, source=vertex, orientation="original")
