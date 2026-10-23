@@ -72,3 +72,7 @@ def test_cycles_str(
     cycles: Sequence[tuple[str, ...]],
 ) -> None:
     assert list(dfs(graph)) == cycles
+
+
+def test_self_import_is_a_cycle_of_one_module() -> None:
+    assert list(dfs({"a": ["a"]})) == [("a",)]

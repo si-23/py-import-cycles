@@ -10,7 +10,7 @@ from py_import_cycles.files import (
     parse_files,
     scan_packages,
 )
-from py_import_cycles.modules import ModuleName, PyModule, PyModuleType
+from py_import_cycles.modules import ModuleName, PyModuleType, make_py_module
 
 
 @pytest.fixture(name="root")
@@ -49,7 +49,7 @@ def test_multiple_file_with_excludes(root: Path) -> None:
             for f in scan_packages([p.parent for p in proj])
             if f.type is not PyModuleType.NAMESPACE_PACKAGE
         ]
-    ) == {PyModule(package=p.parent, path=p) for p in proj}
+    ) == {make_py_module(p.parent, p) for p in proj}
 
 
 def test_ignore_files_without_py_extention(root: Path) -> None:
@@ -61,7 +61,7 @@ def test_ignore_files_without_py_extention(root: Path) -> None:
 
     assert frozenset(
         [f for f in scan_packages([projdir]) if f.type is not PyModuleType.NAMESPACE_PACKAGE]
-    ) == {PyModule(package=p.parent, path=p) for p in proj}
+    ) == {make_py_module(p.parent, p) for p in proj}
 
 
 def test_ignore_extra_names_in_second_arg(root: Path) -> None:
@@ -76,7 +76,7 @@ def test_ignore_extra_names_in_second_arg(root: Path) -> None:
             for f in scan_packages([projdir, projdir / Path("extra"), projdir / Path("args")])
             if f.type is not PyModuleType.NAMESPACE_PACKAGE
         ]
-    ) == {PyModule(package=p.parent, path=p) for p in proj}
+    ) == {make_py_module(p.parent, p) for p in proj}
 
 
 def test_recurse_dirs(root: Path) -> None:
@@ -98,7 +98,7 @@ def test_recurse_dirs(root: Path) -> None:
             for f in scan_packages([root / Path("p1"), root / Path("p2")])
             if f.type is not PyModuleType.NAMESPACE_PACKAGE
         ]
-    ) == {PyModule(package=p.parents[-7], path=p) for p in proj}
+    ) == {make_py_module(p.parents[-7], p) for p in proj}
 
 
 def test_ignore_pycache(root: Path) -> None:
@@ -132,6 +132,12 @@ def test_skip_hidden_folders(root: Path) -> None:
     setup_py_module(projdir / ".hidden" / "sub" / "p2.py")
 
     assert [m.path for m in scan_packages([projdir]) if ".hidden" in m.path.parts] == []
+
+
+def test_skip_pycache_package(root: Path) -> None:
+    setup_py_module(root / "__pycache__" / "p1.py")
+
+    assert list(scan_packages([root / "__pycache__"])) == []
 
 
 def test_outputs_file_paths(root: Path) -> None:

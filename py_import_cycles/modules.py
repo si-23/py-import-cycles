@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import total_ordering
 from pathlib import Path
@@ -79,13 +80,12 @@ def _compute_py_module_name(package: Path, path: Path, py_module_type: PyModuleT
     return module_name.joinname(*rel_path.with_suffix("").parts)
 
 
-@total_ordering
+@dataclass(frozen=True, order=True)
 class PyModule:
-    def __init__(self, package: Path, path: Path) -> None:
-        self.package: Final[Path] = package
-        self.path: Final[Path] = path
-        self.type: Final[PyModuleType] = _compute_py_module_type(path)
-        self.name: Final[ModuleName] = _compute_py_module_name(package, path, self.type)
+    name: ModuleName
+    package: Path = field(compare=False)
+    path: Path = field(compare=False)
+    type: PyModuleType = field(compare=False)
 
     def __str__(self) -> str:
         match self.type:
@@ -96,15 +96,12 @@ class PyModule:
             case PyModuleType.MODULE:
                 return f"{self.name}"
 
-    def __hash__(self) -> int:
-        return hash(self.name)
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, PyModule):
-            return NotImplemented
-        return self.name == other.name
-
-    def __lt__(self, other: object) -> bool:
-        if not isinstance(other, PyModule):
-            return NotImplemented
-        return self.name < other.name
+def make_py_module(package: Path, path: Path) -> PyModule:
+    py_module_type = _compute_py_module_type(path)
+    return PyModule(
+        name=_compute_py_module_name(package, path, py_module_type),
+        package=package,
+        path=path,
+        type=py_module_type,
+    )

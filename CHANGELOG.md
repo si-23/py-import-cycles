@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Prefer a regular package to a module of the same name in relative imports.
 - Resolve relative imports of level two or more in a package's `__init__.py`.
 - Resolve imports of scanned packages named like a standard library module.
+- Number the cycles and lay out and colour the graph the same way on every run.
 
 ## [0.6.0]
 

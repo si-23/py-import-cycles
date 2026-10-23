@@ -6,31 +6,31 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from .modules import PyModule
+from .modules import PyModule, make_py_module
+
+
+def _is_ignored_folder(name: str) -> bool:
+    return name.startswith(".") or name == "__pycache__"
 
 
 def scan_packages(packages: Sequence[Path]) -> Iterator[PyModule]:
-    paths_to_ignore: set[Path] = set()
     for package_path in packages:
-        for root, _dirs, files in os.walk(package_path):
+        if _is_ignored_folder(package_path.name):
+            continue
+
+        for root, dirs, files in os.walk(package_path):
+            dirs[:] = [folder for folder in dirs if not _is_ignored_folder(folder)]
             root_path = Path(root)
-
-            if root_path.name.startswith(".") or root_path.name == "__pycache__":
-                paths_to_ignore.add(root_path)
-                continue
-
-            if any(root_path.is_relative_to(p) for p in paths_to_ignore):
-                continue
 
             for file in files:
                 file_path = root_path / file
                 try:
-                    yield PyModule(package=package_path, path=file_path)
+                    yield make_py_module(package_path, file_path)
                 except ValueError:
                     pass
 
             try:
-                yield PyModule(package=package_path, path=root_path)
+                yield make_py_module(package_path, root_path)
             except ValueError:
                 pass
 
@@ -44,10 +44,7 @@ def parse_files(files: Sequence[str], cwd: Path) -> Iterator[PyModule]:
             root_path = cwd / raw_root_path
 
         rel_file_path = Path(raw_rel_file_path)
-        yield PyModule(
-            package=root_path / rel_file_path.parts[0],
-            path=root_path / rel_file_path,
-        )
+        yield make_py_module(root_path / rel_file_path.parts[0], root_path / rel_file_path)
 
 
 @dataclass(frozen=True, kw_only=True)

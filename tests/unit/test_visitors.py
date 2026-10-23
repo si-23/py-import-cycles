@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from py_import_cycles.files import scan_packages
-from py_import_cycles.modules import ModuleName, PyModule
+from py_import_cycles.modules import ModuleName, make_py_module
 from py_import_cycles.visitors import visit_py_module
 
 
@@ -246,6 +246,6 @@ def test_log_unresolvable_relative_import(tmp_path: Path, caplog: pytest.LogCapt
     (package / "module.py").write_text("from . import missing\n")
     caplog.set_level(logging.DEBUG, logger="py_import_cycles.log")
 
-    list(visit_py_module({}, PyModule(package, package / "module.py")))
+    list(visit_py_module({}, make_py_module(package, package / "module.py")))
 
     assert str(package / "missing") in caplog.text

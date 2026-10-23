@@ -30,14 +30,14 @@ def _get_shape(py_module: PyModule) -> str:
     return "" if py_module.type is PyModuleType.MODULE else "box"
 
 
-def dedup_edges(cycles: Iterable[tuple[TC, ...]]) -> Sequence[tuple[TC, TC]]:
+def _dedup_edges(cycles: Iterable[tuple[TC, ...]]) -> Sequence[tuple[TC, TC]]:
     edges: set[tuple[TC, TC]] = set()
     for cycle in cycles:
         edges |= frozenset(itertools.pairwise(cycle))
-    return list(edges)
+    return sorted(edges)
 
 
-def count_degree(edges: Sequence[tuple[T, T]]) -> Mapping[T, int]:
+def _count_degree(edges: Sequence[tuple[T, T]]) -> Mapping[T, int]:
     degrees: defaultdict[T, int] = defaultdict(int)
     for edge in edges:
         degrees[edge[0]] -= 1
@@ -45,12 +45,12 @@ def count_degree(edges: Sequence[tuple[T, T]]) -> Mapping[T, int]:
     return degrees
 
 
-def badness(edges: Sequence[tuple[T, T]]) -> Mapping[tuple[T, T], float]:
-    degree = count_degree(edges)
+def _badness(edges: Sequence[tuple[T, T]]) -> Mapping[tuple[T, T], float]:
+    degree = _count_degree(edges)
     return {edge: 0.5 * (degree[edge[0]] + degree[edge[1]]) for edge in edges}
 
 
-def normalize(value: float, lower: float, higher: float) -> float:
+def _normalize(value: float, lower: float, higher: float) -> float:
     if not lower <= value < higher:
         raise ValueError(f"{value} is not within bounds")
     return (value - lower) / (higher - lower)
@@ -63,7 +63,7 @@ def _rgb(red: int, green: int, blue: int) -> str:
 def make_dfs_edges(
     cycles: Sequence[tuple[PyModule, ...]],
 ) -> Sequence[ImportEdge]:
-    edges = badness(dedup_edges(cycles))
+    edges = _badness(_dedup_edges(cycles))
     if not (edges_values := edges.values()):
         return []
 
@@ -71,7 +71,7 @@ def make_dfs_edges(
 
     out = []
     for edge, value in edges.items():
-        nn = int(255 * normalize(value, -bound, bound + 1))
+        nn = int(255 * _normalize(value, -bound, bound + 1))
         assert 0 <= nn < 256
         if value < 0:
             color = _rgb(0, 255 - nn, nn)
@@ -86,10 +86,11 @@ def make_cycle_edges(
 ) -> Sequence[ImportEdge]:
     edges: set[ImportEdge] = set()
     for nr, import_cycle in enumerate(import_cycles, start=1):
+        colours = random.Random(nr)
         color = _rgb(
-            random.randint(50, 200),
-            random.randint(50, 200),
-            random.randint(50, 200),
+            colours.randint(50, 200),
+            colours.randint(50, 200),
+            colours.randint(50, 200),
         )
 
         start_py_module = import_cycle[0]
@@ -106,6 +107,16 @@ def make_cycle_edges(
     return sorted(edges)
 
 
+def _make_cycle_digraph(filepath: Path, edges: Sequence[ImportEdge]) -> Digraph:
+    digraph = Digraph("unix", filename=filepath)
+    for edge in edges:
+        tail, head = str(edge.from_py_module.name), str(edge.to_py_module.name)
+        digraph.node(tail, shape=_get_shape(edge.from_py_module))
+        digraph.node(head, shape=_get_shape(edge.to_py_module))
+        digraph.edge(tail, head, edge.title, color=edge.edge_color)
+    return digraph
+
+
 def make_graph(filepath: Path, edges: Sequence[ImportEdge]) -> None:
     sys.stderr.write(f"Write graph data to {filepath}\n")
 
@@ -113,30 +124,6 @@ def make_graph(filepath: Path, edges: Sequence[ImportEdge]) -> None:
         logger.debug("No such edges for graph")
         return
 
-    d = Digraph("unix", filename=filepath)
-
-    with d.subgraph() as ds:
-        for edge in edges:
-            ds.node(
-                str(edge.from_py_module.name),
-                shape=_get_shape(edge.from_py_module),
-            )
-
-            ds.node(
-                str(edge.to_py_module.name),
-                shape=_get_shape(edge.to_py_module),
-            )
-
-            ds.attr("edge", color=edge.edge_color)
-
-            if edge.title:
-                ds.edge(
-                    str(edge.from_py_module.name),
-                    str(edge.to_py_module.name),
-                    edge.title,
-                )
-            else:
-                ds.edge(str(edge.from_py_module.name), str(edge.to_py_module.name))
-
-    d.unflatten(stagger=50)
-    d.view()
+    digraph = _make_cycle_digraph(filepath, edges)
+    digraph.unflatten(stagger=50)
+    digraph.view()

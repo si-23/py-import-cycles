@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .log import logger
-from .modules import ModuleName, PyModule, PyModuleType
+from .modules import ModuleName, PyModule, PyModuleType, make_py_module
 
 
 @dataclass(frozen=True)
@@ -149,11 +149,11 @@ def _compute_ref_path_from_rel_import_from_stmt(
 
 def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path: Path) -> PyModule:
     if (init_file_path := path / "__init__.py").exists():
-        return PyModule(package=base_py_module.package, path=init_file_path)
+        return make_py_module(base_py_module.package, init_file_path)
     if (module_file_path := path.with_suffix(".py")).exists():
-        return PyModule(package=base_py_module.package, path=module_file_path)
+        return make_py_module(base_py_module.package, module_file_path)
     if path.is_dir():
-        return PyModule(package=base_py_module.package, path=path)
+        return make_py_module(base_py_module.package, path)
     raise ValueError(path)
 
 
