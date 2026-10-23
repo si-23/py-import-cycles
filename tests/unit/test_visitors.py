@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 
 from py_import_cycles.files import scan_packages
-from py_import_cycles.modules import ModuleName, make_py_module
+from py_import_cycles.modules import ModuleName, make_py_modules_by_name
 from py_import_cycles.visitors import visit_py_module
 
 
 def _imports(package: Path, module: str) -> Sequence[str]:
-    py_modules_by_name = {m.name: m for m in scan_packages([package])}
+    py_modules_by_name = make_py_modules_by_name(scan_packages([package]))
     return [
         str(m) for m in visit_py_module(py_modules_by_name, py_modules_by_name[ModuleName(module)])
     ]
@@ -33,6 +33,7 @@ def test_import_from_modules(tmp_path: Path) -> None:
         "mod.py": "from package.a.b import c, d\n",
     }
     assert _visit(tmp_path / "package", files, "package.mod") == [
+        "package.a.b.__init__",
         "package.a.b.c",
         "package.a.b.d",
     ]
@@ -45,8 +46,8 @@ def test_import_from_module_and_object(tmp_path: Path) -> None:
         "mod.py": "from package.a.b import c, d\n",
     }
     assert _visit(tmp_path / "package", files, "package.mod") == [
-        "package.a.b.c",
         "package.a.b.__init__",
+        "package.a.b.c",
     ]
 
 
@@ -80,8 +81,8 @@ def test_import_from_module_and_object(tmp_path: Path) -> None:
         pytest.param(
             {"ns/m.py": "", "a.py": "from . import ns\n"},
             "pkg.a",
-            ["pkg.ns/"],
-            id="relative-import-of-namespace-package",
+            [],
+            id="namespace-package-is-no-edge",
         ),
         pytest.param(
             {"a.py": "import os\nimport requests\n"},
@@ -119,6 +120,42 @@ def test_imports(
     tmp_path: Path, files: Mapping[str, str], module: str, expected: Sequence[str]
 ) -> None:
     assert _visit(tmp_path / "pkg", files, module) == expected
+
+
+@pytest.mark.parametrize(
+    "code, expected",
+    [
+        pytest.param("from pkg import HELPER\n", ["pkg.__init__"], id="read-name-from-own-package"),
+        pytest.param("from . import HELPER\n", ["pkg.__init__"], id="read-name-relative"),
+        pytest.param("from pkg import *\n", ["pkg.__init__"], id="star-import-own-package"),
+        pytest.param("import pkg\n", ["pkg.__init__"], id="import-own-package"),
+        pytest.param("from . import sib\n", ["pkg.sib"], id="import-sibling-relative"),
+        pytest.param("from pkg import sib\n", ["pkg.sib"], id="import-sibling-from-package"),
+        pytest.param("import pkg.sib\n", ["pkg.sib"], id="import-sibling"),
+        pytest.param(
+            "import pkg.a.b.c\n",
+            ["pkg.a.__init__", "pkg.a.b.__init__", "pkg.a.b.c"],
+            id="parent-packages-of-other-package",
+        ),
+        pytest.param(
+            "from pkg.a.b import c\n",
+            ["pkg.a.__init__", "pkg.a.b.__init__", "pkg.a.b.c"],
+            id="parent-packages-of-from-import",
+        ),
+    ],
+)
+def test_edges_of_module_in_regular_package(
+    tmp_path: Path, code: str, expected: Sequence[str]
+) -> None:
+    files = {
+        "__init__.py": "",
+        "sib.py": "",
+        "a/__init__.py": "",
+        "a/b/__init__.py": "",
+        "a/b/c.py": "",
+        "mod.py": code,
+    }
+    assert _visit(tmp_path / "pkg", files, "pkg.mod") == expected
 
 
 def test_relative_import_from_parent_in_package_init(tmp_path: Path) -> None:
@@ -209,6 +246,20 @@ def test_ignore_comment(tmp_path: Path, code: str) -> None:
     assert _visit(tmp_path / "pkg", files, "pkg.mod") == ["pkg.foo", "pkg.bar"]
 
 
+@pytest.mark.parametrize(
+    "comment, expected",
+    [
+        pytest.param("# py-import-cycles:ignore", [], id="no-space"),
+        pytest.param("#  py-import-cycles:   ignore", [], id="extra-spaces"),
+        pytest.param("# py-import-cycles: ignore because of the plugin API", [], id="reason"),
+        pytest.param("# py-import-cycles: ignored", ["pkg.b"], id="other-word"),
+    ],
+)
+def test_ignore_comment_spelling(tmp_path: Path, comment: str, expected: Sequence[str]) -> None:
+    files = {"b.py": "", "a.py": f"import pkg.b  {comment}\n"}
+    assert _visit(tmp_path / "pkg", files, "pkg.a") == expected
+
+
 def test_ignore_comment_on_multiline_import_of_several_names(tmp_path: Path) -> None:
     code = "from pkg import (  # py-import-cycles: ignore\n    b,\n    c,\n)\n"
     files = {"b.py": "", "c.py": "", "a.py": code}
@@ -225,7 +276,7 @@ def test_skip_file_that_cannot_be_read(tmp_path: Path) -> None:
     package.mkdir()
     (package / "a.py").write_text("import pkg.b\n")
     (package / "b.py").touch()
-    py_modules_by_name = {m.name: m for m in scan_packages([package])}
+    py_modules_by_name = make_py_modules_by_name(scan_packages([package]))
     (package / "a.py").unlink()
 
     assert list(visit_py_module(py_modules_by_name, py_modules_by_name[ModuleName("pkg.a")])) == []
@@ -240,12 +291,11 @@ def test_honour_coding_declaration(tmp_path: Path) -> None:
     assert _imports(package, "pkg.a") == ["pkg.b"]
 
 
-def test_log_unresolvable_relative_import(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    package = tmp_path / "package"
-    package.mkdir()
-    (package / "module.py").write_text("from . import missing\n")
+def test_log_relative_import_beyond_top_level_package(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     caplog.set_level(logging.DEBUG, logger="py_import_cycles.log")
 
-    list(visit_py_module({}, make_py_module(package, package / "module.py")))
+    _visit(tmp_path / "pkg", {"a.py": "from ... import x\n"}, "pkg.a")
 
-    assert str(package / "missing") in caplog.text
+    assert "Cannot resolve relative import of level 3 in pkg.a" in caplog.text

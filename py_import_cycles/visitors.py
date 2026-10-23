@@ -2,13 +2,14 @@
 
 import ast
 import itertools
+import re
 import tokenize
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence, Set
 from dataclasses import dataclass
 from pathlib import Path
 
 from .log import logger
-from .modules import ModuleName, PyModule, PyModuleType, make_py_module
+from .modules import ModuleName, PyModule, PyModuleType
 
 
 @dataclass(frozen=True)
@@ -35,8 +36,11 @@ class _RelImportFromStmt:
         assert self.level >= 1
 
 
+IGNORE_COMMENT = re.compile(r"py-import-cycles:\s*ignore\b")
+
+
 def _has_ignore_comment(line: str) -> bool:
-    return "py-import-cycles: ignore" in [c.strip() for c in line.split("#")[1:]]
+    return any(IGNORE_COMMENT.match(c.strip()) for c in line.split("#")[1:])
 
 
 def _ignore(code_lines: Sequence[str], lineno: int) -> bool:
@@ -103,91 +107,65 @@ class NodeVisitorImports(ast.NodeVisitor):
             )
 
 
-def _compute_py_module_from_module_name(
-    py_modules_by_name: Mapping[ModuleName, PyModule], module_name: ModuleName
-) -> Iterator[PyModule]:
-    if not module_name.parts:
-        return
-
-    if module_name.parts[-1] == "*":
-        module_name = module_name.parent
-
-    if import_py_module := py_modules_by_name.get(module_name):
-        yield import_py_module
+def _prefixes(module_name: ModuleName) -> Sequence[ModuleName]:
+    return [ModuleName(*module_name.parts[:i]) for i in range(1, len(module_name.parts) + 1)]
 
 
-def _compute_py_module_from_abs_import_stmt(
-    py_modules_by_name: Mapping[ModuleName, PyModule], abs_import_stmt: _AbsImportStmt
-) -> Iterator[PyModule]:
+def _names_of_import_stmt(
+    abs_import_stmt: _AbsImportStmt, ancestors: Set[ModuleName]
+) -> Iterator[ModuleName]:
     for name in abs_import_stmt.names:
-        yield from _compute_py_module_from_module_name(py_modules_by_name, ModuleName(name))
+        *parents, module_name = _prefixes(ModuleName(name))
+        yield from (p for p in parents if p not in ancestors)
+        yield module_name
 
 
-def _compute_py_module_from_abs_import_from_stmt(
+def _names_of_import_from_stmt(
     py_modules_by_name: Mapping[ModuleName, PyModule],
     abs_import_from_stmt: _AbsImportFromStmt,
-) -> Iterator[PyModule]:
-    anchor = ModuleName(abs_import_from_stmt.module)
-    import_py_modules = [
-        import_py_module
+    ancestors: Set[ModuleName],
+) -> Iterator[ModuleName]:
+    *parents, module_name = _prefixes(ModuleName(abs_import_from_stmt.module))
+    submodule_names = [
+        submodule_name
         for name in abs_import_from_stmt.names
-        for import_py_module in _compute_py_module_from_module_name(
-            py_modules_by_name, anchor.joinname(name)
-        )
+        if name != "*" and (submodule_name := module_name.joinname(name)) in py_modules_by_name
     ]
-    yield from import_py_modules
+    reads_names = len(submodule_names) < len(abs_import_from_stmt.names)
 
-    if len(import_py_modules) != len(abs_import_from_stmt.names):
-        yield from _compute_py_module_from_module_name(py_modules_by_name, anchor)
+    yield from (p for p in parents if p not in ancestors)
+    if reads_names or module_name not in ancestors:
+        yield module_name
+    yield from submodule_names
 
 
-def _compute_ref_path_from_rel_import_from_stmt(
+def _package_name(py_module: PyModule) -> ModuleName:
+    if py_module.type is PyModuleType.REGULAR_PACKAGE:
+        return py_module.name
+    return py_module.name.parent
+
+
+def _make_abs_import_from_stmt(
     base_py_module: PyModule, rel_import_from_stmt: _RelImportFromStmt
-) -> Path:
-    return base_py_module.path.parents[rel_import_from_stmt.level - 1]
+) -> _AbsImportFromStmt | None:
+    package_parts = _package_name(base_py_module).parts
+    if rel_import_from_stmt.level > len(package_parts):
+        logger.debug(
+            "Cannot resolve relative import of level %s in %s",
+            rel_import_from_stmt.level,
+            base_py_module.name,
+        )
+        return None
 
-
-def _compute_py_module_from_rel_import_from_stmt(base_py_module: PyModule, path: Path) -> PyModule:
-    if (init_file_path := path / "__init__.py").exists():
-        return make_py_module(base_py_module.package, init_file_path)
-    if (module_file_path := path.with_suffix(".py")).exists():
-        return make_py_module(base_py_module.package, module_file_path)
-    if path.is_dir():
-        return make_py_module(base_py_module.package, path)
-    raise ValueError(path)
-
-
-def _compute_py_modules_from_rel_import_from_stmt(
-    base_py_module: PyModule, rel_import_from_stmt: _RelImportFromStmt
-) -> Iterator[PyModule]:
-    ref_path = _compute_ref_path_from_rel_import_from_stmt(base_py_module, rel_import_from_stmt)
-
-    if rel_import_from_stmt.module:
-        ref_path = ref_path.joinpath(*ModuleName(rel_import_from_stmt.module).parts)
-        try:
-            yield _compute_py_module_from_rel_import_from_stmt(base_py_module, ref_path)
-        except ValueError:
-            logger.debug("Cannot make py module from %s", ref_path)
-
-    for name in rel_import_from_stmt.names:
-        name_path = ref_path.joinpath(name)
-        try:
-            yield _compute_py_module_from_rel_import_from_stmt(base_py_module, name_path)
-        except ValueError:
-            logger.debug("Cannot make py module from %s", name_path)
-
-
-def _imports_own_package_init(base_py_module: PyModule, import_py_module: PyModule) -> bool:
-    return (
-        base_py_module.type is PyModuleType.MODULE
-        and import_py_module.type is PyModuleType.REGULAR_PACKAGE
-        and base_py_module.path.parent == import_py_module.path.parent
-    )
+    anchor = ModuleName(*package_parts[: len(package_parts) - rel_import_from_stmt.level + 1])
+    module = anchor.joinname(rel_import_from_stmt.module) if rel_import_from_stmt.module else anchor
+    return _AbsImportFromStmt(str(module), rel_import_from_stmt.names)
 
 
 def _is_valid(base_py_module: PyModule, import_py_module: PyModule) -> bool:
-    return base_py_module != import_py_module and not _imports_own_package_init(
-        base_py_module, import_py_module
+    return (
+        base_py_module != import_py_module
+        and import_py_module.type is not PyModuleType.NAMESPACE_PACKAGE
     )
 
 
@@ -210,23 +188,22 @@ def _visit_imports(path: Path) -> NodeVisitorImports | None:
     return visitor
 
 
-def _compute_imported_py_modules(
+def _compute_imported_names(
     py_modules_by_name: Mapping[ModuleName, PyModule],
     base_py_module: PyModule,
     visitor: NodeVisitorImports,
-) -> Iterator[PyModule]:
+) -> Iterator[ModuleName]:
+    ancestors = frozenset(_prefixes(base_py_module.name)[:-1])
     return itertools.chain(
+        *(_names_of_import_stmt(s, ancestors) for s in visitor.abs_import_stmts),
         *(
-            _compute_py_module_from_abs_import_stmt(py_modules_by_name, s)
-            for s in visitor.abs_import_stmts
-        ),
-        *(
-            _compute_py_module_from_abs_import_from_stmt(py_modules_by_name, s)
+            _names_of_import_from_stmt(py_modules_by_name, s, ancestors)
             for s in visitor.abs_import_from_stmts
         ),
         *(
-            _compute_py_modules_from_rel_import_from_stmt(base_py_module, s)
+            _names_of_import_from_stmt(py_modules_by_name, abs_stmt, ancestors)
             for s in visitor.rel_import_from_stmts
+            if (abs_stmt := _make_abs_import_from_stmt(base_py_module, s))
         ),
     )
 
@@ -240,10 +217,7 @@ def visit_py_module(
     if (visitor := _visit_imports(base_py_module.path)) is None:
         return
 
-    yield from (
-        import_py_module
-        for import_py_module in _compute_imported_py_modules(
-            py_modules_by_name, base_py_module, visitor
-        )
-        if _is_valid(base_py_module, import_py_module)
-    )
+    for name in _compute_imported_names(py_modules_by_name, base_py_module, visitor):
+        import_py_module = py_modules_by_name.get(name)
+        if import_py_module and _is_valid(base_py_module, import_py_module):
+            yield import_py_module
