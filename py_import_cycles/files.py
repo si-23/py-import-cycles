@@ -9,18 +9,18 @@ from pathlib import Path
 from .modules import PyModule
 
 
+def _is_ignored_folder(name: str) -> bool:
+    return name.startswith(".") or name == "__pycache__"
+
+
 def scan_packages(packages: Sequence[Path]) -> Iterator[PyModule]:
-    paths_to_ignore: set[Path] = set()
     for package_path in packages:
-        for root, _dirs, files in os.walk(package_path):
+        if _is_ignored_folder(package_path.name):
+            continue
+
+        for root, dirs, files in os.walk(package_path):
+            dirs[:] = [folder for folder in dirs if not _is_ignored_folder(folder)]
             root_path = Path(root)
-
-            if root_path.name.startswith(".") or root_path.name == "__pycache__":
-                paths_to_ignore.add(root_path)
-                continue
-
-            if any(root_path.is_relative_to(p) for p in paths_to_ignore):
-                continue
 
             for file in files:
                 file_path = root_path / file

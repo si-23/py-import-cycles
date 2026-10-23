@@ -134,6 +134,12 @@ def test_skip_hidden_folders(root: Path) -> None:
     assert [m.path for m in scan_packages([projdir]) if ".hidden" in m.path.parts] == []
 
 
+def test_skip_pycache_package(root: Path) -> None:
+    setup_py_module(root / "__pycache__" / "p1.py")
+
+    assert list(scan_packages([root / "__pycache__"])) == []
+
+
 def test_outputs_file_paths(root: Path) -> None:
     assert get_outputs_file_paths(root / "out", "run") == OutputsFilePaths(
         log=root / "out" / "run.log",
