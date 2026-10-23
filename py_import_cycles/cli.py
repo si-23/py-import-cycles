@@ -5,7 +5,7 @@ import json
 import logging
 import sys
 import time
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -171,6 +171,10 @@ def _write_sarif(
         Path(path).write_text(sarif, encoding="utf-8")
 
 
+def _sort_cycles(cycles: Iterable[tuple[PyModule, ...]]) -> Sequence[tuple[PyModule, ...]]:
+    return sorted(cycles, key=lambda cycle: (len(cycle), cycle))
+
+
 def _collect_py_modules(packages: Sequence[str], files: Sequence[str]) -> Sequence[PyModule]:
     logger.info("Scan packages")
     py_modules = list(scan_packages([pp for p in packages if (pp := Path(p)).is_dir()]))
@@ -223,7 +227,7 @@ def main() -> int:
     unsorted_cycles = set(strategy.detect_cycles(imports_by_py_module))
 
     logger.info("Sort import cycles")
-    sorted_cycles = sorted(unsorted_cycles, key=lambda t: (len(t), t[0].name))
+    sorted_cycles = _sort_cycles(unsorted_cycles)
 
     sys.stderr.write(f"Found {len(sorted_cycles)} import cycles\n")
     if args.verbose:

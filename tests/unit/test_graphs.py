@@ -77,3 +77,25 @@ def test_cycle_digraph_draws_a_package_as_box(make_py_module: Callable[[str], Py
     )
     digraph = _make_cycle_digraph(Path("cycles.gv"), [ImportEdge("1 (2)", a, package, "#123456")])
     assert "\tpkg [shape=box]" in digraph.source.splitlines()
+
+
+def test_make_dfs_edges_in_sorted_order(make_py_module: Callable[[str], PyModule]) -> None:
+    a, b, c, d = (make_py_module(n) for n in "abcd")
+    edges = make_dfs_edges([(a, b, a), (c, d, c), (b, c, b)])
+    assert [(e.from_py_module, e.to_py_module) for e in edges] == [
+        (a, b),
+        (b, a),
+        (b, c),
+        (c, b),
+        (c, d),
+        (d, c),
+    ]
+
+
+def test_make_cycle_edges_colours_are_reproducible(
+    make_py_module: Callable[[str], PyModule],
+) -> None:
+    a, b = make_py_module("a"), make_py_module("b")
+    assert [e.edge_color for e in make_cycle_edges([(a, b, a)])] == [
+        e.edge_color for e in make_cycle_edges([(a, b, a)])
+    ]

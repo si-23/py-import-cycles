@@ -34,7 +34,7 @@ def _dedup_edges(cycles: Iterable[tuple[TC, ...]]) -> Sequence[tuple[TC, TC]]:
     edges: set[tuple[TC, TC]] = set()
     for cycle in cycles:
         edges |= frozenset(itertools.pairwise(cycle))
-    return list(edges)
+    return sorted(edges)
 
 
 def _count_degree(edges: Sequence[tuple[T, T]]) -> Mapping[T, int]:
@@ -86,10 +86,11 @@ def make_cycle_edges(
 ) -> Sequence[ImportEdge]:
     edges: set[ImportEdge] = set()
     for nr, import_cycle in enumerate(import_cycles, start=1):
+        colours = random.Random(nr)
         color = _rgb(
-            random.randint(50, 200),
-            random.randint(50, 200),
-            random.randint(50, 200),
+            colours.randint(50, 200),
+            colours.randint(50, 200),
+            colours.randint(50, 200),
         )
 
         start_py_module = import_cycle[0]
