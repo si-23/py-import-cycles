@@ -16,7 +16,7 @@ classifiers = [
 dependencies = ["graphviz", "networkx"]
 
 [project.scripts]
-py_import_cycles = "py_import_cycles.__main__:main"
+py_import_cycles = "py_import_cycles.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/si-23/py-import-cycles"
